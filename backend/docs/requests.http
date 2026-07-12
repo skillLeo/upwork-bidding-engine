@@ -1,0 +1,265 @@
+### SkillLeo Bidding Engine — API request collection
+### Works with the VS Code "REST Client" extension or JetBrains' HTTP Client.
+### Run `php artisan migrate --seed` first — admin@skillleo.test / password.
+
+@baseUrl = http://127.0.0.1:8000/api
+@token = REPLACE_WITH_TOKEN_FROM_LOGIN_RESPONSE
+@vollnaSecret = REPLACE_WITH_VOLLNA_WEBHOOK_SECRET_FROM_SETTINGS
+
+###############################################################################
+# AUTH
+###############################################################################
+
+### Login as admin — copy `data.token` from the response into @token above
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@skillleo.test",
+  "password": "password"
+}
+
+### Login as bidder (bidder@skillleo.test / password) to exercise role limits
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "bidder@skillleo.test",
+  "password": "password"
+}
+
+### Current user
+GET {{baseUrl}}/me
+Authorization: Bearer {{token}}
+
+### Logout (revokes the token above)
+POST {{baseUrl}}/auth/logout
+Authorization: Bearer {{token}}
+
+###############################################################################
+# WEBHOOKS (public, no Sanctum token — secret/handshake verified instead)
+###############################################################################
+
+### Vollna webhook — new job. Set vollna_webhook_secret in Settings first.
+POST {{baseUrl}}/vollna-hook
+Content-Type: application/json
+X-Vollna-Secret: {{vollnaSecret}}
+
+{
+  "id": "upwork_demo_001",
+  "title": "Laravel Developer Needed for API Integration",
+  "description": "We need a Laravel developer to integrate a third-party payment API into our existing platform.",
+  "url": "https://www.upwork.com/jobs/~demo001",
+  "budget": "$750 fixed",
+  "proposals": 6,
+  "postedOn": "2026-01-01T10:00:00Z",
+  "client": {
+    "country": "United States",
+    "totalSpent": 12000,
+    "hireRate": 0.75,
+    "paymentVerified": true
+  }
+}
+
+### Vollna webhook — same external_id again (expect 200 "duplicate", idempotent)
+POST {{baseUrl}}/vollna-hook
+Content-Type: application/json
+X-Vollna-Secret: {{vollnaSecret}}
+
+{
+  "id": "upwork_demo_001",
+  "title": "Laravel Developer Needed for API Integration"
+}
+
+### Vollna webhook — wrong secret (expect 401)
+POST {{baseUrl}}/vollna-hook
+Content-Type: application/json
+X-Vollna-Secret: wrong-secret
+
+{
+  "id": "upwork_demo_002",
+  "title": "Should be rejected"
+}
+
+### Vollna webhook — will be hard-filtered (too many proposals), no AI call made
+POST {{baseUrl}}/vollna-hook
+Content-Type: application/json
+X-Vollna-Secret: {{vollnaSecret}}
+
+{
+  "id": "upwork_demo_003",
+  "title": "Bulk Data Entry Task",
+  "description": "Simple task, apply fast.",
+  "budget": "$50 fixed",
+  "proposals": 40
+}
+
+### WhatsApp webhook — Meta subscription handshake (verify token = whatsapp_token setting)
+GET {{baseUrl}}/whatsapp-hook?hub.mode=subscribe&hub.verify_token=REPLACE_WITH_WHATSAPP_TOKEN&hub.challenge=12345
+
+### WhatsApp webhook — inbound message payload (simulates Meta Cloud API delivery)
+POST {{baseUrl}}/whatsapp-hook
+Content-Type: application/json
+
+{
+  "entry": [
+    {
+      "changes": [
+        {
+          "value": {
+            "messages": [
+              { "from": "15551234567", "id": "wamid.demo", "type": "text", "text": { "body": "sent it!" } }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
+
+###############################################################################
+# LEADS  (admin + bidder unless noted)
+###############################################################################
+
+### List leads (paginated)
+GET {{baseUrl}}/leads?per_page=20
+Authorization: Bearer {{token}}
+
+### Filter by status + sort by score descending
+GET {{baseUrl}}/leads?status=ready&sort=-score
+Authorization: Bearer {{token}}
+
+### Search
+GET {{baseUrl}}/leads?search=Laravel
+Authorization: Bearer {{token}}
+
+### Lead detail — replace {id}
+GET {{baseUrl}}/leads/1
+Authorization: Bearer {{token}}
+
+### Mark a lead "sent" (bidder pasted the proposal on Upwork and hit Submit)
+POST {{baseUrl}}/leads/1/status
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "status": "sent"
+}
+
+### Mark a lead "replied" / "won" / "archived" — same endpoint, different value
+POST {{baseUrl}}/leads/1/status
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "status": "replied"
+}
+
+### Rescore a lead (admin only — re-spends the AI call)
+POST {{baseUrl}}/leads/1/rescore
+Authorization: Bearer {{token}}
+
+###############################################################################
+# CLIENTS / CONVERSATION MEMORY
+###############################################################################
+
+### Client detail with message history — replace {id}
+GET {{baseUrl}}/clients/1
+Authorization: Bearer {{token}}
+
+### Paste a client's reply and ask OpenClaw to draft a response
+POST {{baseUrl}}/clients/1/draft-reply
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "message": "Thanks for the proposal! Can you start next week, and what's your rate for ongoing work?"
+}
+
+###############################################################################
+# SETTINGS  (admin only)
+###############################################################################
+
+### Read all settings (secrets come back masked)
+GET {{baseUrl}}/settings
+Authorization: Bearer {{token}}
+
+### Save AI settings
+POST {{baseUrl}}/settings
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "claude_api_key": "sk-ant-REPLACE_ME",
+  "claude_model": "claude-sonnet-4-6"
+}
+
+### Save Vollna settings
+POST {{baseUrl}}/settings
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "vollna_webhook_secret": "a-long-random-shared-secret"
+}
+
+### Save OpenClaw settings
+POST {{baseUrl}}/settings
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "openclaw_url": "https://openclaw.example.com",
+  "openclaw_token": "REPLACE_ME"
+}
+
+### Save WhatsApp settings
+POST {{baseUrl}}/settings
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "whatsapp_token": "REPLACE_ME",
+  "whatsapp_phone_id": "REPLACE_ME",
+  "bidder_whatsapp": "+15551234567"
+}
+
+### Save bidding rules
+POST {{baseUrl}}/settings
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "min_budget": 150,
+  "max_proposals": 25,
+  "score_cutoff": 7,
+  "stack_keywords": ["Laravel", "PHP", "Next.js", "React", "Node", "MERN", "Flutter", "Python"],
+  "hourly_floor": 8,
+  "zero_history_budget_floor": 100,
+  "red_flag_words": ["free test", "unpaid sample", "urgent no budget", "revenue share only"],
+  "followup_days": 3
+}
+
+### Test connection — claude | vollna | openclaw | whatsapp
+POST {{baseUrl}}/settings/test/claude
+Authorization: Bearer {{token}}
+
+###
+POST {{baseUrl}}/settings/test/vollna
+Authorization: Bearer {{token}}
+
+###
+POST {{baseUrl}}/settings/test/openclaw
+Authorization: Bearer {{token}}
+
+###
+POST {{baseUrl}}/settings/test/whatsapp
+Authorization: Bearer {{token}}
+
+###############################################################################
+# ANALYTICS  (admin only)
+###############################################################################
+
+### Dashboard stats + charts data
+GET {{baseUrl}}/analytics
+Authorization: Bearer {{token}}
