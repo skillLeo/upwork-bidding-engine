@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShieldCheck, Users } from "lucide-react";
+import { ShieldCheck, Star, Users } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { ScoreBadge, StatusPill } from "@/components/ui/Badge";
 import { relativeTime } from "@/lib/utils";
@@ -35,6 +35,12 @@ export function LeadCard({ lead }: { lead: Lead }) {
           {lead.payment_verified && (
             <span className="flex items-center gap-1 rounded-pill bg-neutral-bg px-2.5 py-0.5 text-xs font-medium text-neutral">
               <ShieldCheck className="h-3 w-3" /> Payment verified
+            </span>
+          )}
+          {lead.client_rating != null && (
+            <span className="flex items-center gap-1 rounded-pill bg-neutral-bg px-2.5 py-0.5 text-xs font-medium text-neutral">
+              <Star className="h-3 w-3" /> {lead.client_rating}
+              {lead.client_reviews != null ? ` (${lead.client_reviews})` : ""}
             </span>
           )}
         </div>

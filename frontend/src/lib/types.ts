@@ -61,6 +61,8 @@ export interface Lead {
   client_country: string | null;
   client_spend: string | null;
   client_hire_rate: string | null;
+  client_rating: number | null;
+  client_reviews: number | null;
   payment_verified: boolean;
   proposal_count: number;
   score: number | null;

@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 
 #[Fillable([
     'external_id', 'title', 'full_brief', 'url', 'budget',
-    'client_country', 'client_spend', 'client_hire_rate', 'payment_verified',
+    'client_country', 'client_spend', 'client_hire_rate', 'client_rating', 'client_reviews', 'payment_verified',
     'proposal_count', 'score', 'score_reason', 'proposal_text', 'status',
     'client_id', 'posted_at',
 ])]

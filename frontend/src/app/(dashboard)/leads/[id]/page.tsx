@@ -13,6 +13,7 @@ import {
   RefreshCw,
   ShieldCheck,
   ShieldOff,
+  Star,
   Users,
   Wallet,
 } from "lucide-react";
@@ -144,6 +145,15 @@ export default function LeadDetailPage() {
             label="Payment"
             value={lead.payment_verified ? "Verified" : "Unverified"}
             tone={lead.payment_verified ? "success" : "neutral"}
+          />
+          <StatBlock
+            icon={Star}
+            label="Client rating"
+            value={
+              lead.client_rating != null
+                ? `${lead.client_rating}${lead.client_reviews != null ? ` (${lead.client_reviews} reviews)` : ""}`
+                : "—"
+            }
           />
         </div>
 
