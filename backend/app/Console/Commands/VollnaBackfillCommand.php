@@ -63,6 +63,11 @@ class VollnaBackfillCommand extends Command
             if ($isLast || ! $cursor) {
                 break;
             }
+
+            // Vollna's API rate-limits rapid consecutive requests (hit a 429
+            // pulling 5 pages back-to-back during testing) - a small pause
+            // between pages keeps a multi-page backfill from tripping it.
+            sleep(2);
         }
 
         $this->info("Done. Accepted: {$accepted}, duplicate: {$duplicate}, skipped: {$skipped}.");
