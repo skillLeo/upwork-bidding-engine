@@ -64,10 +64,11 @@ class VollnaBackfillCommand extends Command
                 break;
             }
 
-            // Vollna's API rate-limits rapid consecutive requests (hit a 429
-            // pulling 5 pages back-to-back during testing) - a small pause
-            // between pages keeps a multi-page backfill from tripping it.
-            sleep(2);
+            // Vollna's API rate limit held steady at exactly 5 requests
+            // before a 429 in testing, regardless of a 2s pause between
+            // pages - this looks like a per-minute cap, not a burst guard.
+            // Space requests ~13s apart so 5 fit inside a 60s window.
+            sleep(13);
         }
 
         $this->info("Done. Accepted: {$accepted}, duplicate: {$duplicate}, skipped: {$skipped}.");
