@@ -4,6 +4,7 @@ use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\LeadController;
+use App\Http\Controllers\SavedFilterController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\VollnaWebhookController;
 use App\Http\Controllers\WhatsAppWebhookController;
@@ -46,6 +47,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/leads/{lead}', [LeadController::class, 'show']);
     Route::post('/leads/{lead}/status', [LeadController::class, 'updateStatus']);
     Route::post('/leads/{lead}/rescore', [LeadController::class, 'rescore'])->middleware('role:admin');
+
+    /*
+    |----------------------------------------------------------------------
+    | Saved lead filters — shared account-wide, same as Settings, rather
+    | than owned per-user (this is a single-bidder tool, not multi-tenant).
+    |----------------------------------------------------------------------
+    */
+    Route::get('/saved-filters', [SavedFilterController::class, 'index']);
+    Route::post('/saved-filters', [SavedFilterController::class, 'store']);
+    Route::put('/saved-filters/{savedFilter}', [SavedFilterController::class, 'update']);
+    Route::delete('/saved-filters/{savedFilter}', [SavedFilterController::class, 'destroy']);
 
     /*
     |----------------------------------------------------------------------

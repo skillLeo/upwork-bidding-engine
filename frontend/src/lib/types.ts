@@ -58,8 +58,11 @@ export interface Lead {
   full_brief: string;
   url: string | null;
   budget: string | null;
+  budget_min: number | null;
+  budget_max: number | null;
   client_country: string | null;
   client_spend: string | null;
+  client_spend_amount: number | null;
   client_hire_rate: string | null;
   client_rating: number | null;
   client_reviews: number | null;
@@ -179,4 +182,26 @@ export interface AnalyticsResponse {
 export interface ApiErrorBody {
   message: string;
   errors?: Record<string, string[]>;
+}
+
+export interface SavedFilterCriteria {
+  include_keywords?: string[];
+  exclude_keywords?: string[];
+  budget_min?: number;
+  budget_max?: number;
+  payment_verified_only?: boolean;
+  min_client_spend?: number;
+  client_countries_include?: string[];
+  client_countries_exclude?: string[];
+  posted_within_minutes?: number;
+}
+
+export interface SavedFilter {
+  id: number;
+  name: string;
+  is_default: boolean;
+  is_pinned: boolean;
+  criteria: SavedFilterCriteria;
+  created_at: string;
+  updated_at: string;
 }

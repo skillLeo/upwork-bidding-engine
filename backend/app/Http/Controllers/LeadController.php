@@ -36,11 +36,64 @@ class LeadController extends Controller
             });
         }
 
+        if ($include = $this->queryList($request, 'include_keywords')) {
+            $query->where(function ($q) use ($include) {
+                foreach ($include as $keyword) {
+                    $q->orWhere('title', 'like', "%{$keyword}%")
+                        ->orWhere('full_brief', 'like', "%{$keyword}%");
+                }
+            });
+        }
+
+        if ($exclude = $this->queryList($request, 'exclude_keywords')) {
+            $query->where(function ($q) use ($exclude) {
+                foreach ($exclude as $keyword) {
+                    $q->where('title', 'not like', "%{$keyword}%")
+                        ->where('full_brief', 'not like', "%{$keyword}%");
+                }
+            });
+        }
+
+        if ($request->filled('budget_min')) {
+            // A lead with no parsed budget can't be excluded by a floor it
+            // never reported meeting — only leads with a KNOWN budget below
+            // the floor get filtered out.
+            $query->where(function ($q) use ($request) {
+                $q->whereNull('budget_max')->orWhere('budget_max', '>=', (float) $request->query('budget_min'));
+            });
+        }
+
+        if ($request->filled('budget_max')) {
+            $query->where(function ($q) use ($request) {
+                $q->whereNull('budget_min')->orWhere('budget_min', '<=', (float) $request->query('budget_max'));
+            });
+        }
+
+        if ($request->boolean('payment_verified_only')) {
+            $query->where('payment_verified', true);
+        }
+
+        if ($request->filled('min_client_spend')) {
+            $query->where('client_spend_amount', '>=', (float) $request->query('min_client_spend'));
+        }
+
+        if ($countriesIn = $this->queryList($request, 'client_countries_include')) {
+            $query->whereIn('client_country', $countriesIn);
+        }
+
+        if ($countriesOut = $this->queryList($request, 'client_countries_exclude')) {
+            $query->whereNotIn('client_country', $countriesOut);
+        }
+
+        if ($request->filled('posted_within_minutes')) {
+            $query->where('posted_at', '>=', now()->subMinutes((int) $request->query('posted_within_minutes')));
+        }
+
         $sort = (string) $request->query('sort', '-created_at');
         $direction = str_starts_with($sort, '-') ? 'desc' : 'asc';
         $column = ltrim($sort, '-');
 
-        if (! in_array($column, ['created_at', 'score', 'posted_at', 'proposal_count'], true)) {
+        if (! in_array($column, ['created_at', 'score', 'posted_at', 'proposal_count', 'budget_max'], true)) {
             $column = 'created_at';
         }
 
@@ -65,6 +118,28 @@ class LeadController extends Controller
     public function show(Lead $lead): JsonResponse
     {
         return response()->json(['data' => new LeadResource($lead->load('client'))]);
+    }
+
+    /**
+     * Saved filter criteria arrays arrive as either `key[]=a&key[]=b` or a
+     * single comma-separated `key=a,b` (simpler to build client-side) -
+     * accept both instead of forcing the frontend into one array format.
+     *
+     * @return array<int, string>
+     */
+    protected function queryList(Request $request, string $key): array
+    {
+        $value = $request->query($key);
+
+        if (is_array($value)) {
+            return array_values(array_filter(array_map('trim', $value)));
+        }
+
+        if (is_string($value) && $value !== '') {
+            return array_values(array_filter(array_map('trim', explode(',', $value))));
+        }
+
+        return [];
     }
 
     public function updateStatus(UpdateLeadStatusRequest $request, Lead $lead): JsonResponse

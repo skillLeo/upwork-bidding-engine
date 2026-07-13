@@ -92,13 +92,15 @@ class VollnaProjectImporter
                 ?? ''
             ),
             'url' => $url,
-            'budget' => $this->normalizeBudget($payload),
+            'budget' => $budget = $this->normalizeBudget($payload),
+            ...$this->parseBudgetRange($budget),
             'client_country' => Arr::get($client, 'country.name')
                 ?? Arr::get($client, 'country')
                 ?? Arr::get($payload, 'client_country'),
-            'client_spend' => $this->stringifyMoney(
+            'client_spend' => $this->stringifyMoney($rawSpend = (
                 Arr::get($client, 'total_spent') ?? Arr::get($client, 'totalSpent') ?? Arr::get($payload, 'client_spend')
-            ),
+            )),
+            'client_spend_amount' => is_numeric($rawSpend) ? (float) $rawSpend : null,
             'client_hire_rate' => $this->stringifyPercent(
                 Arr::get($client, 'hire_rate') ?? Arr::get($client, 'hireRate') ?? Arr::get($payload, 'client_hire_rate')
             ),
@@ -181,6 +183,33 @@ class VollnaProjectImporter
         }
 
         return null;
+    }
+
+    /**
+     * `budget` is kept as a free-text display string (e.g. "15 - 25 USD/hr",
+     * "$5,000 fixed") since Vollna's own formatting varies by source shape -
+     * this pulls the numbers back out so budget range filters can query
+     * numerically instead of doing fragile string matching.
+     *
+     * @return array{budget_min: ?float, budget_max: ?float}
+     */
+    protected function parseBudgetRange(?string $budget): array
+    {
+        if (! $budget) {
+            return ['budget_min' => null, 'budget_max' => null];
+        }
+
+        preg_match_all('/[\d,]+(?:\.\d+)?/', $budget, $matches);
+        $numbers = array_map(fn ($n) => (float) str_replace(',', '', $n), $matches[0] ?? []);
+
+        if ($numbers === []) {
+            return ['budget_min' => null, 'budget_max' => null];
+        }
+
+        return [
+            'budget_min' => min($numbers),
+            'budget_max' => max($numbers),
+        ];
     }
 
     protected function stringifyMoney(mixed $value): ?string

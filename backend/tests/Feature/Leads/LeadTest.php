@@ -42,6 +42,69 @@ class LeadTest extends TestCase
         $this->assertEquals(1, $response->json('meta.total'));
     }
 
+    public function test_include_keywords_matches_title_or_brief(): void
+    {
+        $bidder = User::factory()->bidder()->create();
+        Lead::factory()->create(['title' => 'Laravel Developer Needed', 'full_brief' => 'Build an API.']);
+        Lead::factory()->create(['title' => 'Generic Job', 'full_brief' => 'We need help with Laravel setup.']);
+        Lead::factory()->create(['title' => 'Unrelated', 'full_brief' => 'Nothing to see here.']);
+
+        $response = $this->actingAs($bidder, 'sanctum')->getJson('/api/leads?include_keywords=Laravel');
+
+        $response->assertOk();
+        $this->assertEquals(2, $response->json('meta.total'));
+    }
+
+    public function test_exclude_keywords_hides_matching_leads(): void
+    {
+        $bidder = User::factory()->bidder()->create();
+        Lead::factory()->create(['title' => 'WordPress Site Fix', 'full_brief' => 'Minor CSS tweaks.']);
+        Lead::factory()->create(['title' => 'Laravel API', 'full_brief' => 'Build an API.']);
+
+        $response = $this->actingAs($bidder, 'sanctum')->getJson('/api/leads?exclude_keywords=WordPress');
+
+        $response->assertOk();
+        $this->assertEquals(1, $response->json('meta.total'));
+    }
+
+    public function test_budget_range_filters_by_parsed_budget(): void
+    {
+        $bidder = User::factory()->bidder()->create();
+        Lead::factory()->create(['budget' => '$500 fixed', 'budget_min' => 500, 'budget_max' => 500]);
+        Lead::factory()->create(['budget' => '$5000 fixed', 'budget_min' => 5000, 'budget_max' => 5000]);
+        Lead::factory()->create(['budget' => null, 'budget_min' => null, 'budget_max' => null]);
+
+        $response = $this->actingAs($bidder, 'sanctum')->getJson('/api/leads?budget_min=1000');
+
+        $response->assertOk();
+        // The $5000 lead plus the no-budget lead (never excluded by a floor it never reported).
+        $this->assertEquals(2, $response->json('meta.total'));
+    }
+
+    public function test_payment_verified_only_filters_correctly(): void
+    {
+        $bidder = User::factory()->bidder()->create();
+        Lead::factory()->create(['payment_verified' => true]);
+        Lead::factory()->create(['payment_verified' => false]);
+
+        $response = $this->actingAs($bidder, 'sanctum')->getJson('/api/leads?payment_verified_only=1');
+
+        $response->assertOk();
+        $this->assertEquals(1, $response->json('meta.total'));
+    }
+
+    public function test_posted_within_minutes_filters_out_older_leads(): void
+    {
+        $bidder = User::factory()->bidder()->create();
+        Lead::factory()->create(['posted_at' => now()->subMinutes(5)]);
+        Lead::factory()->create(['posted_at' => now()->subHours(3)]);
+
+        $response = $this->actingAs($bidder, 'sanctum')->getJson('/api/leads?posted_within_minutes=30');
+
+        $response->assertOk();
+        $this->assertEquals(1, $response->json('meta.total'));
+    }
+
     public function test_show_returns_full_lead(): void
     {
         $bidder = User::factory()->bidder()->create();

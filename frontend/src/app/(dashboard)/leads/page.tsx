@@ -9,15 +9,17 @@ import {
 } from "@tanstack/react-table";
 import { Inbox, Search, Sparkles, TrendingUp } from "lucide-react";
 import { useLeads } from "@/lib/hooks/useLeads";
+import { useSavedFilters } from "@/lib/hooks/useSavedFilters";
 import { LeadCard } from "@/components/leads/LeadCard";
 import { LeadFiltersRail } from "@/components/leads/LeadFiltersRail";
+import { SavedFiltersBar } from "@/components/leads/SavedFiltersBar";
 import { LeftRail, PageContainer, RightRail } from "@/components/layout/Rails";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LeadCardSkeleton } from "@/components/ui/Skeleton";
-import type { Lead } from "@/lib/types";
+import type { Lead, SavedFilter } from "@/lib/types";
 
 const TIPS = [
   "Proposals sent within the first hour get read far more often — check Ready leads often.",
@@ -62,9 +64,30 @@ export default function LeadsPage() {
     { id: "created_at", desc: true },
   ]);
 
+  const { filters: savedFilters } = useSavedFilters();
+  const [activeFilterId, setActiveFilterId] = React.useState<number | null>(null);
+  const [hasAppliedDefault, setHasAppliedDefault] = React.useState(false);
+
+  // Apply the pinned default filter once, the first time saved filters load -
+  // never again after, so a user explicitly clearing back to "All leads"
+  // doesn't get silently overridden back to the default on a later refetch.
+  React.useEffect(() => {
+    if (hasAppliedDefault || savedFilters.length === 0) return;
+    const defaultFilter = savedFilters.find((f) => f.is_default);
+    if (defaultFilter) setActiveFilterId(defaultFilter.id);
+    setHasAppliedDefault(true);
+  }, [savedFilters, hasAppliedDefault]);
+
+  const activeFilter = savedFilters.find((f) => f.id === activeFilterId) ?? null;
+
+  function handleSelectFilter(filter: SavedFilter | null) {
+    setActiveFilterId(filter?.id ?? null);
+    setHasAppliedDefault(true);
+  }
+
   React.useEffect(() => {
     setPage(1);
-  }, [status, scoreMin, search, sorting]);
+  }, [status, scoreMin, search, sorting, activeFilterId]);
 
   const sortParam =
     sorting.length > 0 ? `${sorting[0].desc ? "-" : ""}${sorting[0].id}` : "-created_at";
@@ -76,6 +99,13 @@ export default function LeadsPage() {
     sort: sortParam,
     page,
     per_page: 12,
+    include_keywords: activeFilter?.criteria.include_keywords,
+    exclude_keywords: activeFilter?.criteria.exclude_keywords,
+    budget_min: activeFilter?.criteria.budget_min,
+    budget_max: activeFilter?.criteria.budget_max,
+    payment_verified_only: activeFilter?.criteria.payment_verified_only,
+    min_client_spend: activeFilter?.criteria.min_client_spend,
+    posted_within_minutes: activeFilter?.criteria.posted_within_minutes,
   });
 
   const table = useReactTable({
@@ -96,6 +126,7 @@ export default function LeadsPage() {
     setStatus("all");
     setScoreMin(undefined);
     setSearchInput("");
+    handleSelectFilter(null);
   }
 
   return (
@@ -111,6 +142,8 @@ export default function LeadsPage() {
         </LeftRail>
 
         <div className="min-w-0 flex-1 space-y-4">
+          <SavedFiltersBar activeId={activeFilterId} onSelect={handleSelectFilter} />
+
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h1 className="text-xl font-semibold text-text-primary">Leads</h1>
