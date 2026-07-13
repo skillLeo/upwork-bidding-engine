@@ -37,9 +37,9 @@ export function SavedFiltersBar({
       <button
         onClick={() => onSelect(null)}
         className={cn(
-          "rounded-pill border px-3 py-1.5 text-xs font-medium transition-colors",
+          "rounded-pill border px-3 py-1.5 text-xs font-medium transition-all duration-150",
           activeId === null
-            ? "border-primary bg-primary-tint text-primary"
+            ? "border-primary bg-primary-tint text-primary shadow-sm"
             : "border-border-strong text-text-secondary hover:bg-black/5",
         )}
       >
@@ -53,9 +53,9 @@ export function SavedFiltersBar({
             key={filter.id}
             onClick={() => onSelect(filter)}
             className={cn(
-              "group flex items-center gap-1 rounded-pill border px-3 py-1.5 text-xs font-medium transition-colors",
+              "group flex items-center gap-1 rounded-pill border px-3 py-1.5 text-xs font-medium transition-all duration-150",
               isActive
-                ? "border-primary bg-primary-tint text-primary"
+                ? "border-primary bg-primary-tint text-primary shadow-sm"
                 : "border-border-strong text-text-secondary hover:bg-black/5",
             )}
           >

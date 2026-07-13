@@ -2,11 +2,13 @@
 
 import useSWR from "swr";
 import { apiClient, fetcher } from "@/lib/api-client";
-import type { Lead, LeadStatus } from "@/lib/types";
+import { buildQuery } from "@/lib/hooks/useLeads";
+import type { Lead, LeadStatus, SavedFilterCriteria } from "@/lib/types";
 
-export function useLead(id: number | string | undefined) {
+export function useLead(id: number | string | undefined, criteria?: SavedFilterCriteria) {
+  const query = criteria ? buildQuery(criteria) : "";
   const { data, error, isLoading, mutate } = useSWR<{ data: Lead }>(
-    id ? `/leads/${id}` : null,
+    id ? `/leads/${id}${query ? `?${query}` : ""}` : null,
     fetcher,
   );
   return { lead: data?.data, isLoading, error, mutate };

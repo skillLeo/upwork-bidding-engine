@@ -1,10 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
+  AlertTriangle,
   ArrowLeft,
   Copy,
   ExternalLink,
@@ -18,6 +19,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { useLead, updateLeadStatus, rescoreLead } from "@/lib/hooks/useLead";
+import { useSavedFilters } from "@/lib/hooks/useSavedFilters";
 import { PageContainer } from "@/components/layout/Rails";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -38,9 +40,15 @@ const statusActions: Array<{ status: LeadStatus; label: string }> = [
 
 export default function LeadDetailPage() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
-  const { lead, isLoading, mutate } = useLead(params.id);
+
+  const filterId = searchParams.get("filter");
+  const { filters: savedFilters } = useSavedFilters();
+  const activeFilter = filterId ? savedFilters.find((f) => f.id === Number(filterId)) : undefined;
+
+  const { lead, isLoading, mutate } = useLead(params.id, activeFilter?.criteria);
   const [actionLoading, setActionLoading] = React.useState<string | null>(null);
 
   async function handleStatus(status: LeadStatus) {
@@ -132,6 +140,22 @@ export default function LeadDetailPage() {
           >
             View on Upwork <ExternalLink className="h-3.5 w-3.5" />
           </a>
+        )}
+
+        {lead.matches_filter === false && lead.filter_fail_reasons && (
+          <div className="mt-4 rounded-md border border-danger-border bg-danger-bg px-4 py-3">
+            <p className="flex items-center gap-1.5 text-sm font-semibold text-danger">
+              <AlertTriangle className="h-4 w-4" /> Why this job isn&apos;t in your filter
+            </p>
+            <ul className="mt-2 space-y-1">
+              {lead.filter_fail_reasons.map((reason) => (
+                <li key={reason} className="flex gap-1.5 text-sm text-danger/90">
+                  <span aria-hidden>•</span>
+                  {reason}
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
 
         <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">

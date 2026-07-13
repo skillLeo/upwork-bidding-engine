@@ -198,7 +198,7 @@ export default function LeadsPage() {
           ) : (
             <div className="space-y-3">
               {rows.map((row) => (
-                <LeadCard key={row.original.id} lead={row.original} />
+                <LeadCard key={row.original.id} lead={row.original} activeFilterId={activeFilterId} />
               ))}
             </div>
           )}

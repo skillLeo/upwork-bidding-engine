@@ -105,6 +105,59 @@ class LeadTest extends TestCase
         $this->assertEquals(1, $response->json('meta.total'));
     }
 
+    public function test_search_ignores_active_filter_criteria(): void
+    {
+        $bidder = User::factory()->bidder()->create();
+        // Wouldn't pass an "Odoo" include-keyword filter, but the search
+        // term itself should still find it regardless of that filter.
+        Lead::factory()->create(['title' => 'Odoo ERP Setup', 'full_brief' => 'Implement Odoo modules.']);
+        Lead::factory()->create(['title' => 'Unrelated Job', 'full_brief' => 'Nothing to see here.']);
+
+        $response = $this->actingAs($bidder, 'sanctum')->getJson(
+            '/api/leads?search=Odoo&include_keywords=Laravel,PHP',
+        );
+
+        $response->assertOk();
+        $this->assertEquals(1, $response->json('meta.total'));
+    }
+
+    public function test_search_result_not_matching_active_filter_is_annotated(): void
+    {
+        $bidder = User::factory()->bidder()->create();
+        Lead::factory()->create(['title' => 'Odoo ERP Setup', 'full_brief' => 'Implement Odoo modules.']);
+
+        $response = $this->actingAs($bidder, 'sanctum')->getJson(
+            '/api/leads?search=Odoo&include_keywords=Laravel,PHP',
+        );
+
+        $response->assertOk()
+            ->assertJsonPath('data.0.matches_filter', false)
+            ->assertJsonPath('data.0.filter_fail_reasons.0', 'Include keywords: matches none of Laravel, PHP.');
+    }
+
+    public function test_matches_filter_is_absent_when_no_criteria_active(): void
+    {
+        $bidder = User::factory()->bidder()->create();
+        Lead::factory()->create(['title' => 'Any Job']);
+
+        $response = $this->actingAs($bidder, 'sanctum')->getJson('/api/leads');
+
+        $response->assertOk();
+        $this->assertArrayNotHasKey('matches_filter', $response->json('data.0'));
+    }
+
+    public function test_show_annotates_lead_when_criteria_passed(): void
+    {
+        $bidder = User::factory()->bidder()->create();
+        $lead = Lead::factory()->create(['title' => 'Odoo ERP Setup', 'full_brief' => 'Implement Odoo.']);
+
+        $this->actingAs($bidder, 'sanctum')
+            ->getJson("/api/leads/{$lead->id}?include_keywords=Laravel")
+            ->assertOk()
+            ->assertJsonPath('data.matches_filter', false)
+            ->assertJsonPath('data.filter_fail_reasons.0', 'Include keywords: matches none of Laravel.');
+    }
+
     public function test_show_returns_full_lead(): void
     {
         $bidder = User::factory()->bidder()->create();

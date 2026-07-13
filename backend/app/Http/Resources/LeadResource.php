@@ -41,6 +41,17 @@ class LeadResource extends JsonResource
             'posted_at' => $this->posted_at ->toIso8601String(),
             'created_at' => $this->created_at->toIso8601String(),
             'updated_at' => $this->updated_at->toIso8601String(),
+            // Only set by LeadController when a filter's criteria are in
+            // play (e.g. searching while a saved filter is active) - absent
+            // entirely on a plain unfiltered browse.
+            'matches_filter' => $this->when(
+                $this->offsetExists('matches_filter'),
+                fn () => $this->matches_filter,
+            ),
+            'filter_fail_reasons' => $this->when(
+                $this->offsetExists('filter_fail_reasons'),
+                fn () => $this->filter_fail_reasons,
+            ),
         ];
     }
 }

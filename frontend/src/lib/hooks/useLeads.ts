@@ -22,7 +22,7 @@ export interface LeadFilters {
   posted_within_minutes?: number;
 }
 
-function buildQuery(filters: LeadFilters): string {
+export function buildQuery(filters: LeadFilters): string {
   const params = new URLSearchParams();
   if (filters.status) params.set("status", filters.status);
   if (filters.score_min !== undefined) params.set("score_min", String(filters.score_min));

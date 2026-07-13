@@ -77,6 +77,11 @@ export interface Lead {
   posted_at: string | null;
   created_at: string;
   updated_at: string;
+  // Only present when a saved filter's criteria were evaluated against this
+  // lead (e.g. searching while a filter is active) - absent on a plain
+  // unfiltered browse.
+  matches_filter?: boolean;
+  filter_fail_reasons?: string[];
 }
 
 export interface PaginationMeta {

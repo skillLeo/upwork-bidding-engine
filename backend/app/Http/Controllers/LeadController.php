@@ -11,11 +11,14 @@ use App\Jobs\ScoreLeadJob;
 use App\Models\ActivityLog;
 use App\Models\Client;
 use App\Models\Lead;
+use App\Services\LeadFilterEvaluator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class LeadController extends Controller
 {
+    public function __construct(protected LeadFilterEvaluator $filterEvaluator) {}
+
     public function index(Request $request): JsonResponse
     {
         $query = Lead::query()->with('client');
@@ -29,6 +32,13 @@ class LeadController extends Controller
             $query->where('score', '>=', (int) $request->query('score_min'));
         }
 
+        // Searching means "find this across everything", not "search within
+        // my current filter" - a saved filter's keyword/budget/etc. rules
+        // are skipped entirely while a search term is present. The results
+        // are still annotated below so leads that wouldn't normally pass the
+        // active filter show up with a reason instead of just disappearing.
+        $hasSearch = $request->filled('search');
+
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('title', 'like', "%{$search}%")
@@ -36,57 +46,10 @@ class LeadController extends Controller
             });
         }
 
-        if ($include = $this->queryList($request, 'include_keywords')) {
-            $query->where(function ($q) use ($include) {
-                foreach ($include as $keyword) {
-                    $q->orWhere('title', 'like', "%{$keyword}%")
-                        ->orWhere('full_brief', 'like', "%{$keyword}%");
-                }
-            });
-        }
+        $criteria = $this->criteriaFromRequest($request);
 
-        if ($exclude = $this->queryList($request, 'exclude_keywords')) {
-            $query->where(function ($q) use ($exclude) {
-                foreach ($exclude as $keyword) {
-                    $q->where('title', 'not like', "%{$keyword}%")
-                        ->where('full_brief', 'not like', "%{$keyword}%");
-                }
-            });
-        }
-
-        if ($request->filled('budget_min')) {
-            // A lead with no parsed budget can't be excluded by a floor it
-            // never reported meeting — only leads with a KNOWN budget below
-            // the floor get filtered out.
-            $query->where(function ($q) use ($request) {
-                $q->whereNull('budget_max')->orWhere('budget_max', '>=', (float) $request->query('budget_min'));
-            });
-        }
-
-        if ($request->filled('budget_max')) {
-            $query->where(function ($q) use ($request) {
-                $q->whereNull('budget_min')->orWhere('budget_min', '<=', (float) $request->query('budget_max'));
-            });
-        }
-
-        if ($request->boolean('payment_verified_only')) {
-            $query->where('payment_verified', true);
-        }
-
-        if ($request->filled('min_client_spend')) {
-            $query->where('client_spend_amount', '>=', (float) $request->query('min_client_spend'));
-        }
-
-        if ($countriesIn = $this->queryList($request, 'client_countries_include')) {
-            $query->whereIn('client_country', $countriesIn);
-        }
-
-        if ($countriesOut = $this->queryList($request, 'client_countries_exclude')) {
-            $query->whereNotIn('client_country', $countriesOut);
-        }
-
-        if ($request->filled('posted_within_minutes')) {
-            $query->where('posted_at', '>=', now()->subMinutes((int) $request->query('posted_within_minutes')));
+        if (! $hasSearch) {
+            $this->applyCriteria($query, $criteria);
         }
 
         $sort = (string) $request->query('sort', '-created_at');
@@ -104,6 +67,17 @@ class LeadController extends Controller
 
         $leads = $query->paginate($perPage)->withQueryString();
 
+        // Only worth evaluating (and worth the extra per-lead work) when a
+        // filter's criteria are actually in play - a plain unfiltered browse
+        // has nothing to be "not in filter" relative to.
+        if ($criteria !== []) {
+            foreach ($leads->items() as $lead) {
+                $reasons = $this->filterEvaluator->reasons($lead, $criteria);
+                $lead->setAttribute('matches_filter', $reasons === []);
+                $lead->setAttribute('filter_fail_reasons', $reasons);
+            }
+        }
+
         return response()->json([
             'data' => LeadResource::collection($leads->items()),
             'meta' => [
@@ -115,9 +89,103 @@ class LeadController extends Controller
         ]);
     }
 
-    public function show(Lead $lead): JsonResponse
+    /**
+     * @return array<string, mixed>
+     */
+    protected function criteriaFromRequest(Request $request): array
     {
-        return response()->json(['data' => new LeadResource($lead->load('client'))]);
+        $criteria = [
+            'include_keywords' => $this->queryList($request, 'include_keywords'),
+            'exclude_keywords' => $this->queryList($request, 'exclude_keywords'),
+            'budget_min' => $request->filled('budget_min') ? (float) $request->query('budget_min') : null,
+            'budget_max' => $request->filled('budget_max') ? (float) $request->query('budget_max') : null,
+            'payment_verified_only' => $request->boolean('payment_verified_only'),
+            'min_client_spend' => $request->filled('min_client_spend') ? (float) $request->query('min_client_spend') : null,
+            'client_countries_include' => $this->queryList($request, 'client_countries_include'),
+            'client_countries_exclude' => $this->queryList($request, 'client_countries_exclude'),
+            'posted_within_minutes' => $request->filled('posted_within_minutes') ? (int) $request->query('posted_within_minutes') : null,
+        ];
+
+        // Drop empty/false/null entries so an unfiltered browse (nothing set)
+        // ends up as `[]`, the signal used above to skip evaluation entirely.
+        return array_filter($criteria, fn ($value) => $value !== null && $value !== [] && $value !== false);
+    }
+
+    /**
+     * @param  \Illuminate\Database\Eloquent\Builder<Lead>  $query
+     * @param  array<string, mixed>  $criteria
+     */
+    protected function applyCriteria($query, array $criteria): void
+    {
+        if ($include = $criteria['include_keywords'] ?? []) {
+            $query->where(function ($q) use ($include) {
+                foreach ($include as $keyword) {
+                    $q->orWhere('title', 'like', "%{$keyword}%")
+                        ->orWhere('full_brief', 'like', "%{$keyword}%");
+                }
+            });
+        }
+
+        if ($exclude = $criteria['exclude_keywords'] ?? []) {
+            $query->where(function ($q) use ($exclude) {
+                foreach ($exclude as $keyword) {
+                    $q->where('title', 'not like', "%{$keyword}%")
+                        ->where('full_brief', 'not like', "%{$keyword}%");
+                }
+            });
+        }
+
+        if (isset($criteria['budget_min'])) {
+            // A lead with no parsed budget can't be excluded by a floor it
+            // never reported meeting — only leads with a KNOWN budget below
+            // the floor get filtered out.
+            $query->where(function ($q) use ($criteria) {
+                $q->whereNull('budget_max')->orWhere('budget_max', '>=', $criteria['budget_min']);
+            });
+        }
+
+        if (isset($criteria['budget_max'])) {
+            $query->where(function ($q) use ($criteria) {
+                $q->whereNull('budget_min')->orWhere('budget_min', '<=', $criteria['budget_max']);
+            });
+        }
+
+        if (! empty($criteria['payment_verified_only'])) {
+            $query->where('payment_verified', true);
+        }
+
+        if (isset($criteria['min_client_spend'])) {
+            $query->where('client_spend_amount', '>=', $criteria['min_client_spend']);
+        }
+
+        if ($countriesIn = $criteria['client_countries_include'] ?? []) {
+            $query->whereIn('client_country', $countriesIn);
+        }
+
+        if ($countriesOut = $criteria['client_countries_exclude'] ?? []) {
+            $query->whereNotIn('client_country', $countriesOut);
+        }
+
+        if (isset($criteria['posted_within_minutes'])) {
+            $query->where('posted_at', '>=', now()->subMinutes($criteria['posted_within_minutes']));
+        }
+    }
+
+    public function show(Request $request, Lead $lead): JsonResponse
+    {
+        $lead->load('client');
+
+        // Only present when the frontend links here from a filtered context
+        // (e.g. clicking a "Not in filter" search result) - see index() for
+        // why this is skipped entirely on a plain, unfiltered lead view.
+        $criteria = $this->criteriaFromRequest($request);
+        if ($criteria !== []) {
+            $reasons = $this->filterEvaluator->reasons($lead, $criteria);
+            $lead->setAttribute('matches_filter', $reasons === []);
+            $lead->setAttribute('filter_fail_reasons', $reasons);
+        }
+
+        return response()->json(['data' => new LeadResource($lead)]);
     }
 
     /**
