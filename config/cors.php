@@ -7,9 +7,12 @@ return [
     | Cross-Origin Resource Sharing (CORS) Configuration
     |--------------------------------------------------------------------------
     |
-    | Locked to the Next.js dashboard origin. The API is consumed by a
-    | separate SPA using Sanctum bearer tokens (not cookie auth), so
-    | credentials support is left off by default.
+    | In production the Vue SPA is served from this same Laravel app, so
+    | API calls are same-origin and this never triggers. It only matters
+    | for local dev, where the Vite dev server runs on its own port and
+    | needs `FRONTEND_URL` set to allow it through. Sanctum bearer tokens
+    | (not cookie auth) are used either way, so credentials support is
+    | left off by default.
     |
     */
 
