@@ -9,5 +9,12 @@ use Illuminate\Support\Facades\Route;
 Route::get('/{any}', function () {
     return response()
         ->view('app')
-        ->header('Cache-Control', 'no-store, must-revalidate');
+        // The SPA shell must never be cached — not by the browser, and not by
+        // Hostinger's CDN edge (which honours Surrogate-Control / CDN-Cache-Control).
+        // A stale shell references hashed asset files from an older build that no
+        // longer exist, so it must always be re-fetched fresh from origin.
+        ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        ->header('CDN-Cache-Control', 'no-store')
+        ->header('Surrogate-Control', 'no-store')
+        ->header('Pragma', 'no-cache');
 })->where('any', '^(?!api).*$');
