@@ -7,5 +7,7 @@ use Illuminate\Support\Facades\Route;
 // route file (routes/api.php) mounted under its own prefix, so it's never
 // reachable through this catch-all.
 Route::get('/{any}', function () {
-    return view('app');
+    return response()
+        ->view('app')
+        ->header('Cache-Control', 'no-store, must-revalidate');
 })->where('any', '^(?!api).*$');
