@@ -32,9 +32,7 @@ class UpdateSettingsRequest extends FormRequest
             'openclaw_url' => ['sometimes', 'nullable', 'string', 'max:500'],
             'openclaw_token' => ['sometimes', 'nullable', 'string', 'max:500'],
 
-            // WhatsApp
-            'whatsapp_token' => ['sometimes', 'nullable', 'string', 'max:1000'],
-            'whatsapp_phone_id' => ['sometimes', 'nullable', 'string', 'max:100'],
+            // WhatsApp — sent via OpenClaw, no Meta token/phone ID needed
             'bidder_whatsapp' => ['sometimes', 'nullable', 'string', 'max:30'],
 
             // Rules

@@ -8,7 +8,6 @@ use App\Models\ActivityLog;
 use App\Services\ClaudeService;
 use App\Services\OpenClawService;
 use App\Services\SettingsService;
-use App\Services\WhatsAppService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -61,7 +60,6 @@ class SettingsController extends Controller
         Request $request,
         ClaudeService $claude,
         OpenClawService $openClaw,
-        WhatsAppService $whatsapp,
     ): JsonResponse {
         if (! in_array($service, SettingsService::SERVICES, true)) {
             return response()->json(['message' => 'Unknown service.'], 422);
@@ -70,7 +68,7 @@ class SettingsController extends Controller
         $result = match ($service) {
             'claude' => $claude->testConnection(),
             'openclaw' => $openClaw->testConnection(),
-            'whatsapp' => $whatsapp->testConnection(),
+            'whatsapp' => $openClaw->testWhatsAppConnection(),
             'vollna' => $this->testVollna(),
         };
 

@@ -6,8 +6,8 @@ use App\Enums\ActivityType;
 use App\Enums\LeadStatus;
 use App\Models\ActivityLog;
 use App\Models\Lead;
+use App\Services\OpenClawService;
 use App\Services\SettingsService;
-use App\Services\WhatsAppService;
 use Illuminate\Console\Command;
 
 class FollowUpReminderCommand extends Command
@@ -16,7 +16,7 @@ class FollowUpReminderCommand extends Command
 
     protected $description = 'Ping the bidder on WhatsApp for sent leads that have had no reply after the configured follow-up window.';
 
-    public function handle(SettingsService $settings, WhatsAppService $whatsapp): int
+    public function handle(SettingsService $settings, OpenClawService $openClaw): int
     {
         $days = (int) $settings->get('followup_days', 3);
         $cutoff = now()->subDays($days);
@@ -36,7 +36,7 @@ class FollowUpReminderCommand extends Command
 
         foreach ($leads as $lead) {
             try {
-                $whatsapp->sendFollowUp($lead, "{$dashboardBase}/leads/{$lead->id}");
+                $openClaw->sendFollowUp($lead, "{$dashboardBase}/leads/{$lead->id}");
 
                 ActivityLog::record(ActivityType::FollowUpSent, subject: $lead, meta: [
                     'followup_days' => $days,

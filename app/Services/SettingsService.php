@@ -35,9 +35,9 @@ class SettingsService
         'openclaw_url' => ['group' => 'openclaw', 'secret' => true, 'default' => ''],
         'openclaw_token' => ['group' => 'openclaw', 'secret' => true, 'default' => ''],
 
-        // WhatsApp
-        'whatsapp_token' => ['group' => 'whatsapp', 'secret' => true, 'default' => ''],
-        'whatsapp_phone_id' => ['group' => 'whatsapp', 'secret' => true, 'default' => ''],
+        // WhatsApp — sent via OpenClaw (already QR-linked to WhatsApp), not
+        // Meta's Cloud API, so the only thing this app needs to know is who
+        // to message. openclaw_url/openclaw_token above do the connecting.
         'bidder_whatsapp' => ['group' => 'whatsapp', 'secret' => true, 'default' => ''],
 
         // Rules
@@ -204,16 +204,6 @@ class SettingsService
     public function openClawToken(): ?string
     {
         return $this->get('openclaw_token') ?: null;
-    }
-
-    public function whatsappToken(): ?string
-    {
-        return $this->get('whatsapp_token') ?: null;
-    }
-
-    public function whatsappPhoneId(): ?string
-    {
-        return $this->get('whatsapp_phone_id') ?: null;
     }
 
     public function bidderWhatsapp(): ?string

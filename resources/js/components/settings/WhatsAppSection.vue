@@ -14,8 +14,6 @@ import { apiErrorMessage } from "@/lib/api-client";
 defineProps({ settings: { type: Object, required: true } });
 const emit = defineEmits(["saved"]);
 
-const token = ref("");
-const phoneId = ref("");
 const bidderNumber = ref("");
 const saving = ref(false);
 
@@ -23,12 +21,8 @@ async function handleSave() {
   saving.value = true;
   try {
     await saveSettings({
-      whatsapp_token: token.value,
-      whatsapp_phone_id: phoneId.value,
       bidder_whatsapp: bidderNumber.value,
     });
-    token.value = "";
-    phoneId.value = "";
     bidderNumber.value = "";
     toast.success("WhatsApp settings saved.");
     emit("saved");
@@ -43,28 +37,16 @@ async function handleSave() {
 <template>
   <Card>
     <CardHeader>
-      <CardTitle>WhatsApp</CardTitle>
+      <CardTitle>WhatsApp (via OpenClaw)</CardTitle>
       <TestConnectionButton service="whatsapp" />
     </CardHeader>
     <CardContent class="space-y-4">
-      <SecretField
-        label="Access token"
-        :is-set="settings.whatsapp_token.is_set"
-        :masked="settings.whatsapp_token.masked"
-        v-model="token"
-      />
-      <SecretField
-        label="Phone number ID"
-        :is-set="settings.whatsapp_phone_id.is_set"
-        :masked="settings.whatsapp_phone_id.masked"
-        v-model="phoneId"
-      />
       <SecretField
         label="Bidder's WhatsApp number"
         :is-set="settings.bidder_whatsapp.is_set"
         :masked="settings.bidder_whatsapp.masked"
         v-model="bidderNumber"
-        hint="E.164 format, e.g. +15551234567"
+        hint="E.164 format, e.g. +15551234567. Test connection sends a real WhatsApp message to this number."
       />
       <div class="flex justify-end">
         <Button @click="handleSave" :loading="saving">Save WhatsApp settings</Button>

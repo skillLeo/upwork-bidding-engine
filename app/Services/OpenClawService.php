@@ -106,6 +106,89 @@ class OpenClawService
     }
 
     /**
+     * Sends a WhatsApp text via OpenClaw (already QR-linked to WhatsApp) —
+     * no Meta Cloud API token/phone ID needed, just a destination number.
+     *
+     * @return array<string, mixed>
+     */
+    public function sendWhatsAppMessage(string $to, string $message): array
+    {
+        $response = $this->client()->post('/task', [
+            'skill' => 'send_whatsapp_message',
+            'to' => $to,
+            'message' => $message,
+        ]);
+
+        $response->throw();
+
+        return (array) $response->json();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function sendLeadCard(Lead $lead, string $dashboardUrl): array
+    {
+        $score = $lead->score !== null ? "{$lead->score}/10" : 'n/a';
+
+        $lines = [
+            "🟢 *New ready lead — score {$score}*",
+            $lead->title,
+            '',
+            "Budget: {$lead->budget}",
+            "Proposals so far: {$lead->proposal_count}",
+            "Why: {$lead->score_reason}",
+            '',
+            'Proposal to paste on Upwork:',
+            '—',
+            (string) $lead->proposal_text,
+            '—',
+            '',
+            "Open in dashboard: {$dashboardUrl}",
+        ];
+
+        return $this->sendWhatsAppMessage((string) $this->settings->bidderWhatsapp(), implode("\n", $lines));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function sendFollowUp(Lead $lead, string $dashboardUrl): array
+    {
+        $text = "⏰ Reminder: \"{$lead->title}\" was sent with no reply yet. Consider a polite follow-up.\n{$dashboardUrl}";
+
+        return $this->sendWhatsAppMessage((string) $this->settings->bidderWhatsapp(), $text);
+    }
+
+    /**
+     * Unlike testConnection() (a bare /health ping), this actually sends a
+     * real WhatsApp message — the only way to prove the OpenClaw <-> WhatsApp
+     * link genuinely delivers, not just that OpenClaw is reachable.
+     *
+     * @return array{success: bool, message: string}
+     */
+    public function testWhatsAppConnection(): array
+    {
+        $to = $this->settings->bidderWhatsapp();
+
+        if (! $to) {
+            return ['success' => false, 'message' => "No bidder WhatsApp number configured."];
+        }
+
+        if (! $this->settings->openClawUrl()) {
+            return ['success' => false, 'message' => 'No OpenClaw URL configured.'];
+        }
+
+        try {
+            $this->sendWhatsAppMessage($to, 'SkillLeo test message — your OpenClaw WhatsApp connection is working.');
+
+            return ['success' => true, 'message' => "Test message sent to {$to}."];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => 'Could not send WhatsApp test message: '.$e->getMessage()];
+        }
+    }
+
+    /**
      * @return array{success: bool, message: string}
      */
     public function testConnection(): array

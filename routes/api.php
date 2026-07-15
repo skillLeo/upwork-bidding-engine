@@ -7,7 +7,6 @@ use App\Http\Controllers\LeadController;
 use App\Http\Controllers\SavedFilterController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\VollnaWebhookController;
-use App\Http\Controllers\WhatsAppWebhookController;
 use App\Http\Middleware\VerifyVollnaSecret;
 use Illuminate\Support\Facades\Route;
 
@@ -20,10 +19,8 @@ use Illuminate\Support\Facades\Route;
 Route::post('/vollna-hook', VollnaWebhookController::class)
     ->middleware([VerifyVollnaSecret::class, 'throttle:webhooks']);
 
-Route::get('/whatsapp-hook', [WhatsAppWebhookController::class, 'verify'])
-    ->middleware('throttle:webhooks');
-Route::post('/whatsapp-hook', [WhatsAppWebhookController::class, 'receive'])
-    ->middleware('throttle:webhooks');
+// Outbound WhatsApp goes through OpenClaw (see OpenClawService), not Meta's
+// Cloud API, so there is no inbound Meta webhook to receive here.
 
 /*
 |--------------------------------------------------------------------------

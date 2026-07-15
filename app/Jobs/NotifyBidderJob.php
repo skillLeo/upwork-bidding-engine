@@ -6,7 +6,7 @@ use App\Enums\ActivityType;
 use App\Enums\LeadStatus;
 use App\Models\ActivityLog;
 use App\Models\Lead;
-use App\Services\WhatsAppService;
+use App\Services\OpenClawService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -29,7 +29,7 @@ class NotifyBidderJob implements ShouldQueue
         return [30, 120, 300];
     }
 
-    public function handle(WhatsAppService $whatsapp): void
+    public function handle(OpenClawService $openClaw): void
     {
         $lead = Lead::find($this->leadId);
 
@@ -40,7 +40,7 @@ class NotifyBidderJob implements ShouldQueue
         $dashboardUrl = rtrim((string) config('skillleo.frontend_url'), '/')."/leads/{$lead->id}";
 
         try {
-            $whatsapp->sendLeadCard($lead, $dashboardUrl);
+            $openClaw->sendLeadCard($lead, $dashboardUrl);
 
             ActivityLog::record(ActivityType::BidderNotified, subject: $lead, meta: [
                 'channel' => 'whatsapp',
