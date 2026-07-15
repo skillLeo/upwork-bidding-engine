@@ -17,6 +17,11 @@ const password = ref("");
 const errors = ref({});
 const submitting = ref(false);
 
+// Quick-login shortcuts are a local dev convenience only — the server stamps the
+// environment into the page so a production build can never render them.
+const isLocal =
+  document.querySelector('meta[name="app-env"]')?.content === "local";
+
 function validate() {
   const next = {};
   if (!email.value || !/^\S+@\S+\.\S+$/.test(email.value)) {
@@ -27,6 +32,13 @@ function validate() {
   }
   errors.value = next;
   return Object.keys(next).length === 0;
+}
+
+async function quickLogin(role) {
+  email.value = `${role}@skillleo.test`;
+  password.value = "password";
+  errors.value = {};
+  await onSubmit();
 }
 
 async function onSubmit() {
@@ -86,9 +98,38 @@ async function onSubmit() {
         </div>
         <Button type="submit" class="w-full" size="lg" :loading="submitting">Sign in</Button>
       </form>
+
+      <div v-if="isLocal" class="mt-6">
+        <div class="flex items-center gap-3">
+          <span class="h-px flex-1 bg-border"></span>
+          <span class="text-xs font-medium text-text-tertiary">Dev quick login</span>
+          <span class="h-px flex-1 bg-border"></span>
+        </div>
+        <div class="mt-3 grid grid-cols-2 gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            :disabled="submitting"
+            @click="quickLogin('admin')"
+          >
+            Admin
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            :disabled="submitting"
+            @click="quickLogin('bidder')"
+          >
+            Bidder
+          </Button>
+        </div>
+      </div>
     </div>
 
-    <div class="mt-6 max-w-sm rounded-card border border-border bg-white/70 px-4 py-3 text-center text-xs text-text-tertiary">
+    <div
+      v-if="isLocal"
+      class="mt-6 max-w-sm rounded-card border border-border bg-white/70 px-4 py-3 text-center text-xs text-text-tertiary"
+    >
       Seeded demo accounts — <span class="font-mono">admin@skillleo.test</span> /
       <span class="font-mono">bidder@skillleo.test</span>, password:
       <span class="font-mono">password</span>
