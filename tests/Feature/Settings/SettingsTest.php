@@ -35,17 +35,17 @@ class SettingsTest extends TestCase
         $admin = User::factory()->admin()->create();
 
         $this->actingAs($admin, 'sanctum')->postJson('/api/settings', [
-            'claude_api_key' => 'sk-ant-abcdef123456',
+            'openclaw_token' => 'sk-openclaw-abcdef123456',
             'score_cutoff' => 8,
         ])->assertOk();
 
         $get = $this->actingAs($admin, 'sanctum')->getJson('/api/settings');
 
         $get->assertOk()
-            ->assertJsonPath('data.ai.claude_api_key.is_set', true)
+            ->assertJsonPath('data.openclaw.openclaw_token.is_set', true)
             ->assertJsonPath('data.rules.score_cutoff', 8);
 
-        $masked = $get->json('data.ai.claude_api_key.masked');
+        $masked = $get->json('data.openclaw.openclaw_token.masked');
         $this->assertStringNotContainsString('abcdef123456', $masked);
         $this->assertStringEndsWith('3456', $masked);
     }
@@ -55,32 +55,32 @@ class SettingsTest extends TestCase
         $admin = User::factory()->admin()->create();
 
         $this->actingAs($admin, 'sanctum')->postJson('/api/settings', [
-            'claude_api_key' => 'sk-ant-plaintext-should-not-appear',
+            'openclaw_token' => 'sk-openclaw-plaintext-should-not-appear',
         ]);
 
-        $row = Setting::query()->where('key', 'claude_api_key')->first();
+        $row = Setting::query()->where('key', 'openclaw_token')->first();
 
         $this->assertNotNull($row);
         $this->assertTrue($row->is_secret);
-        $this->assertStringNotContainsString('sk-ant-plaintext-should-not-appear', (string) $row->value);
+        $this->assertStringNotContainsString('sk-openclaw-plaintext-should-not-appear', (string) $row->value);
 
         $this->assertEquals(
-            'sk-ant-plaintext-should-not-appear',
-            app(SettingsService::class)->claudeApiKey(),
+            'sk-openclaw-plaintext-should-not-appear',
+            app(SettingsService::class)->openClawToken(),
         );
     }
 
     public function test_blank_secret_field_does_not_overwrite_existing_value(): void
     {
         $admin = User::factory()->admin()->create();
-        app(SettingsService::class)->set('claude_api_key', 'existing-key');
+        app(SettingsService::class)->set('openclaw_token', 'existing-token');
 
         $this->actingAs($admin, 'sanctum')->postJson('/api/settings', [
-            'claude_api_key' => '',
+            'openclaw_token' => '',
             'score_cutoff' => 9,
         ])->assertOk();
 
-        $this->assertEquals('existing-key', app(SettingsService::class)->claudeApiKey());
+        $this->assertEquals('existing-token', app(SettingsService::class)->openClawToken());
         $this->assertEquals(9, app(SettingsService::class)->get('score_cutoff'));
     }
 

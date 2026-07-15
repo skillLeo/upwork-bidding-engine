@@ -113,14 +113,12 @@ class ScoreLeadJobTest extends TestCase
         Queue::assertNotPushed(NotifyBidderJob::class);
     }
 
-    public function test_openclaw_request_includes_claude_credentials_from_settings(): void
+    public function test_openclaw_request_carries_no_anthropic_credentials(): void
     {
+        // OpenClaw is authenticated to Claude on its own (CLI subscription
+        // auth) — this app must never send an API key/model, only the job
+        // and rules.
         Queue::fake();
-        app(SettingsService::class)->setMany([
-            'claude_api_key' => 'sk-ant-secret',
-            'claude_model' => 'claude-sonnet-4-6',
-        ]);
-
         Http::fake([
             'openclaw.test/*' => Http::response(['score' => 8, 'reason' => 'ok', 'proposal' => 'p']),
         ]);
@@ -130,8 +128,39 @@ class ScoreLeadJobTest extends TestCase
         $this->runJob($lead);
 
         Http::assertSent(function ($request) {
-            return $request['ai']['api_key'] === 'sk-ant-secret'
-                && $request['ai']['model'] === 'claude-sonnet-4-6';
+            return ! array_key_exists('ai', $request->data())
+                && array_key_exists('job', $request->data())
+                && array_key_exists('rules', $request->data());
         });
+    }
+
+    public function test_ai_engine_disabled_skips_openclaw_call_and_leaves_lead_new(): void
+    {
+        Http::fake();
+        app(SettingsService::class)->set('ai_engine_enabled', false);
+
+        $lead = Lead::factory()->create(['proposal_count' => 2, 'budget' => '$500 fixed', 'status' => LeadStatus::New]);
+
+        $this->runJob($lead);
+
+        $lead->refresh();
+        $this->assertEquals(LeadStatus::New, $lead->status);
+        $this->assertNull($lead->score);
+
+        Http::assertNothingSent();
+    }
+
+    public function test_final_failure_returns_lead_to_new_not_archived(): void
+    {
+        // A lead that never got a real evaluation shouldn't read as
+        // "reviewed and rejected" (archived) — it goes back to `new`,
+        // visible on the board, eligible for a manual rescore.
+        $lead = Lead::factory()->create(['status' => LeadStatus::Scoring]);
+
+        (new ScoreLeadJob($lead->id))->failed(new \RuntimeException('OpenClaw timed out'));
+
+        $lead->refresh();
+        $this->assertEquals(LeadStatus::New, $lead->status);
+        $this->assertStringContainsString('OpenClaw timed out', (string) $lead->score_reason);
     }
 }

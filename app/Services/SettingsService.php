@@ -24,16 +24,15 @@ class SettingsService
      * @var array<string, array{group: string, secret: bool, default: mixed}>
      */
     public const SCHEMA = [
-        // AI
-        'claude_api_key' => ['group' => 'ai', 'secret' => true, 'default' => ''],
-        'claude_model' => ['group' => 'ai', 'secret' => false, 'default' => 'claude-sonnet-4-6'],
-
         // Vollna
         'vollna_webhook_secret' => ['group' => 'vollna', 'secret' => true, 'default' => ''],
 
-        // OpenClaw
+        // AI engine — OpenClaw, on its own Claude Code CLI subscription auth.
+        // No Anthropic API key/model here: OpenClaw is already authenticated,
+        // and the CLI picks its own model.
         'openclaw_url' => ['group' => 'openclaw', 'secret' => true, 'default' => ''],
         'openclaw_token' => ['group' => 'openclaw', 'secret' => true, 'default' => ''],
+        'ai_engine_enabled' => ['group' => 'openclaw', 'secret' => false, 'default' => true],
 
         // WhatsApp — sent via OpenClaw (already QR-linked to WhatsApp), not
         // Meta's Cloud API, so the only thing this app needs to know is who
@@ -51,7 +50,7 @@ class SettingsService
         'followup_days' => ['group' => 'rules', 'secret' => false, 'default' => 3],
     ];
 
-    public const SERVICES = ['claude', 'vollna', 'openclaw', 'whatsapp'];
+    public const SERVICES = ['vollna', 'openclaw', 'whatsapp'];
 
     /**
      * All settings, decrypted, keyed by setting key. Cached forever;
@@ -181,16 +180,6 @@ class SettingsService
 
     // ---- Typed convenience accessors used by services/jobs ----
 
-    public function claudeApiKey(): ?string
-    {
-        return $this->get('claude_api_key') ?: null;
-    }
-
-    public function claudeModel(): string
-    {
-        return $this->get('claude_model') ?: 'claude-sonnet-4-6';
-    }
-
     public function vollnaWebhookSecret(): ?string
     {
         return $this->get('vollna_webhook_secret') ?: null;
@@ -204,6 +193,15 @@ class SettingsService
     public function openClawToken(): ?string
     {
         return $this->get('openclaw_token') ?: null;
+    }
+
+    /**
+     * Kill switch for AI calls — lets Vollna keep filling `leads` while
+     * scoring/drafting is paused, instead of an all-or-nothing outage.
+     */
+    public function aiEngineEnabled(): bool
+    {
+        return (bool) $this->get('ai_engine_enabled', true);
     }
 
     public function bidderWhatsapp(): ?string

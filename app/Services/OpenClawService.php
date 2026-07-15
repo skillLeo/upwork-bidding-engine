@@ -10,9 +10,9 @@ use Illuminate\Support\Facades\Http;
 
 /**
  * Talks to the external OpenClaw service, which is the thing that actually
- * calls Claude to score jobs and draft proposals/replies. We pass along the
- * Claude key + model from Settings on every call so OpenClaw never needs
- * its own copy of the secret.
+ * calls Claude to score jobs, draft proposals/replies, and send WhatsApp
+ * messages. OpenClaw is authenticated to Claude on its own (Claude Code CLI
+ * subscription auth) — this app never holds or sends an Anthropic API key.
  */
 class OpenClawService
 {
@@ -23,21 +23,19 @@ class OpenClawService
         return Http::baseUrl(rtrim((string) $this->settings->openClawUrl(), '/'))
             ->withToken((string) $this->settings->openClawToken())
             ->acceptJson()
-            ->timeout(45)
+            // OpenClaw's scoring/drafting calls run through the Claude CLI, not
+            // a direct API call, so they can genuinely take 30-150+ seconds —
+            // a short timeout here just means a working-but-slow call gets
+            // killed and retried needlessly.
+            ->timeout(180)
             // Array form: each element is the delay (ms) before that attempt,
             // so this is 3 retries at 1s / 3s / 6s — real backoff, not fixed.
+            // This only covers connection-level failures (network blips); the
+            // job-level retry (tries/backoff on ScoreLeadJob etc.) is what
+            // handles a request that reached OpenClaw but failed there.
             ->retry([1000, 3000, 6000], 0, function (\Exception $exception, PendingRequest $request) {
                 return $exception instanceof ConnectionException;
             });
-    }
-
-    protected function aiConfig(): array
-    {
-        return [
-            'provider' => 'anthropic',
-            'api_key' => $this->settings->claudeApiKey(),
-            'model' => $this->settings->claudeModel(),
-        ];
     }
 
     /**
@@ -61,7 +59,6 @@ class OpenClawService
                 'stack' => $rules['stack_keywords'] ?? [],
                 'min_budget' => $rules['min_budget'] ?? 0,
             ],
-            'ai' => $this->aiConfig(),
         ]);
 
         $response->throw();
@@ -92,7 +89,6 @@ class OpenClawService
             ],
             'message' => $incomingMessage,
             'history' => $history,
-            'ai' => $this->aiConfig(),
         ]);
 
         $response->throw();

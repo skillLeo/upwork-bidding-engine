@@ -6,7 +6,8 @@ use Illuminate\Foundation\Http\FormRequest;
 
 /**
  * Accepts a partial payload — only keys present are saved, so each Settings
- * section (AI / Vollna / OpenClaw / WhatsApp / Rules) can "Save" on its own.
+ * section (Vollna / AI Engine (OpenClaw) / WhatsApp / Rules) can "Save" on
+ * its own.
  */
 class UpdateSettingsRequest extends FormRequest
 {
@@ -21,16 +22,13 @@ class UpdateSettingsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            // AI
-            'claude_api_key' => ['sometimes', 'nullable', 'string', 'max:500'],
-            'claude_model' => ['sometimes', 'string', 'max:100'],
-
             // Vollna
             'vollna_webhook_secret' => ['sometimes', 'nullable', 'string', 'max:500'],
 
-            // OpenClaw
+            // AI engine (OpenClaw)
             'openclaw_url' => ['sometimes', 'nullable', 'string', 'max:500'],
             'openclaw_token' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'ai_engine_enabled' => ['sometimes', 'boolean'],
 
             // WhatsApp — sent via OpenClaw, no Meta token/phone ID needed
             'bidder_whatsapp' => ['sometimes', 'nullable', 'string', 'max:30'],

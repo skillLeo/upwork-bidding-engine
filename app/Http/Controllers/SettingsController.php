@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Enums\ActivityType;
 use App\Http\Requests\Settings\UpdateSettingsRequest;
 use App\Models\ActivityLog;
-use App\Services\ClaudeService;
 use App\Services\OpenClawService;
 use App\Services\SettingsService;
 use Illuminate\Http\JsonResponse;
@@ -58,7 +57,6 @@ class SettingsController extends Controller
     public function testConnection(
         string $service,
         Request $request,
-        ClaudeService $claude,
         OpenClawService $openClaw,
     ): JsonResponse {
         if (! in_array($service, SettingsService::SERVICES, true)) {
@@ -66,7 +64,6 @@ class SettingsController extends Controller
         }
 
         $result = match ($service) {
-            'claude' => $claude->testConnection(),
             'openclaw' => $openClaw->testConnection(),
             'whatsapp' => $openClaw->testWhatsAppConnection(),
             'vollna' => $this->testVollna(),

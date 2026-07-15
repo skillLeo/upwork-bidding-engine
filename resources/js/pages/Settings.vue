@@ -2,7 +2,6 @@
 import { useSettings } from "@/composables/useSettings";
 import PageContainer from "@/components/layout/PageContainer.vue";
 import Skeleton from "@/components/ui/Skeleton.vue";
-import AiSection from "@/components/settings/AiSection.vue";
 import VollnaSection from "@/components/settings/VollnaSection.vue";
 import OpenClawSection from "@/components/settings/OpenClawSection.vue";
 import WhatsAppSection from "@/components/settings/WhatsAppSection.vue";
@@ -24,7 +23,6 @@ const { settings, isLoading, refetch } = useSettings();
         API keys, tokens, and bidding rules — nothing here is stored in .env.
       </p>
     </div>
-    <AiSection :settings="settings.ai" @saved="refetch" />
     <VollnaSection :settings="settings.vollna" @saved="refetch" />
     <OpenClawSection :settings="settings.openclaw" @saved="refetch" />
     <WhatsAppSection :settings="settings.whatsapp" @saved="refetch" />

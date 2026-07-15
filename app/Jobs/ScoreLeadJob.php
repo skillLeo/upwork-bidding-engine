@@ -54,6 +54,17 @@ class ScoreLeadJob implements ShouldQueue
             return;
         }
 
+        // Kill switch: leave the lead as `new` (untouched, still visible, not
+        // consumed) rather than call OpenClaw. Vollna intake keeps working
+        // either way — only AI processing pauses. Re-enabling requires a
+        // manual rescore for leads that arrived while this was off, since
+        // this dispatch is already spent.
+        if (! $settings->aiEngineEnabled()) {
+            ActivityLog::record('ai_engine_disabled', subject: $lead);
+
+            return;
+        }
+
         $lead->update(['status' => LeadStatus::Scoring]);
 
         try {
@@ -91,8 +102,12 @@ class ScoreLeadJob implements ShouldQueue
     }
 
     /**
-     * Final failure after all retries are exhausted — archive it so it
-     * doesn't sit invisibly stuck in "scoring" forever.
+     * Final failure after all retries are exhausted. Goes back to `new`
+     * (not `archived`) — archiving a lead we never actually evaluated would
+     * hide it from view and read as "we looked at this and passed," when
+     * really the AI call itself never completed. `new` keeps it in the
+     * default board view with the error visible in score_reason, and
+     * eligible for a manual rescore once whatever broke is fixed.
      */
     public function failed(\Throwable $exception): void
     {
@@ -103,7 +118,7 @@ class ScoreLeadJob implements ShouldQueue
         }
 
         $lead->update([
-            'status' => LeadStatus::Archived,
+            'status' => LeadStatus::New,
             'score_reason' => 'Scoring failed after retries: '.$exception->getMessage(),
         ]);
 
