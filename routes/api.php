@@ -32,6 +32,11 @@ Route::post('/whatsapp-hook', [WhatsAppWebhookController::class, 'receive'])
 */
 Route::post('/auth/login', [AuthController::class, 'login']);
 
+// Passwordless dev sign-in. The controller 404s unless skillleo.dev_quick_login
+// is on, so this is inert in a deployment that hasn't opted in.
+Route::post('/auth/dev-login', [AuthController::class, 'devLogin'])
+    ->middleware('throttle:webhooks');
+
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);

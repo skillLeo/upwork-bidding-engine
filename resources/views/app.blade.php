@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>SkillLeo Bidding Engine</title>
     <meta name="description" content="Score, draft, and track Upwork proposals from one dashboard.">
-    {{-- Gates dev-only affordances (quick-login shortcuts) so they can never reach production. --}}
-    <meta name="app-env" content="{{ app()->environment() }}">
+    {{-- Drives the sign-in page's dev quick-login buttons. See config/skillleo.php. --}}
+    <meta name="dev-quick-login" content="{{ config('skillleo.dev_quick_login') ? '1' : '0' }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">

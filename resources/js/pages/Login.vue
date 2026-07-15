@@ -17,10 +17,10 @@ const password = ref("");
 const errors = ref({});
 const submitting = ref(false);
 
-// Quick-login shortcuts are a local dev convenience only — the server stamps the
-// environment into the page so a production build can never render them.
-const isLocal =
-  document.querySelector('meta[name="app-env"]')?.content === "local";
+// The server decides whether dev quick login is available (config/skillleo.php).
+// No credentials live here — clicking asks the server to issue the token.
+const devQuickLogin =
+  document.querySelector('meta[name="dev-quick-login"]')?.content === "1";
 
 function validate() {
   const next = {};
@@ -35,10 +35,17 @@ function validate() {
 }
 
 async function quickLogin(role) {
-  email.value = `${role}@skillleo.test`;
-  password.value = "password";
-  errors.value = {};
-  await onSubmit();
+  submitting.value = true;
+  try {
+    const res = await apiClient.post("/auth/dev-login", { role });
+    auth.setAuth(res.data.data.token, res.data.data.user);
+    toast.success(`Signed in as ${role}.`);
+    router.replace({ name: "leads" });
+  } catch (error) {
+    toast.error(apiErrorMessage(error, `Could not sign in as ${role}.`));
+  } finally {
+    submitting.value = false;
+  }
 }
 
 async function onSubmit() {
@@ -99,7 +106,7 @@ async function onSubmit() {
         <Button type="submit" class="w-full" size="lg" :loading="submitting">Sign in</Button>
       </form>
 
-      <div v-if="isLocal" class="mt-6">
+      <div v-if="devQuickLogin" class="mt-6">
         <div class="flex items-center gap-3">
           <span class="h-px flex-1 bg-border"></span>
           <span class="text-xs font-medium text-text-tertiary">Dev quick login</span>
@@ -127,12 +134,12 @@ async function onSubmit() {
     </div>
 
     <div
-      v-if="isLocal"
-      class="mt-6 max-w-sm rounded-card border border-border bg-white/70 px-4 py-3 text-center text-xs text-text-tertiary"
+      v-if="devQuickLogin"
+      class="mt-6 max-w-sm rounded-card border border-warning-border bg-warning-bg px-4 py-3 text-center text-xs text-text-secondary"
     >
-      Seeded demo accounts — <span class="font-mono">admin@skillleo.test</span> /
-      <span class="font-mono">bidder@skillleo.test</span>, password:
-      <span class="font-mono">password</span>
+      Dev quick login is <span class="font-semibold">on</span> — anyone who can open this page can
+      sign in without a password. Set <span class="font-mono">DEV_QUICK_LOGIN=false</span> before
+      going live.
     </div>
   </div>
 </template>
