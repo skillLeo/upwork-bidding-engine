@@ -20,8 +20,13 @@ const statusOptions = [
 
 const scoreOptions = [
   { value: undefined, label: "Any" },
+  { value: 4, label: "4+" },
+  { value: 5, label: "5+" },
+  { value: 6, label: "6+" },
   { value: 7, label: "7+" },
+  { value: 8, label: "8+" },
   { value: 9, label: "9+" },
+  { value: 10, label: "10" },
 ];
 </script>
 
@@ -50,14 +55,14 @@ const scoreOptions = [
 
     <div class="rounded-card border border-border bg-surface p-4 shadow-card">
       <p class="mb-2 text-sm font-semibold text-text-primary">Minimum score</p>
-      <div class="flex gap-1.5">
+      <div class="flex flex-wrap gap-1.5">
         <button
           v-for="opt in scoreOptions"
           :key="opt.label"
           @click="emit('update:scoreMin', opt.value)"
           :class="
             cn(
-              'flex-1 rounded-pill border px-2 py-1.5 text-xs font-medium transition-colors',
+              'rounded-pill border px-2.5 py-1.5 text-xs font-medium transition-colors',
               scoreMin === opt.value
                 ? 'border-primary bg-primary-tint text-primary'
                 : 'border-border-strong text-text-secondary hover:bg-black/5',

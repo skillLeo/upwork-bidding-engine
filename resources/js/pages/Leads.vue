@@ -1,8 +1,10 @@
 <script setup>
 import { ref, computed, watch } from "vue";
-import { Inbox, Search, Sparkles, TrendingUp } from "@lucide/vue";
+import { Inbox, Search, Sparkles, TrendingUp, RefreshCw } from "@lucide/vue";
+import { toast } from "vue-sonner";
 import { useLeads } from "@/composables/useLeads";
 import { useSavedFilters } from "@/composables/useSavedFilters";
+import { apiClient, apiErrorMessage } from "@/lib/api-client";
 import LeadCard from "@/components/leads/LeadCard.vue";
 import LeadFiltersRail from "@/components/leads/LeadFiltersRail.vue";
 import SavedFiltersBar from "@/components/leads/SavedFiltersBar.vue";
@@ -105,6 +107,22 @@ function clearFilters() {
   search.value = "";
   handleSelectFilter(null);
 }
+
+const syncing = ref(false);
+async function handleSync() {
+  syncing.value = true;
+  try {
+    const res = await apiClient.post("/leads/sync-vollna");
+    // The job runs for 1-3 minutes in the background (Vollna's own rate
+    // limit) - the page's existing 20s poll picks up results as they land,
+    // no need to force an immediate refetch here.
+    toast.success(res.data.data.message);
+  } catch (error) {
+    toast.error(apiErrorMessage(error, "Could not start the sync."));
+  } finally {
+    syncing.value = false;
+  }
+}
 </script>
 
 <template>
@@ -130,6 +148,9 @@ function clearFilters() {
             </p>
           </div>
           <div class="flex gap-2">
+            <Button variant="secondary" @click="handleSync" :loading="syncing">
+              <RefreshCw class="h-4 w-4" /> Sync
+            </Button>
             <DateRangeFilter
               :from="postedFrom"
               @update:from="postedFrom = $event"

@@ -100,7 +100,7 @@ onMounted(() => {
     <template v-if="open">
       <div class="fixed inset-0 z-10" @click="open = false" />
       <div
-        class="absolute right-0 z-20 mt-1.5 w-72 overflow-hidden rounded-card border border-border bg-white shadow-popover"
+        class="absolute left-0 z-20 mt-1.5 w-80 overflow-hidden rounded-card border border-border bg-white shadow-popover"
       >
         <div class="border-b border-border px-3 py-2">
           <p class="text-xs font-semibold tracking-wide text-text-tertiary uppercase">
@@ -125,17 +125,20 @@ onMounted(() => {
           </button>
         </div>
 
-        <div class="space-y-2 border-t border-border p-3">
+        <div class="space-y-2.5 border-t border-border p-3">
           <p class="text-xs font-semibold tracking-wide text-text-tertiary uppercase">
             Custom range
           </p>
-          <div class="flex items-center gap-2">
+          <div>
+            <label class="mb-1 block text-[11px] font-medium text-text-tertiary">From</label>
             <input
               v-model="customFrom"
               type="datetime-local"
               class="h-9 w-full rounded-md border border-border-strong bg-white px-2 text-xs text-text-primary focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
-            <span class="text-xs text-text-tertiary">to</span>
+          </div>
+          <div>
+            <label class="mb-1 block text-[11px] font-medium text-text-tertiary">To</label>
             <input
               v-model="customTo"
               type="datetime-local"
