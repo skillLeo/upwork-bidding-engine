@@ -71,6 +71,8 @@ watch(searchInput, (value) => {
 });
 
 const page = ref(1);
+const perPage = ref(50);
+const perPageOptions = [25, 50, 100];
 const sortParam = ref("-created_at");
 const mobileFiltersOpen = ref(false);
 const mobileFilterCount = computed(
@@ -101,7 +103,7 @@ function handleSelectFilter(filter) {
   hasAppliedDefault = true;
 }
 
-watch([status, scoreMin, postedFrom, postedTo, search, sortParam, activeFilterId], () => {
+watch([status, scoreMin, postedFrom, postedTo, search, sortParam, activeFilterId, perPage], () => {
   page.value = 1;
 });
 
@@ -113,7 +115,7 @@ const leadFilters = computed(() => ({
   search: search.value || undefined,
   sort: sortParam.value,
   page: page.value,
-  per_page: 12,
+  per_page: perPage.value,
   include_keywords: activeFilter.value?.criteria.include_keywords,
   exclude_keywords: activeFilter.value?.criteria.exclude_keywords,
   budget_min: activeFilter.value?.criteria.budget_min,
@@ -280,7 +282,7 @@ async function handleSync() {
             </div>
 
             <template v-if="isLoading">
-              <LeadRowSkeleton v-for="i in 10" :key="i" />
+              <LeadRowSkeleton v-for="i in 20" :key="i" />
             </template>
             <template v-else>
               <LeadRow
@@ -293,26 +295,38 @@ async function handleSync() {
           </div>
         </div>
 
-        <div v-if="meta && meta.last_page > 1" class="flex items-center justify-between pt-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            :disabled="page <= 1"
-            @click="page = Math.max(1, page - 1)"
-          >
-            Previous
-          </Button>
-          <span class="text-xs text-text-tertiary">
-            Page {{ meta.current_page }} of {{ meta.last_page }}
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            :disabled="page >= meta.last_page"
-            @click="page = page + 1"
-          >
-            Next
-          </Button>
+        <div v-if="meta" class="flex items-center justify-between pt-1">
+          <label class="flex items-center gap-2 text-xs text-text-tertiary">
+            Rows per page
+            <select
+              v-model.number="perPage"
+              class="h-7 rounded-md border border-border-strong bg-white px-2 text-xs font-medium text-text-secondary focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none"
+            >
+              <option v-for="opt in perPageOptions" :key="opt" :value="opt">{{ opt }}</option>
+            </select>
+          </label>
+
+          <div v-if="meta.last_page > 1" class="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              :disabled="page <= 1"
+              @click="page = Math.max(1, page - 1)"
+            >
+              Previous
+            </Button>
+            <span class="text-xs text-text-tertiary">
+              Page {{ meta.current_page }} of {{ meta.last_page }}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              :disabled="page >= meta.last_page"
+              @click="page = page + 1"
+            >
+              Next
+            </Button>
+          </div>
         </div>
       </div>
     </div>
