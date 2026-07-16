@@ -47,6 +47,18 @@ class SettingsService
         // to message. openclaw_url/openclaw_token above do the connecting.
         'bidder_whatsapp' => ['group' => 'whatsapp', 'secret' => true, 'default' => ''],
 
+        // Mail — SMTP creds configured here instead of .env so they can be
+        // changed without a redeploy. Applied at runtime in
+        // AppServiceProvider::boot(); .env's MAIL_MAILER=log stays as the
+        // inert fallback until these are actually filled in.
+        'mail_host' => ['group' => 'mail', 'secret' => false, 'default' => ''],
+        'mail_port' => ['group' => 'mail', 'secret' => false, 'default' => 587],
+        'mail_username' => ['group' => 'mail', 'secret' => true, 'default' => ''],
+        'mail_password' => ['group' => 'mail', 'secret' => true, 'default' => ''],
+        'mail_encryption' => ['group' => 'mail', 'secret' => false, 'default' => 'tls'],
+        'mail_from_address' => ['group' => 'mail', 'secret' => false, 'default' => ''],
+        'mail_from_name' => ['group' => 'mail', 'secret' => false, 'default' => 'SkillLeo'],
+
         // Rules
         'min_budget' => ['group' => 'rules', 'secret' => false, 'default' => 150],
         'max_proposals' => ['group' => 'rules', 'secret' => false, 'default' => 25],
@@ -63,7 +75,7 @@ class SettingsService
         'max_posted_age_days' => ['group' => 'rules', 'secret' => false, 'default' => 7],
     ];
 
-    public const SERVICES = ['vollna', 'openclaw', 'whatsapp'];
+    public const SERVICES = ['vollna', 'openclaw', 'whatsapp', 'mail'];
 
     /**
      * All settings, decrypted, keyed by setting key. Cached forever;
@@ -192,6 +204,22 @@ class SettingsService
     }
 
     // ---- Typed convenience accessors used by services/jobs ----
+
+    /**
+     * @return array{host: string, port: int, username: string, password: string, encryption: string, from_address: string, from_name: string}
+     */
+    public function mailConfig(): array
+    {
+        return [
+            'host' => (string) $this->get('mail_host'),
+            'port' => (int) $this->get('mail_port'),
+            'username' => (string) $this->get('mail_username'),
+            'password' => (string) $this->get('mail_password'),
+            'encryption' => (string) $this->get('mail_encryption'),
+            'from_address' => (string) $this->get('mail_from_address'),
+            'from_name' => (string) $this->get('mail_from_name'),
+        ];
+    }
 
     public function vollnaWebhookSecret(): ?string
     {

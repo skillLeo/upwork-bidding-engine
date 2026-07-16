@@ -9,6 +9,7 @@ use App\Services\OpenClawService;
 use App\Services\SettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 
 class SettingsController extends Controller
 {
@@ -67,6 +68,7 @@ class SettingsController extends Controller
             'openclaw' => $openClaw->testConnection(),
             'whatsapp' => $openClaw->testWhatsAppConnection(),
             'vollna' => $this->testVollna(),
+            'mail' => $this->testMail($request),
         };
 
         ActivityLog::record(
@@ -93,6 +95,35 @@ class SettingsController extends Controller
         }
 
         return ['success' => true, 'message' => 'Webhook secret is set. Vollna connects to you — point its webhook at /api/vollna-hook.'];
+    }
+
+    /**
+     * Sends a real test email to the admin running the check — the only
+     * way to prove SMTP creds actually deliver, not just that they're set.
+     *
+     * @return array{success: bool, message: string}
+     */
+    protected function testMail(Request $request): array
+    {
+        $to = $request->user()?->email;
+
+        if (! $this->settings->mailConfig()['host']) {
+            return ['success' => false, 'message' => 'No SMTP host configured.'];
+        }
+
+        if (! $to) {
+            return ['success' => false, 'message' => 'No email address to send the test to.'];
+        }
+
+        try {
+            Mail::raw('SkillLeo test email — your SMTP settings are working.', function ($message) use ($to) {
+                $message->to($to)->subject('SkillLeo — test email');
+            });
+
+            return ['success' => true, 'message' => "Test email sent to {$to}."];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => 'Could not send test email: '.$e->getMessage()];
+        }
     }
 
     /**

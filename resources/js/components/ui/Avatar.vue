@@ -4,6 +4,7 @@ import { cn, initials } from "@/lib/utils";
 
 const props = defineProps({
   name: { type: String, required: true },
+  src: { type: [String, null], default: null },
   size: { type: String, default: "md" },
   class: { type: String, default: "" },
 });
@@ -16,7 +17,7 @@ const sizeClasses = {
 
 const classes = computed(() =>
   cn(
-    "flex shrink-0 items-center justify-center rounded-full bg-primary-tint font-semibold text-primary",
+    "flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary-tint font-semibold text-primary",
     sizeClasses[props.size],
     props.class,
   ),
@@ -24,5 +25,8 @@ const classes = computed(() =>
 </script>
 
 <template>
-  <div :class="classes" :title="name">{{ initials(name) }}</div>
+  <div :class="classes" :title="name">
+    <img v-if="src" :src="src" :alt="name" class="h-full w-full object-cover" />
+    <template v-else>{{ initials(name) }}</template>
+  </div>
 </template>

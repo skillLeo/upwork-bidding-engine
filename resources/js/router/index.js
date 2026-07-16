@@ -12,6 +12,22 @@ const routes = [
     component: () => import("@/pages/Login.vue"),
   },
   {
+    path: "/forgot-password",
+    name: "forgot-password",
+    component: () => import("@/pages/ForgotPassword.vue"),
+  },
+  {
+    path: "/reset-password",
+    name: "reset-password",
+    component: () => import("@/pages/ResetPassword.vue"),
+  },
+  {
+    path: "/profile",
+    name: "profile",
+    component: () => import("@/pages/Profile.vue"),
+    meta: { requiresAuth: true },
+  },
+  {
     path: "/leads",
     name: "leads",
     component: () => import("@/pages/Leads.vue"),

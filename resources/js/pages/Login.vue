@@ -17,6 +17,12 @@ const password = ref("");
 const errors = ref({});
 const submitting = ref(false);
 
+// Set when login() responds with { requires_otp: true, challenge } instead
+// of a token — swaps the form to the code-entry step, same page.
+const otpChallenge = ref(null);
+const otpCode = ref("");
+const otpError = ref("");
+
 // The server decides whether dev quick login is available (config/skillleo.php).
 // No credentials live here — clicking asks the server to issue the token.
 const devQuickLogin =
@@ -56,6 +62,12 @@ async function onSubmit() {
       email: email.value,
       password: password.value,
     });
+
+    if (res.data.data.requires_otp) {
+      otpChallenge.value = res.data.data.challenge;
+      return;
+    }
+
     auth.setAuth(res.data.data.token, res.data.data.user);
     toast.success("Welcome back.");
     router.replace({ name: "leads" });
@@ -64,6 +76,34 @@ async function onSubmit() {
   } finally {
     submitting.value = false;
   }
+}
+
+async function onVerifyOtp() {
+  otpError.value = "";
+  if (!otpCode.value) {
+    otpError.value = "Enter the 6-digit code.";
+    return;
+  }
+  submitting.value = true;
+  try {
+    const res = await apiClient.post("/auth/verify-otp", {
+      challenge: otpChallenge.value,
+      code: otpCode.value,
+    });
+    auth.setAuth(res.data.data.token, res.data.data.user);
+    toast.success("Welcome back.");
+    router.replace({ name: "leads" });
+  } catch (error) {
+    otpError.value = apiErrorMessage(error, "That code is incorrect or has expired.");
+  } finally {
+    submitting.value = false;
+  }
+}
+
+function backToPassword() {
+  otpChallenge.value = null;
+  otpCode.value = "";
+  otpError.value = "";
 }
 </script>
 
@@ -77,64 +117,103 @@ async function onSubmit() {
     </div>
 
     <div class="w-full max-w-sm rounded-card border border-border bg-surface p-8 shadow-card">
-      <h1 class="text-xl font-semibold text-text-primary">Sign in</h1>
-      <p class="mt-1 text-sm text-text-secondary">Bidding Engine dashboard</p>
+      <template v-if="otpChallenge">
+        <h1 class="text-xl font-semibold text-text-primary">Enter your code</h1>
+        <p class="mt-1 text-sm text-text-secondary">
+          We emailed a 6-digit code to {{ email }}. It expires in 10 minutes.
+        </p>
 
-      <form @submit.prevent="onSubmit" class="mt-6 space-y-4" novalidate>
-        <div>
-          <Label for="email">Email</Label>
-          <Input
-            id="email"
-            type="email"
-            autocomplete="email"
-            placeholder="you@company.com"
-            v-model="email"
-          />
-          <FieldError :text="errors.email" />
-        </div>
-        <div>
-          <Label for="password">Password</Label>
-          <Input
-            id="password"
-            type="password"
-            autocomplete="current-password"
-            placeholder="••••••••"
-            v-model="password"
-          />
-          <FieldError :text="errors.password" />
-        </div>
-        <Button type="submit" class="w-full" size="lg" :loading="submitting">Sign in</Button>
-      </form>
+        <form @submit.prevent="onVerifyOtp" class="mt-6 space-y-4" novalidate>
+          <div>
+            <Label for="otp">Code</Label>
+            <Input
+              id="otp"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              placeholder="123456"
+              v-model="otpCode"
+              class="text-center text-lg tracking-[0.5em]"
+            />
+            <FieldError :text="otpError" />
+          </div>
+          <Button type="submit" class="w-full" size="lg" :loading="submitting">Verify</Button>
+        </form>
 
-      <div v-if="devQuickLogin" class="mt-6">
-        <div class="flex items-center gap-3">
-          <span class="h-px flex-1 bg-border"></span>
-          <span class="text-xs font-medium text-text-tertiary">Dev quick login</span>
-          <span class="h-px flex-1 bg-border"></span>
+        <button
+          type="button"
+          @click="backToPassword"
+          class="mt-6 text-sm font-medium text-text-secondary hover:text-primary"
+        >
+          ← Back
+        </button>
+      </template>
+
+      <template v-else>
+        <h1 class="text-xl font-semibold text-text-primary">Sign in</h1>
+        <p class="mt-1 text-sm text-text-secondary">Bidding Engine dashboard</p>
+
+        <form @submit.prevent="onSubmit" class="mt-6 space-y-4" novalidate>
+          <div>
+            <Label for="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              autocomplete="email"
+              placeholder="you@company.com"
+              v-model="email"
+            />
+            <FieldError :text="errors.email" />
+          </div>
+          <div>
+            <div class="flex items-center justify-between">
+              <Label for="password" class="mb-0">Password</Label>
+              <router-link to="/forgot-password" class="text-xs font-medium text-primary hover:underline">
+                Forgot password?
+              </router-link>
+            </div>
+            <Input
+              id="password"
+              type="password"
+              autocomplete="current-password"
+              placeholder="••••••••"
+              v-model="password"
+              class="mt-1.5"
+            />
+            <FieldError :text="errors.password" />
+          </div>
+          <Button type="submit" class="w-full" size="lg" :loading="submitting">Sign in</Button>
+        </form>
+
+        <div v-if="devQuickLogin" class="mt-6">
+          <div class="flex items-center gap-3">
+            <span class="h-px flex-1 bg-border"></span>
+            <span class="text-xs font-medium text-text-tertiary">Dev quick login</span>
+            <span class="h-px flex-1 bg-border"></span>
+          </div>
+          <div class="mt-3 grid grid-cols-2 gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              :disabled="submitting"
+              @click="quickLogin('admin')"
+            >
+              Admin
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              :disabled="submitting"
+              @click="quickLogin('bidder')"
+            >
+              Bidder
+            </Button>
+          </div>
         </div>
-        <div class="mt-3 grid grid-cols-2 gap-2">
-          <Button
-            type="button"
-            variant="secondary"
-            :disabled="submitting"
-            @click="quickLogin('admin')"
-          >
-            Admin
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            :disabled="submitting"
-            @click="quickLogin('bidder')"
-          >
-            Bidder
-          </Button>
-        </div>
-      </div>
+      </template>
     </div>
 
     <div
-      v-if="devQuickLogin"
+      v-if="devQuickLogin && !otpChallenge"
       class="mt-6 max-w-sm rounded-card border border-warning-border bg-warning-bg px-4 py-3 text-center text-xs text-text-secondary"
     >
       Dev quick login is <span class="font-semibold">on</span> — anyone who can open this page can

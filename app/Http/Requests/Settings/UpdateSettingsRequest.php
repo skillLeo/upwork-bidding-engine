@@ -35,6 +35,15 @@ class UpdateSettingsRequest extends FormRequest
             // WhatsApp — sent via OpenClaw, no Meta token/phone ID needed
             'bidder_whatsapp' => ['sometimes', 'nullable', 'string', 'max:30'],
 
+            // Mail (SMTP)
+            'mail_host' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'mail_port' => ['sometimes', 'integer', 'min:1', 'max:65535'],
+            'mail_username' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'mail_password' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'mail_encryption' => ['sometimes', 'nullable', 'string', 'in:tls,ssl,'],
+            'mail_from_address' => ['sometimes', 'nullable', 'email', 'max:255'],
+            'mail_from_name' => ['sometimes', 'nullable', 'string', 'max:255'],
+
             // Rules
             'min_budget' => ['sometimes', 'integer', 'min:0'],
             'max_proposals' => ['sometimes', 'integer', 'min:1'],

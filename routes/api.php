@@ -4,6 +4,7 @@ use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\LeadController;
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SavedFilterController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\VollnaWebhookController;
@@ -34,9 +35,27 @@ Route::post('/auth/login', [AuthController::class, 'login']);
 Route::post('/auth/dev-login', [AuthController::class, 'devLogin'])
     ->middleware('throttle:webhooks');
 
+Route::post('/auth/verify-otp', [AuthController::class, 'verifyOtp'])
+    ->middleware('throttle:webhooks');
+Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])
+    ->middleware('throttle:webhooks');
+Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])
+    ->middleware('throttle:webhooks');
+
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
+
+    /*
+    |----------------------------------------------------------------------
+    | Profile — every authenticated user manages their own account, not
+    | admin-gated like Settings.
+    |----------------------------------------------------------------------
+    */
+    Route::put('/profile', [ProfileController::class, 'update']);
+    Route::put('/profile/password', [ProfileController::class, 'updatePassword']);
+    Route::post('/profile/avatar', [ProfileController::class, 'uploadAvatar']);
+    Route::put('/profile/two-factor', [ProfileController::class, 'toggleTwoFactor']);
 
     /*
     |----------------------------------------------------------------------

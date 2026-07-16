@@ -2,7 +2,7 @@
 import { ref, computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { toast } from "vue-sonner";
-import { BarChart3, ChevronDown, LayoutGrid, LogOut, Settings as SettingsIcon } from "@lucide/vue";
+import { BarChart3, ChevronDown, LayoutGrid, LogOut, Settings as SettingsIcon, UserCircle } from "@lucide/vue";
 import { useAuthStore } from "@/stores/auth";
 import { apiClient } from "@/lib/api-client";
 import Avatar from "@/components/ui/Avatar.vue";
@@ -83,7 +83,7 @@ async function handleLogout() {
           class="flex items-center gap-1.5 rounded-full p-1 hover:bg-black/5"
           aria-label="Account menu"
         >
-          <Avatar :name="auth.user?.name ?? '?'" size="sm" />
+          <Avatar :name="auth.user?.name ?? '?'" :src="auth.user?.avatar_url" size="sm" />
           <ChevronDown class="h-4 w-4 text-text-tertiary" />
         </button>
 
@@ -97,6 +97,14 @@ async function handleLogout() {
                 {{ auth.user?.role }}
               </span>
             </div>
+            <router-link
+              to="/profile"
+              @click="menuOpen = false"
+              class="flex w-full items-center gap-2 px-3 py-2 text-sm text-text-secondary hover:bg-black/5 hover:text-text-primary"
+            >
+              <UserCircle class="h-4 w-4" />
+              Profile
+            </router-link>
             <button
               @click="handleLogout"
               class="flex w-full items-center gap-2 px-3 py-2 text-sm text-text-secondary hover:bg-black/5 hover:text-text-primary"
