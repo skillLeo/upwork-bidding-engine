@@ -47,3 +47,13 @@ export async function rescoreLead(id) {
   const res = await apiClient.post(`/leads/${id}/rescore`);
   return res.data.data;
 }
+
+export async function bulkUpdateLeadStatus(ids, status) {
+  const res = await apiClient.post("/leads/bulk-status", { ids, status });
+  return res.data.data;
+}
+
+export async function bulkToggleLeadFavorite(ids, isFavorite) {
+  const res = await apiClient.post("/leads/bulk-favorite", { ids, is_favorite: isFavorite });
+  return res.data.data;
+}

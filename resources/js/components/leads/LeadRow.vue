@@ -17,7 +17,9 @@ const props = defineProps({
   // Skills that match the active saved filter's keywords get highlighted,
   // same idea as Vollna bolding a matched keyword in a job title.
   matchKeywords: { type: Array, default: () => [] },
+  selected: { type: Boolean, default: false },
 });
+const emit = defineEmits(["toggle-select"]);
 
 // Local to this row — nothing coordinates it with siblings, so any number
 // of rows can be previewed open at once, same as Vollna's list.
@@ -123,6 +125,16 @@ function handleRowKeydown(event) {
       )
     "
   >
+    <div class="flex h-full items-center justify-center">
+      <input
+        type="checkbox"
+        :checked="selected"
+        @change="emit('toggle-select', lead.id)"
+        :aria-label="`Select ${lead.title}`"
+        class="h-3.5 w-3.5 rounded border-border-strong text-primary focus:ring-2 focus:ring-primary/30"
+      />
+    </div>
+
     <button
       type="button"
       tabindex="-1"

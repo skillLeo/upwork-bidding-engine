@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, watchEffect } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   Inbox,
@@ -10,10 +10,12 @@ import {
   ChevronUp,
   ChevronDown,
   ChevronsUpDown,
+  Bookmark,
 } from "@lucide/vue";
 import { toast } from "vue-sonner";
 import { useLeads } from "@/composables/useLeads";
 import { useSavedFilters } from "@/composables/useSavedFilters";
+import { bulkToggleLeadFavorite, bulkUpdateLeadStatus } from "@/composables/useLead";
 import { apiClient, apiErrorMessage } from "@/lib/api-client";
 import LeadRow from "@/components/leads/LeadRow.vue";
 import LeadFiltersRail from "@/components/leads/LeadFiltersRail.vue";
@@ -173,7 +175,7 @@ const leadFilters = computed(() => ({
   posted_within_minutes: activeFilter.value?.criteria.posted_within_minutes,
 }));
 
-const { leads, meta, isLoading } = useLeads(leadFilters);
+const { leads, meta, isLoading, refetch } = useLeads(leadFilters);
 
 function clearFilters() {
   status.value = "all";
@@ -181,6 +183,78 @@ function clearFilters() {
   searchInput.value = "";
   search.value = "";
   handleSelectFilter(null);
+}
+
+// Row checkboxes — selection is page-scoped (the ids currently loaded),
+// same as most datatables: it clears whenever the underlying list changes
+// so a bulk action can never silently apply to leads you can no longer see.
+const selectedIds = ref(new Set());
+const selectAllCheckbox = ref(null);
+const bulkLoading = ref(null);
+
+watch(leads, () => {
+  selectedIds.value = new Set();
+});
+
+const allSelected = computed(
+  () => leads.value.length > 0 && leads.value.every((lead) => selectedIds.value.has(lead.id)),
+);
+const someSelected = computed(() => selectedIds.value.size > 0);
+
+watchEffect(() => {
+  if (selectAllCheckbox.value) {
+    selectAllCheckbox.value.indeterminate = someSelected.value && !allSelected.value;
+  }
+});
+
+function toggleSelect(id) {
+  const next = new Set(selectedIds.value);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  selectedIds.value = next;
+}
+
+function toggleSelectAll() {
+  selectedIds.value = allSelected.value ? new Set() : new Set(leads.value.map((lead) => lead.id));
+}
+
+function clearSelection() {
+  selectedIds.value = new Set();
+}
+
+const bulkStatusActions = [
+  { status: "sent", label: "Sent" },
+  { status: "replied", label: "Replied" },
+  { status: "won", label: "Won" },
+  { status: "archived", label: "Not interested" },
+];
+
+async function handleBulkStatus(status) {
+  bulkLoading.value = status;
+  try {
+    const result = await bulkUpdateLeadStatus(Array.from(selectedIds.value), status);
+    toast.success(result.message);
+    clearSelection();
+    refetch({ silent: true });
+  } catch (error) {
+    toast.error(apiErrorMessage(error, "Could not update those leads."));
+  } finally {
+    bulkLoading.value = null;
+  }
+}
+
+async function handleBulkFavorite() {
+  bulkLoading.value = "favorite";
+  try {
+    const result = await bulkToggleLeadFavorite(Array.from(selectedIds.value), true);
+    toast.success(result.message);
+    clearSelection();
+    refetch({ silent: true });
+  } catch (error) {
+    toast.error(apiErrorMessage(error, "Could not save those leads."));
+  } finally {
+    bulkLoading.value = null;
+  }
 }
 
 const syncing = ref(false);
@@ -287,6 +361,37 @@ async function handleSync() {
           />
         </div>
 
+        <div
+          v-if="someSelected"
+          class="flex flex-wrap items-center gap-2 rounded-md border border-primary bg-primary-tint px-3 py-2"
+        >
+          <span class="text-sm font-semibold text-primary">{{ selectedIds.size }} selected</span>
+          <div class="ml-auto flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              @click="handleBulkFavorite"
+              :disabled="bulkLoading !== null"
+              class="flex items-center gap-1.5 rounded-pill border border-primary bg-white px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary-tint disabled:opacity-50"
+            >
+              <Loader2 v-if="bulkLoading === 'favorite'" class="h-3 w-3 animate-spin" />
+              <Bookmark v-else class="h-3 w-3" />
+              Save
+            </button>
+            <Button
+              v-for="action in bulkStatusActions"
+              :key="action.status"
+              variant="ghost"
+              size="sm"
+              :disabled="bulkLoading !== null"
+              :loading="bulkLoading === action.status"
+              @click="handleBulkStatus(action.status)"
+            >
+              Mark {{ action.label }}
+            </Button>
+            <Button variant="ghost" size="sm" @click="clearSelection">Clear</Button>
+          </div>
+        </div>
+
         <div class="overflow-hidden rounded-md border border-border bg-surface">
           <EmptyState
             v-if="!isLoading && leads.length === 0"
@@ -303,6 +408,14 @@ async function handleSync() {
             <div
               class="leads-row-grid min-h-9 items-center border-b border-border bg-surface px-3 text-[11px] font-semibold tracking-wide text-text-tertiary uppercase"
             >
+              <input
+                ref="selectAllCheckbox"
+                type="checkbox"
+                :checked="allSelected"
+                @change="toggleSelectAll"
+                aria-label="Select all leads on this page"
+                class="h-3.5 w-3.5 justify-self-center rounded border-border-strong text-primary focus:ring-2 focus:ring-primary/30"
+              />
               <span aria-hidden="true" />
               <button type="button" class="flex min-w-0 items-center gap-0.5 truncate text-left hover:text-text-primary" @click="toggleSort('score')">
                 <span class="truncate">Score</span>
@@ -339,6 +452,8 @@ async function handleSync() {
                 :lead="lead"
                 :active-filter-id="activeFilterId"
                 :match-keywords="activeFilter?.criteria.include_keywords ?? []"
+                :selected="selectedIds.has(lead.id)"
+                @toggle-select="toggleSelect"
               />
             </template>
           </div>

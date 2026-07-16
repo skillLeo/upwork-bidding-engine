@@ -71,6 +71,8 @@ Route::middleware('auth:sanctum')->group(function () {
     |----------------------------------------------------------------------
     */
     Route::get('/leads', [LeadController::class, 'index']);
+    Route::post('/leads/bulk-status', [LeadController::class, 'bulkStatus']);
+    Route::post('/leads/bulk-favorite', [LeadController::class, 'bulkFavorite']);
     Route::get('/leads/{lead}', [LeadController::class, 'show']);
     Route::post('/leads/{lead}/status', [LeadController::class, 'updateStatus']);
     Route::post('/leads/{lead}/favorite', [LeadController::class, 'toggleFavorite']);

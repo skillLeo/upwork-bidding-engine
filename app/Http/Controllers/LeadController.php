@@ -15,6 +15,7 @@ use App\Models\Lead;
 use App\Services\LeadFilterEvaluator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class LeadController extends Controller
 {
@@ -271,6 +272,57 @@ class LeadController extends Controller
         ], userId: $request->user()?->id);
 
         return response()->json(['data' => new LeadResource($lead->fresh('client'))]);
+    }
+
+    /**
+     * Bulk status change from the leads list's row-checkbox selection. One
+     * query, one activity log entry — not a loop of single updateStatus()
+     * calls, which would be both slow and enough parallel requests to flirt
+     * with the 120/min per-user rate limit on a big selection.
+     *
+     * Deliberately skips updateStatus()'s "provision a Client record on
+     * first forward transition" side effect - that belongs to a single
+     * deliberate transition, not a bulk sweep, so a bulk "mark sent" won't
+     * silently spawn dozens of Client Memory records.
+     */
+    public function bulkStatus(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1', 'max:200'],
+            'ids.*' => ['integer'],
+            // Same restriction as the single-lead endpoint: only
+            // bidder-driven, forward transitions are settable here.
+            'status' => ['required', 'string', Rule::in(['sent', 'replied', 'won', 'archived'])],
+        ]);
+
+        $count = Lead::query()->whereIn('id', $validated['ids'])->update(['status' => $validated['status']]);
+
+        ActivityLog::record(ActivityType::LeadStatusUpdated, meta: [
+            'action' => 'bulk_status',
+            'status' => $validated['status'],
+            'count' => $count,
+        ], userId: $request->user()?->id);
+
+        return response()->json(['data' => ['message' => "{$count} lead".($count === 1 ? '' : 's')." marked {$validated['status']}.", 'count' => $count]]);
+    }
+
+    public function bulkFavorite(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1', 'max:200'],
+            'ids.*' => ['integer'],
+            'is_favorite' => ['required', 'boolean'],
+        ]);
+
+        $count = Lead::query()->whereIn('id', $validated['ids'])->update(['is_favorite' => $validated['is_favorite']]);
+
+        ActivityLog::record(ActivityType::LeadStatusUpdated, meta: [
+            'action' => 'bulk_favorite',
+            'is_favorite' => $validated['is_favorite'],
+            'count' => $count,
+        ], userId: $request->user()?->id);
+
+        return response()->json(['data' => ['message' => "{$count} lead".($count === 1 ? '' : 's')." updated.", 'count' => $count]]);
     }
 
     public function rescore(Lead $lead): JsonResponse

@@ -13,8 +13,26 @@ const emit = defineEmits(["select"]);
 const { filters, refetch } = useSavedFilters();
 const menuOpen = ref(false);
 const editing = ref(null); // SavedFilter object | "new" | null
+const manageButton = ref(null);
+const menuStyle = ref({});
 
 const pinned = computed(() => filters.value.filter((f) => f.is_pinned));
+
+// The trigger lives inside the filter pills' horizontally-scrolling row —
+// overflow-x-auto forces overflow-y to clip too, so an absolutely
+// positioned dropdown would be cut off by that row instead of floating
+// above the page. Teleporting to <body> and positioning against the
+// button's own rect sidesteps that entirely.
+function toggleMenu() {
+  if (!menuOpen.value) {
+    const rect = manageButton.value.getBoundingClientRect();
+    menuStyle.value = {
+      top: `${rect.bottom + 6}px`,
+      left: `${Math.min(rect.left, window.innerWidth - 272)}px`,
+    };
+  }
+  menuOpen.value = !menuOpen.value;
+}
 
 function handleSaved(saved) {
   refetch();
@@ -76,40 +94,46 @@ function handleDeleted(id) {
 
     <div class="relative shrink-0">
       <button
-        @click="menuOpen = !menuOpen"
+        ref="manageButton"
+        @click="toggleMenu"
         class="flex items-center gap-1 rounded-pill px-2 py-1.5 text-xs font-medium text-text-tertiary hover:bg-black/5"
       >
         Manage <ChevronDown class="h-3 w-3" />
       </button>
 
-      <template v-if="menuOpen">
-        <div class="fixed inset-0 z-10" @click="menuOpen = false" />
-        <div class="absolute left-0 z-20 mt-1 w-64 rounded-card border border-border bg-white py-1.5 shadow-popover">
-          <p v-if="filters.length === 0" class="px-3 py-2 text-xs text-text-tertiary">
-            No saved filters yet.
-          </p>
-          <button
-            v-for="filter in filters"
-            :key="filter.id"
-            @click="
-              editing = filter;
-              menuOpen = false;
-            "
-            class="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-text-secondary hover:bg-black/5"
+      <Teleport to="body">
+        <template v-if="menuOpen">
+          <div class="fixed inset-0 z-40" @click="menuOpen = false" />
+          <div
+            :style="menuStyle"
+            class="fixed z-50 w-64 rounded-card border border-border bg-white py-1.5 shadow-popover"
           >
-            <span class="flex items-center gap-1.5 truncate">
-              {{ filter.name }}
-              <span
-                v-if="filter.is_default"
-                class="rounded-pill bg-primary-tint px-1.5 py-0.5 text-[10px] font-semibold text-primary"
-              >
-                default
+            <p v-if="filters.length === 0" class="px-3 py-2 text-xs text-text-tertiary">
+              No saved filters yet.
+            </p>
+            <button
+              v-for="filter in filters"
+              :key="filter.id"
+              @click="
+                editing = filter;
+                menuOpen = false;
+              "
+              class="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-text-secondary hover:bg-black/5"
+            >
+              <span class="flex items-center gap-1.5 truncate">
+                {{ filter.name }}
+                <span
+                  v-if="filter.is_default"
+                  class="rounded-pill bg-primary-tint px-1.5 py-0.5 text-[10px] font-semibold text-primary"
+                >
+                  default
+                </span>
               </span>
-            </span>
-            <Pencil class="h-3.5 w-3.5 shrink-0 text-text-tertiary" />
-          </button>
-        </div>
-      </template>
+              <Pencil class="h-3.5 w-3.5 shrink-0 text-text-tertiary" />
+            </button>
+          </div>
+        </template>
+      </Teleport>
     </div>
 
     <FilterModal
