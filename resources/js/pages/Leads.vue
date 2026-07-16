@@ -275,7 +275,7 @@ async function handleSync() {
 </script>
 
 <template>
-  <PageContainer>
+  <PageContainer class="max-w-[1600px]">
     <div class="flex items-start gap-4">
       <LeftRail>
         <LeadFiltersRail
@@ -408,14 +408,16 @@ async function handleSync() {
             <div
               class="leads-row-grid min-h-9 items-center border-b border-border bg-surface px-3 text-[11px] font-semibold tracking-wide text-text-tertiary uppercase"
             >
-              <input
-                ref="selectAllCheckbox"
-                type="checkbox"
-                :checked="allSelected"
-                @change="toggleSelectAll"
-                aria-label="Select all leads on this page"
-                class="h-3.5 w-3.5 justify-self-center rounded border-border-strong text-primary focus:ring-2 focus:ring-primary/30"
-              />
+              <div class="flex h-full items-center justify-center">
+                <input
+                  ref="selectAllCheckbox"
+                  type="checkbox"
+                  :checked="allSelected"
+                  @change="toggleSelectAll"
+                  aria-label="Select all leads on this page"
+                  class="h-3.5 w-3.5 rounded border-border-strong text-primary focus:ring-2 focus:ring-primary/30"
+                />
+              </div>
               <span aria-hidden="true" />
               <button type="button" class="flex min-w-0 items-center gap-0.5 truncate text-left hover:text-text-primary" @click="toggleSort('score')">
                 <span class="truncate">Score</span>
