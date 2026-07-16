@@ -1,11 +1,14 @@
 <script setup>
-import { computed } from "vue";
+import { computed, onMounted } from "vue";
 import { useRoute } from "vue-router";
 import { Toaster } from "vue-sonner";
 import NavBar from "@/components/layout/NavBar.vue";
+import { useBrandingStore } from "@/stores/branding";
 
 const route = useRoute();
 const showNav = computed(() => route.name !== "login");
+
+onMounted(() => useBrandingStore().fetch());
 </script>
 
 <template>

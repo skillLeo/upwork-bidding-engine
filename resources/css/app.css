@@ -170,7 +170,7 @@ body {
    they can never drift out of alignment. */
 .leads-row-grid {
   display: grid;
-  grid-template-columns: 3px 40px minmax(140px, 1fr) 84px 70px 80px 64px 108px 90px;
+  grid-template-columns: 3px 60px minmax(140px, 1fr) 84px 70px 80px 52px 108px 82px;
   column-gap: 12px;
 }
 

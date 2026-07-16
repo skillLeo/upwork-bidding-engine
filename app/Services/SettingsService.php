@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Setting;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Single source of truth for every runtime-configurable key/value the app
@@ -24,6 +25,12 @@ class SettingsService
      * @var array<string, array{group: string, secret: bool, default: mixed}>
      */
     public const SCHEMA = [
+        // Branding — product name + logo shown across the app (nav bar,
+        // sign-in screen). Not secret: an unauthenticated visitor needs
+        // these too, via the public GET /branding route, before signing in.
+        'app_name' => ['group' => 'branding', 'secret' => false, 'default' => 'SkillLeo'],
+        'app_logo_path' => ['group' => 'branding', 'secret' => false, 'default' => null],
+
         // Vollna
         'vollna_webhook_secret' => ['group' => 'vollna', 'secret' => true, 'default' => ''],
         // Used only by the manual "Sync now" button (Developers > API
@@ -258,6 +265,18 @@ class SettingsService
     public function bidderWhatsapp(): ?string
     {
         return $this->get('bidder_whatsapp') ?: null;
+    }
+
+    public function appName(): string
+    {
+        return (string) ($this->get('app_name') ?: 'SkillLeo');
+    }
+
+    public function appLogoUrl(): ?string
+    {
+        $path = $this->get('app_logo_path');
+
+        return $path ? Storage::disk('public')->url($path) : null;
     }
 
     /**

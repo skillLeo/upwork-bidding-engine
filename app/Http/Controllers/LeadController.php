@@ -68,7 +68,7 @@ class LeadController extends Controller
         $direction = str_starts_with($sort, '-') ? 'desc' : 'asc';
         $column = ltrim($sort, '-');
 
-        if (! in_array($column, ['created_at', 'score', 'posted_at', 'proposal_count', 'budget_max'], true)) {
+        if (! in_array($column, ['created_at', 'score', 'posted_at', 'proposal_count', 'budget_max', 'connects_required'], true)) {
             $column = 'created_at';
         }
 

@@ -1,6 +1,15 @@
 <script setup>
 import { ref, computed, watch } from "vue";
-import { Inbox, Search, SlidersHorizontal, RefreshCw, Loader2 } from "@lucide/vue";
+import {
+  Inbox,
+  Search,
+  SlidersHorizontal,
+  RefreshCw,
+  Loader2,
+  ChevronUp,
+  ChevronDown,
+  ChevronsUpDown,
+} from "@lucide/vue";
 import { toast } from "vue-sonner";
 import { useLeads } from "@/composables/useLeads";
 import { useSavedFilters } from "@/composables/useSavedFilters";
@@ -19,9 +28,33 @@ import LeadRowSkeleton from "@/components/ui/LeadRowSkeleton.vue";
 const sortOptions = [
   { value: "-created_at", label: "Newest first" },
   { value: "-score", label: "Highest score" },
+  { value: "-budget_max", label: "Highest budget" },
   { value: "-proposal_count", label: "Most proposals" },
+  { value: "-connects_required", label: "Most connects required" },
+  { value: "-posted_at", label: "Recently posted" },
   { value: "posted_at", label: "Oldest posted" },
 ];
+
+// Column headers double as the second, more direct way to sort (click to
+// sort, click again to flip direction) — the dropdown above stays as a
+// handful of quick presets, both ends just drive the same `sortParam`.
+const sortColumn = computed(() => sortParam.value.replace(/^-/, ""));
+const sortDirection = computed(() => (sortParam.value.startsWith("-") ? "desc" : "asc"));
+
+function toggleSort(column) {
+  if (sortColumn.value === column) {
+    sortParam.value = sortDirection.value === "desc" ? column : `-${column}`;
+  } else {
+    // First click on a column sorts "most relevant first" — highest
+    // score/budget/proposals/connects, most recently posted.
+    sortParam.value = `-${column}`;
+  }
+}
+
+function sortIcon(column) {
+  if (sortColumn.value !== column) return ChevronsUpDown;
+  return sortDirection.value === "desc" ? ChevronDown : ChevronUp;
+}
 
 const status = ref("all");
 const scoreMin = ref(undefined);
@@ -221,12 +254,27 @@ async function handleSync() {
               class="leads-row-grid min-h-9 items-center border-b border-border bg-surface px-3 text-[11px] font-semibold tracking-wide text-text-tertiary uppercase"
             >
               <span aria-hidden="true" />
-              <span class="truncate">Score</span>
+              <button type="button" class="flex min-w-0 items-center gap-0.5 truncate text-left hover:text-text-primary" @click="toggleSort('score')">
+                <span class="truncate">Score</span>
+                <component :is="sortIcon('score')" class="h-3 w-3 shrink-0" :class="sortColumn === 'score' ? 'text-primary' : 'text-text-tertiary/60'" />
+              </button>
               <span class="truncate">Title</span>
-              <span class="truncate text-right">Budget</span>
-              <span class="truncate text-right">Proposals</span>
-              <span class="truncate text-right" title="Connects required">Connects</span>
-              <span class="truncate">Age</span>
+              <button type="button" class="flex min-w-0 items-center justify-end gap-0.5 truncate hover:text-text-primary" @click="toggleSort('budget_max')">
+                <component :is="sortIcon('budget_max')" class="h-3 w-3 shrink-0" :class="sortColumn === 'budget_max' ? 'text-primary' : 'text-text-tertiary/60'" />
+                <span class="truncate">Budget</span>
+              </button>
+              <button type="button" class="flex min-w-0 items-center justify-end gap-0.5 truncate hover:text-text-primary" @click="toggleSort('proposal_count')">
+                <component :is="sortIcon('proposal_count')" class="h-3 w-3 shrink-0" :class="sortColumn === 'proposal_count' ? 'text-primary' : 'text-text-tertiary/60'" />
+                <span class="truncate">Proposals</span>
+              </button>
+              <button type="button" class="flex min-w-0 items-center justify-end gap-0.5 truncate hover:text-text-primary" title="Connects required" @click="toggleSort('connects_required')">
+                <component :is="sortIcon('connects_required')" class="h-3 w-3 shrink-0" :class="sortColumn === 'connects_required' ? 'text-primary' : 'text-text-tertiary/60'" />
+                <span class="truncate">Connects</span>
+              </button>
+              <button type="button" class="flex min-w-0 items-center gap-0.5 truncate text-left hover:text-text-primary" @click="toggleSort('posted_at')">
+                <span class="truncate">Age</span>
+                <component :is="sortIcon('posted_at')" class="h-3 w-3 shrink-0" :class="sortColumn === 'posted_at' ? 'text-primary' : 'text-text-tertiary/60'" />
+              </button>
               <span class="truncate">Client</span>
               <span class="truncate">Status</span>
             </div>

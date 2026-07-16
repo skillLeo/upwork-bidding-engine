@@ -10,6 +10,7 @@ use App\Services\SettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 
 class SettingsController extends Controller
 {
@@ -53,6 +54,68 @@ class SettingsController extends Controller
             'data' => $this->maskedPayload(),
             'meta' => ['message' => 'Settings saved.'],
         ]);
+    }
+
+    /**
+     * Public — unauthenticated pages (sign-in, forgot/reset password) need
+     * the product name and logo before anyone has a token.
+     */
+    public function branding(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'name' => $this->settings->appName(),
+            'logo_url' => $this->settings->appLogoUrl(),
+        ]]);
+    }
+
+    public function uploadLogo(Request $request): JsonResponse
+    {
+        $request->validate([
+            // Raster-only, same reasoning as avatar uploads: SVG can carry
+            // an inline <script> and execute if its stored URL is ever
+            // opened directly.
+            'logo' => ['required', 'file', 'mimes:png,jpg,jpeg,webp', 'max:2048'],
+        ]);
+
+        $oldPath = $this->settings->get('app_logo_path');
+        if ($oldPath) {
+            Storage::disk('public')->delete($oldPath);
+        }
+
+        $path = $request->file('logo')->store('branding', 'public');
+        $this->settings->set('app_logo_path', $path);
+
+        ActivityLog::record(
+            ActivityType::SettingUpdated,
+            meta: ['keys' => ['app_logo_path']],
+            userId: $request->user()?->id,
+        );
+
+        return response()->json(['data' => [
+            'name' => $this->settings->appName(),
+            'logo_url' => $this->settings->appLogoUrl(),
+        ]]);
+    }
+
+    public function removeLogo(Request $request): JsonResponse
+    {
+        $oldPath = $this->settings->get('app_logo_path');
+        if ($oldPath) {
+            Storage::disk('public')->delete($oldPath);
+        }
+
+        $this->settings->set('app_logo_path', null);
+
+        ActivityLog::record(
+            ActivityType::SettingUpdated,
+            meta: ['keys' => ['app_logo_path'], 'action' => 'logo_removed'],
+            userId: $request->user()?->id,
+        );
+
+        return response()->json(['data' => [
+            'name' => $this->settings->appName(),
+            'logo_url' => null,
+        ]]);
     }
 
     public function testConnection(
@@ -147,6 +210,10 @@ class SettingsController extends Controller
                 ? ['is_set' => filled($value), 'masked' => $this->mask($value)]
                 : $value;
         }
+
+        // Derived, not stored — the Settings UI needs a ready-to-render
+        // logo URL, not the raw storage path.
+        $grouped['branding']['app_logo_url'] = $this->settings->appLogoUrl();
 
         return $grouped;
     }

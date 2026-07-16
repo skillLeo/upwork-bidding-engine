@@ -22,6 +22,9 @@ class UpdateSettingsRequest extends FormRequest
     public function rules(): array
     {
         return [
+            // Branding
+            'app_name' => ['sometimes', 'nullable', 'string', 'max:100'],
+
             // Vollna
             'vollna_webhook_secret' => ['sometimes', 'nullable', 'string', 'max:500'],
             'vollna_api_token' => ['sometimes', 'nullable', 'string', 'max:500'],

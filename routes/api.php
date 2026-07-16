@@ -21,6 +21,10 @@ use Illuminate\Support\Facades\Route;
 Route::post('/vollna-hook', VollnaWebhookController::class)
     ->middleware([VerifyVollnaSecret::class, 'throttle:webhooks']);
 
+// Product name + logo — the sign-in screen needs these before anyone has
+// a token, so this stays outside auth:sanctum entirely.
+Route::get('/branding', [SettingsController::class, 'branding']);
+
 // Outbound WhatsApp goes through OpenClaw (see OpenClawService), not Meta's
 // Cloud API, so there is no inbound Meta webhook to receive here.
 
@@ -100,6 +104,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/settings', [SettingsController::class, 'index']);
         Route::post('/settings', [SettingsController::class, 'store']);
         Route::post('/settings/test/{service}', [SettingsController::class, 'testConnection']);
+        Route::post('/settings/logo', [SettingsController::class, 'uploadLogo']);
+        Route::delete('/settings/logo', [SettingsController::class, 'removeLogo']);
 
         Route::get('/analytics', [AnalyticsController::class, 'index']);
         Route::get('/diagnostics', DiagnosticsController::class);

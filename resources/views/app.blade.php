@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>SkillLeo Bidding Engine</title>
+    <title>{{ $appName }} Bidding Engine</title>
     <meta name="description" content="Score, draft, and track Upwork proposals from one dashboard.">
     {{-- Drives the sign-in page's dev quick-login buttons. See config/skillleo.php. --}}
     <meta name="dev-quick-login" content="{{ config('skillleo.dev_quick_login') ? '1' : '0' }}">
