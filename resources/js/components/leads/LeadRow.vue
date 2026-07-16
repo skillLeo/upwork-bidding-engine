@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed } from "vue";
+import { useRouter } from "vue-router";
 import { toast } from "vue-sonner";
 import { Bookmark, ChevronRight, ExternalLink, Loader2, ShieldCheck, Star } from "@lucide/vue";
 import StatusPill from "@/components/ui/StatusPill.vue";
@@ -7,6 +8,8 @@ import Button from "@/components/ui/Button.vue";
 import { toggleLeadFavorite, updateLeadStatus } from "@/composables/useLead";
 import { apiErrorMessage } from "@/lib/api-client";
 import { cn, scoreTier, compactAge } from "@/lib/utils";
+
+const router = useRouter();
 
 const props = defineProps({
   lead: { type: Object, required: true },
@@ -81,10 +84,37 @@ async function handleQuickStatus(status) {
     statusLoading.value = null;
   }
 }
+
+// The row itself is the one tab stop (score/title/budget/etc are all
+// display:contents, and the chevron button is tabindex="-1") so keyboard
+// users get Enter-to-open and Space-to-preview without tabbing through
+// every cell, and Up/Down jump row to row the way a fast scan needs to.
+function handleRowKeydown(event) {
+  if (event.key === "Enter") {
+    router.push(to.value);
+    return;
+  }
+  if (event.key === " ") {
+    event.preventDefault();
+    expanded.value = !expanded.value;
+    return;
+  }
+  if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+  event.preventDefault();
+  const rows = Array.from(document.querySelectorAll("[data-lead-row]"));
+  const index = rows.indexOf(event.currentTarget);
+  const next = rows[index + (event.key === "ArrowDown" ? 1 : -1)];
+  next?.focus();
+}
 </script>
 
 <template>
   <div
+    data-lead-row
+    tabindex="0"
+    role="link"
+    :aria-label="`Open ${lead.title}, score ${lead.score ?? 'not scored'}`"
+    @keydown="handleRowKeydown"
     :class="
       cn(
         'leads-row-grid min-h-9 items-center border-b border-border text-sm text-text-primary',
@@ -95,6 +125,7 @@ async function handleQuickStatus(status) {
   >
     <button
       type="button"
+      tabindex="-1"
       @click="expanded = !expanded"
       :aria-expanded="expanded"
       :aria-label="expanded ? 'Hide quick preview' : 'Show quick preview'"
@@ -111,7 +142,7 @@ async function handleQuickStatus(status) {
       />
     </button>
 
-    <router-link :to="to" class="contents">
+    <router-link :to="to" tabindex="-1" class="contents">
       <span class="font-mono text-sm font-bold tabular-nums" :class="scoreClass">
         <span class="sr-only">Score </span>{{ lead.score ?? "–" }}
       </span>

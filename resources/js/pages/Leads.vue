@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import {
   Inbox,
   Search,
@@ -41,6 +42,27 @@ const sortOptions = [
 const sortColumn = computed(() => sortParam.value.replace(/^-/, ""));
 const sortDirection = computed(() => (sortParam.value.startsWith("-") ? "desc" : "asc"));
 
+const columnLabels = {
+  created_at: "Created date",
+  score: "Score",
+  budget_max: "Budget",
+  proposal_count: "Proposals",
+  connects_required: "Connects",
+  posted_at: "Posted date",
+};
+
+// The dropdown only lists common presets, but a header click can land on a
+// combination that isn't one of them (e.g. "Score, lowest first") — without
+// this, the native <select> would just render blank since none of its
+// <option> values would match sortParam.
+const dropdownOptions = computed(() => {
+  if (sortOptions.some((opt) => opt.value === sortParam.value)) return sortOptions;
+  const label = `${columnLabels[sortColumn.value] ?? sortColumn.value}, ${
+    sortDirection.value === "asc" ? "lowest first" : "highest first"
+  }`;
+  return [...sortOptions, { value: sortParam.value, label }];
+});
+
 function toggleSort(column) {
   if (sortColumn.value === column) {
     sortParam.value = sortDirection.value === "desc" ? column : `-${column}`;
@@ -56,12 +78,15 @@ function sortIcon(column) {
   return sortDirection.value === "desc" ? ChevronDown : ChevronUp;
 }
 
-const status = ref("all");
-const scoreMin = ref(undefined);
+const route = useRoute();
+const router = useRouter();
+
+const status = ref(route.query.status ?? "all");
+const scoreMin = ref(route.query.score_min ? Number(route.query.score_min) : undefined);
 const postedFrom = ref(null);
 const postedTo = ref(null);
-const searchInput = ref("");
-const search = ref("");
+const searchInput = ref(route.query.search ?? "");
+const search = ref(route.query.search ?? "");
 let searchDebounce;
 watch(searchInput, (value) => {
   clearTimeout(searchDebounce);
@@ -70,18 +95,21 @@ watch(searchInput, (value) => {
   }, 350);
 });
 
-const page = ref(1);
-const perPage = ref(50);
+const page = ref(route.query.page ? Number(route.query.page) : 1);
+const perPage = ref(route.query.per_page ? Number(route.query.per_page) : 50);
 const perPageOptions = [25, 50, 100];
-const sortParam = ref("-created_at");
+const sortParam = ref(route.query.sort ?? "-created_at");
 const mobileFiltersOpen = ref(false);
 const mobileFilterCount = computed(
   () => (status.value !== "all" ? 1 : 0) + (scoreMin.value ? 1 : 0),
 );
 
 const { filters: savedFilters } = useSavedFilters();
-const activeFilterId = ref(null);
-let hasAppliedDefault = false;
+const activeFilterId = ref(route.query.filter ? Number(route.query.filter) : null);
+// A filter id restored from the URL, or picked by the user, both count as
+// "already decided" - only fall back to the saved-default filter when
+// neither happened yet.
+let hasAppliedDefault = activeFilterId.value !== null;
 
 watch(
   savedFilters,
@@ -105,6 +133,26 @@ function handleSelectFilter(filter) {
 
 watch([status, scoreMin, postedFrom, postedTo, search, sortParam, activeFilterId, perPage], () => {
   page.value = 1;
+});
+
+// Everything that defines "what you're looking at" round-trips through the
+// URL - refresh, browser back/forward, and a pasted link all land on the
+// exact same view instead of resetting to defaults. Posted-date range is
+// deliberately excluded: DateRangeFilter always re-applies its own "last 3
+// days" default on mount, so restoring it here would just get overwritten.
+watch([status, scoreMin, search, sortParam, page, perPage, activeFilterId], () => {
+  router.replace({
+    path: route.path,
+    query: {
+      ...(status.value !== "all" && { status: status.value }),
+      ...(scoreMin.value && { score_min: scoreMin.value }),
+      ...(search.value && { search: search.value }),
+      ...(sortParam.value !== "-created_at" && { sort: sortParam.value }),
+      ...(page.value !== 1 && { page: page.value }),
+      ...(perPage.value !== 50 && { per_page: perPage.value }),
+      ...(activeFilterId.value != null && { filter: activeFilterId.value }),
+    },
+  });
 });
 
 const leadFilters = computed(() => ({
@@ -223,7 +271,7 @@ async function handleSync() {
               v-model="sortParam"
               class="h-9 shrink-0 rounded-md border border-border-strong bg-white px-2.5 text-xs font-medium text-text-secondary focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none"
             >
-              <option v-for="opt in sortOptions" :key="opt.value" :value="opt.value">
+              <option v-for="opt in dropdownOptions" :key="opt.value" :value="opt.value">
                 {{ opt.label }}
               </option>
             </select>
