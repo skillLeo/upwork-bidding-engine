@@ -4,46 +4,47 @@
 @source '../js/**/*.js';
 
 :root {
-  /* Surfaces */
-  --color-bg: #f4f2ee;
+  /* Surfaces — cool neutral, not cream, not stark white */
+  --color-bg: #f6f7f9;
   --color-surface: #ffffff;
 
-  /* Primary action blue */
-  --color-primary: #0a66c2;
-  --color-primary-hover: #004182;
-  --color-primary-pressed: #002f5f;
-  --color-primary-tint: #edf3f8;
+  /* Accent — deep indigo. Links, focus rings, active state only. Never a
+     score signal, never a decorative fill. */
+  --color-primary: #3b44e3;
+  --color-primary-hover: #2e36c4;
+  --color-primary-pressed: #242ba0;
+  --color-primary-tint: #eeeffc;
 
-  /* Text */
-  --color-text-primary: rgba(0, 0, 0, 0.9);
-  --color-text-secondary: rgba(0, 0, 0, 0.6);
-  --color-text-tertiary: rgba(0, 0, 0, 0.45);
+  /* Text — solid cool greys, not alpha-black (crisper at small sizes) */
+  --color-text-primary: #14161a;
+  --color-text-secondary: #55595f;
+  --color-text-tertiary: #8a8f98;
   --color-text-inverse: #ffffff;
 
   /* Borders */
-  --color-border: rgba(0, 0, 0, 0.08);
-  --color-border-strong: rgba(0, 0, 0, 0.15);
+  --color-border: #e4e6ea;
+  --color-border-strong: #c9cdd4;
 
-  /* Status */
-  --color-success: #057642;
-  --color-success-bg: #e9f5ec;
-  --color-success-border: #b7ddc3;
-  --color-info: #0a66c2;
-  --color-info-bg: #eaf1fb;
-  --color-info-border: #b8d3f0;
-  --color-neutral: #56687a;
-  --color-neutral-bg: #eef1f4;
-  --color-neutral-border: #ccd6e0;
-  --color-warning: #915907;
+  /* Status / score tiers */
+  --color-success: #0f7b4e;
+  --color-success-bg: #e7f5ee;
+  --color-success-border: #bfe0ce;
+  --color-info: #1d5fbf;
+  --color-info-bg: #e9f1fb;
+  --color-info-border: #bcd7f2;
+  --color-neutral: #6b7280;
+  --color-neutral-bg: #eef0f2;
+  --color-neutral-border: #d8dbdf;
+  --color-warning: #92400e;
   --color-warning-bg: #fbf0da;
   --color-warning-border: #f0d999;
   --color-danger: #b3401f;
   --color-danger-bg: #fbece7;
   --color-danger-border: #f0c3b3;
 
-  /* Shadows */
-  --shadow-card: 0 0 0 1px var(--color-border), 0 2px 4px rgba(0, 0, 0, 0.06);
-  --shadow-card-hover: 0 0 0 1px var(--color-border-strong), 0 4px 12px rgba(0, 0, 0, 0.1);
+  /* Shadows — flat by default; tables use hairline borders, not shadow */
+  --shadow-card: 0 0 0 1px var(--color-border), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-card-hover: 0 0 0 1px var(--color-border-strong), 0 2px 6px rgba(0, 0, 0, 0.06);
   --shadow-popover: 0 0 0 1px var(--color-border), 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
@@ -80,7 +81,7 @@
   --color-danger-bg: var(--color-danger-bg);
   --color-danger-border: var(--color-danger-border);
 
-  --radius-card: 8px;
+  --radius-card: 6px;
   --radius-pill: 9999px;
 
   --shadow-card: var(--shadow-card);
@@ -89,6 +90,8 @@
 
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
     Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo,
+    Consolas, monospace;
 }
 
 html {
@@ -120,7 +123,7 @@ body {
   color: var(--color-primary-pressed);
 }
 
-/* Focus ring — visible, consistent, LinkedIn-blue */
+/* Focus ring — visible, consistent, indigo accent */
 :focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
@@ -161,4 +164,20 @@ body {
   );
   background-size: 800px 100%;
   animation: shimmer 1.4s ease-in-out infinite;
+}
+
+/* Leads table — one column template shared by the header and every row so
+   they can never drift out of alignment. */
+.leads-row-grid {
+  display: grid;
+  grid-template-columns: 3px 40px minmax(140px, 1fr) 84px 70px 80px 64px 108px 90px;
+  column-gap: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }

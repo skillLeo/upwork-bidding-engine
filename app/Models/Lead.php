@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 #[Fillable([
     'external_id', 'title', 'full_brief', 'url', 'budget', 'budget_min', 'budget_max',
     'client_country', 'client_spend', 'client_spend_amount', 'client_hire_rate', 'client_rating', 'client_reviews', 'payment_verified',
-    'proposal_count', 'score', 'score_reason', 'proposal_text', 'status',
+    'proposal_count', 'connects_required', 'score', 'score_reason', 'proposal_text', 'status',
     'client_id', 'posted_at',
 ])]
 class Lead extends Model
@@ -28,6 +28,7 @@ class Lead extends Model
         return [
             'payment_verified' => 'boolean',
             'proposal_count' => 'integer',
+            'connects_required' => 'integer',
             'score' => 'integer',
             'status' => LeadStatus::class,
             'posted_at' => 'datetime',

@@ -30,12 +30,12 @@ function handleDeleted(id) {
 </script>
 
 <template>
-  <div class="flex flex-wrap items-center gap-1.5">
+  <div class="thin-scroll flex items-center gap-1.5 overflow-x-auto pb-1">
     <button
       @click="emit('select', null)"
       :class="
         cn(
-          'rounded-pill border px-3 py-1.5 text-xs font-medium transition-all duration-150',
+          'shrink-0 rounded-pill border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-all duration-150',
           activeId === null
             ? 'border-primary bg-primary-tint text-primary shadow-sm'
             : 'border-border-strong text-text-secondary hover:bg-black/5',
@@ -51,15 +51,15 @@ function handleDeleted(id) {
       @click="emit('select', filter)"
       :class="
         cn(
-          'group flex items-center gap-1 rounded-pill border px-3 py-1.5 text-xs font-medium transition-all duration-150',
+          'group flex shrink-0 items-center gap-1 rounded-pill border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-all duration-150',
           activeId === filter.id
             ? 'border-primary bg-primary-tint text-primary shadow-sm'
             : 'border-border-strong text-text-secondary hover:bg-black/5',
         )
       "
     >
+      <Pin class="h-3 w-3 shrink-0" />
       {{ filter.name }}
-      <Pin v-if="filter.is_default" class="h-3 w-3" />
       <Pencil
         v-if="activeId === filter.id"
         class="h-3 w-3 opacity-0 group-hover:opacity-100"
@@ -69,12 +69,12 @@ function handleDeleted(id) {
 
     <button
       @click="editing = 'new'"
-      class="flex items-center gap-1 rounded-pill border border-dashed border-border-strong px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-black/5"
+      class="flex shrink-0 items-center gap-1 rounded-pill border border-dashed border-border-strong px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-black/5"
     >
       <Plus class="h-3 w-3" /> New filter
     </button>
 
-    <div class="relative">
+    <div class="relative shrink-0">
       <button
         @click="menuOpen = !menuOpen"
         class="flex items-center gap-1 rounded-pill px-2 py-1.5 text-xs font-medium text-text-tertiary hover:bg-black/5"

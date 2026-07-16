@@ -9,24 +9,19 @@ const emit = defineEmits(["update:status", "update:scoreMin"]);
 
 const statusOptions = [
   { value: "all", label: "All leads" },
+  { value: "new", label: "New" },
+  { value: "scoring", label: "Scoring" },
   { value: "ready", label: "Ready" },
   { value: "sent", label: "Sent" },
   { value: "replied", label: "Replied" },
   { value: "won", label: "Won" },
-  { value: "new", label: "New" },
-  { value: "scoring", label: "Scoring" },
   { value: "archived", label: "Archived" },
 ];
 
 const scoreOptions = [
   { value: undefined, label: "Any" },
-  { value: 4, label: "4+" },
-  { value: 5, label: "5+" },
-  { value: 6, label: "6+" },
-  { value: 7, label: "7+" },
-  { value: 8, label: "8+" },
-  { value: 9, label: "9+" },
-  { value: 10, label: "10" },
+  { value: 7, label: "7+ · Bid" },
+  { value: 9, label: "9+ · Bid & boost" },
 ];
 </script>
 
@@ -55,17 +50,17 @@ const scoreOptions = [
 
     <div class="rounded-card border border-border bg-surface p-4 shadow-card">
       <p class="mb-2 text-sm font-semibold text-text-primary">Minimum score</p>
-      <div class="flex flex-wrap gap-1.5">
+      <div class="flex flex-col gap-1">
         <button
           v-for="opt in scoreOptions"
           :key="opt.label"
           @click="emit('update:scoreMin', opt.value)"
           :class="
             cn(
-              'rounded-pill border px-2.5 py-1.5 text-xs font-medium transition-colors',
+              'rounded-md border px-3 py-1.5 text-left text-sm font-medium transition-colors',
               scoreMin === opt.value
                 ? 'border-primary bg-primary-tint text-primary'
-                : 'border-border-strong text-text-secondary hover:bg-black/5',
+                : 'border-transparent text-text-secondary hover:bg-black/5',
             )
           "
         >

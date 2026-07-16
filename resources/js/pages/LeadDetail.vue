@@ -5,6 +5,7 @@ import { toast } from "vue-sonner";
 import {
   AlertTriangle,
   ArrowLeft,
+  Coins,
   Copy,
   ExternalLink,
   Globe2,
@@ -59,6 +60,11 @@ const statBlocks = computed(() => {
     { icon: Wallet, label: "Budget", value: lead.value.budget ?? "—" },
     { icon: Globe2, label: "Client country", value: lead.value.client_country ?? "—" },
     { icon: Users, label: "Proposals so far", value: String(lead.value.proposal_count) },
+    {
+      icon: Coins,
+      label: "Connects required",
+      value: lead.value.connects_required != null ? String(lead.value.connects_required) : "—",
+    },
     { icon: Wallet, label: "Client spend", value: lead.value.client_spend ?? "—" },
     { icon: Users, label: "Hire rate", value: lead.value.client_hire_rate ?? "—" },
     {

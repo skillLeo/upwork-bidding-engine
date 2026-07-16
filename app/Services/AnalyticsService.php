@@ -33,6 +33,10 @@ class AnalyticsService
 
         $avgScore = (float) (Lead::query()->whereNotNull('score')->avg('score') ?? 0);
 
+        $sentStatuses = [LeadStatus::Sent, LeadStatus::Replied, LeadStatus::Won];
+        $knownConnects = (int) (Lead::query()->whereIn('status', $sentStatuses)->sum('connects_required'));
+        $sentWithoutKnownConnects = Lead::query()->whereIn('status', $sentStatuses)->whereNull('connects_required')->count();
+
         return [
             'total_leads' => array_sum($byStatus),
             'by_status' => $byStatus,
@@ -40,9 +44,10 @@ class AnalyticsService
             'reply_rate' => $sent > 0 ? round(($repliedOrWon / $sent) * 100, 1) : 0.0,
             'win_rate' => $sent > 0 ? round(($won / $sent) * 100, 1) : 0.0,
             'avg_score' => round($avgScore, 1),
-            // Upwork "Connects" cost per proposal varies by job and isn't in the
-            // Vollna payload, so this is a clearly-labeled estimate, not tracked fact.
-            'estimated_connects_spent' => $sent * 4,
+            // Real connects_required (from Vollna) for leads that have it,
+            // plus a clearly-labeled 4-per-proposal estimate only for the
+            // remainder that don't - not a pure guess once real data exists.
+            'estimated_connects_spent' => $knownConnects + ($sentWithoutKnownConnects * 4),
         ];
     }
 

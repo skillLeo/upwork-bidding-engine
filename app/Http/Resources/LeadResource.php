@@ -32,6 +32,7 @@ class LeadResource extends JsonResource
             'client_reviews' => $this->client_reviews,
             'payment_verified' => $this->payment_verified,
             'proposal_count' => $this->proposal_count,
+            'connects_required' => $this->connects_required,
             'score' => $this->score,
             'score_reason' => $this->score_reason,
             'proposal_text' => $this->proposal_text,

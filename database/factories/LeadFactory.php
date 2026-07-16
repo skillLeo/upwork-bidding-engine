@@ -64,6 +64,7 @@ class LeadFactory extends Factory
             'client_hire_rate' => fake()->numberBetween(0, 100).'%',
             'payment_verified' => fake()->boolean(80),
             'proposal_count' => fake()->numberBetween(0, 45),
+            'connects_required' => fake()->randomElement([2, 4, 6, 8, 10, 16]),
             'score' => null,
             'score_reason' => null,
             'proposal_text' => null,

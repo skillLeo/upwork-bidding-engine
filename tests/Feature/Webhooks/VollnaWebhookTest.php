@@ -98,6 +98,7 @@ class VollnaWebhookTest extends TestCase
                 'total_spent' => 12500,
                 'payment_method_verified' => true,
             ],
+            'connects_required' => 6,
         ]), ['X-Vollna-Secret' => 'test-secret']);
 
         $response->assertStatus(201)->assertJsonPath('data.accepted', 1);
@@ -111,6 +112,7 @@ class VollnaWebhookTest extends TestCase
             'score' => 9,
             'payment_verified' => true,
             'client_country' => 'United States',
+            'connects_required' => 6,
         ]);
 
         Http::assertSent(fn ($request) => str_contains($request->url(), '/task') && $request->data()['skill'] === 'score_and_write');

@@ -45,6 +45,7 @@ class VollnaProjectImporter
             'published' => $project['publishedAt'] ?? null,
             'budget' => $budget['amount'] ?? null,
             'budget_type' => str_contains($budgetType, 'hour') ? 'hourly' : 'fixed',
+            'connects_required' => $project['connectsRequired'] ?? $project['connects'] ?? null,
             'client_details' => [
                 'country' => $client['country'] ?? null,
                 'total_spent' => $client['totalSpent'] ?? null,
@@ -177,6 +178,17 @@ class VollnaProjectImporter
             'proposal_count' => (int) (
                 Arr::get($payload, 'proposals') ?? Arr::get($payload, 'proposal_count') ?? Arr::get($payload, 'applicants') ?? 0
             ),
+            // Field name isn't confirmed against a real Vollna payload yet
+            // (no docs access) - defensive aliases like the rest of this
+            // map, but verify against one live webhook delivery and adjust
+            // if none of these actually match.
+            'connects_required' => $this->nullableInt(
+                Arr::get($payload, 'connects_required')
+                    ?? Arr::get($payload, 'connectsRequired')
+                    ?? Arr::get($payload, 'connects')
+                    ?? Arr::get($payload, 'required_connects')
+                    ?? Arr::get($payload, 'connectPrice')
+            ),
             'posted_at' => $this->parseDate(
                 Arr::get($payload, 'published') ?? Arr::get($payload, 'postedOn') ?? Arr::get($payload, 'posted_at') ?? Arr::get($payload, 'publishedDateTime')
             ),
@@ -308,6 +320,11 @@ class VollnaProjectImporter
         }
 
         return (string) $value;
+    }
+
+    protected function nullableInt(mixed $value): ?int
+    {
+        return is_numeric($value) ? (int) $value : null;
     }
 
     protected function parseDate(mixed $value): ?Carbon

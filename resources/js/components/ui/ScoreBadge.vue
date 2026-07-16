@@ -1,14 +1,13 @@
 <script setup>
 import { computed } from "vue";
 import Badge from "@/components/ui/Badge.vue";
+import { scoreTier } from "@/lib/utils";
 
 const props = defineProps({
   score: { type: [Number, null], default: null },
 });
 
-const tone = computed(() =>
-  props.score >= 9 ? "success" : props.score >= 7 ? "info" : "neutral",
-);
+const tone = computed(() => scoreTier(props.score));
 </script>
 
 <template>

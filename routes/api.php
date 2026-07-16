@@ -3,6 +3,7 @@
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ClientController;
+use App\Http\Controllers\DiagnosticsController;
 use App\Http\Controllers\LeadController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SavedFilterController;
@@ -101,5 +102,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/settings/test/{service}', [SettingsController::class, 'testConnection']);
 
         Route::get('/analytics', [AnalyticsController::class, 'index']);
+        Route::get('/diagnostics', DiagnosticsController::class);
     });
 });

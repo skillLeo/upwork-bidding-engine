@@ -85,16 +85,16 @@ onMounted(() => {
       @click="open = !open"
       :class="
         cn(
-          'flex h-10 items-center gap-2 rounded-md border px-3 text-sm font-medium transition-colors',
+          'flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-xs font-medium transition-colors',
           open || activePreset !== 'all'
             ? 'border-primary bg-primary-tint text-primary'
             : 'border-border-strong text-text-secondary hover:bg-black/5',
         )
       "
     >
-      <Calendar class="h-4 w-4" />
+      <Calendar class="h-3.5 w-3.5" />
       {{ triggerLabel }}
-      <ChevronDown class="h-3.5 w-3.5 opacity-60" />
+      <ChevronDown class="h-3 w-3 opacity-60" />
     </button>
 
     <template v-if="open">
