@@ -28,7 +28,8 @@ Route::post('/vollna-hook', VollnaWebhookController::class)
 | Auth
 |--------------------------------------------------------------------------
 */
-Route::post('/auth/login', [AuthController::class, 'login']);
+Route::post('/auth/login', [AuthController::class, 'login'])
+    ->middleware('throttle:login');
 
 // Passwordless dev sign-in. The controller 404s unless skillleo.dev_quick_login
 // is on, so this is inert in a deployment that hasn't opted in.
@@ -36,11 +37,11 @@ Route::post('/auth/dev-login', [AuthController::class, 'devLogin'])
     ->middleware('throttle:webhooks');
 
 Route::post('/auth/verify-otp', [AuthController::class, 'verifyOtp'])
-    ->middleware('throttle:webhooks');
+    ->middleware('throttle:otp');
 Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])
-    ->middleware('throttle:webhooks');
+    ->middleware('throttle:login');
 Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])
-    ->middleware('throttle:webhooks');
+    ->middleware('throttle:login');
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);

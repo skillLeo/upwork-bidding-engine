@@ -38,6 +38,22 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(60)->by($request->ip());
         });
 
+        // Password guessing: keyed on IP + the submitted email so one
+        // attacker can't burn through many accounts by spreading requests
+        // across emails, and one email can't be hammered from many IPs
+        // without also hitting the IP-only webhooks-style limit elsewhere.
+        RateLimiter::for('login', function (Request $request) {
+            return Limit::perMinute(6)->by($request->ip().'|'.$request->input('email'));
+        });
+
+        // A 6-digit OTP is only ~1M possibilities - this has to be tight
+        // (not the generic 60/min webhooks limit) since the code's own
+        // 10-minute expiry is the only other thing standing between a
+        // fast guesser and a valid session.
+        RateLimiter::for('otp', function (Request $request) {
+            return Limit::perMinute(5)->by($request->ip().'|'.$request->input('challenge'));
+        });
+
         $this->configureDynamicMail();
 
         // The default notification points at a named `password.reset` web

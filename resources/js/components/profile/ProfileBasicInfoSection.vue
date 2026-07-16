@@ -16,21 +16,29 @@ import { useAuthStore } from "@/stores/auth";
 
 const auth = useAuthStore();
 
+const originalEmail = auth.user?.email ?? "";
 const name = ref(auth.user?.name ?? "");
-const email = ref(auth.user?.email ?? "");
+const email = ref(originalEmail);
+const currentPassword = ref("");
 const errors = ref({});
 const saving = ref(false);
 const uploadingAvatar = ref(false);
 const fileInput = ref(null);
 
 const avatarSrc = computed(() => auth.user?.avatar_url ?? null);
+const emailChanged = computed(() => email.value !== originalEmail);
 
 async function handleSave() {
   errors.value = {};
   saving.value = true;
   try {
-    const res = await apiClient.put("/profile", { name: name.value, email: email.value });
+    const res = await apiClient.put("/profile", {
+      name: name.value,
+      email: email.value,
+      current_password: currentPassword.value,
+    });
     auth.setUser(res.data.data);
+    currentPassword.value = "";
     toast.success("Profile updated.");
   } catch (error) {
     errors.value = error.response?.data?.errors
@@ -99,7 +107,7 @@ async function handleAvatarChange(event) {
         <input
           ref="fileInput"
           type="file"
-          accept="image/*"
+          accept="image/jpeg,image/png,image/webp"
           class="hidden"
           @change="handleAvatarChange"
         />
@@ -116,6 +124,13 @@ async function handleAvatarChange(event) {
           <Input type="email" v-model="email" />
           <FieldError :text="errors.email" />
         </div>
+      </div>
+
+      <div v-if="emailChanged">
+        <Label>Current password</Label>
+        <Input type="password" autocomplete="current-password" v-model="currentPassword" />
+        <FieldError :text="errors.current_password" />
+        <p class="mt-1 text-xs text-text-tertiary">Confirm it's you before changing your email.</p>
       </div>
 
       <div class="flex justify-end">

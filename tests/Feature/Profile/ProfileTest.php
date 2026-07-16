@@ -18,26 +18,69 @@ class ProfileTest extends TestCase
         $this->putJson('/api/profile', ['name' => 'X', 'email' => 'x@x.com'])->assertStatus(401);
     }
 
-    public function test_user_can_update_own_name_and_email(): void
+    public function test_name_only_change_does_not_require_current_password(): void
     {
         $user = User::factory()->create();
 
         $this->actingAs($user, 'sanctum')
-            ->putJson('/api/profile', ['name' => 'New Name', 'email' => 'new-email@skillleo.test'])
+            ->putJson('/api/profile', ['name' => 'New Name', 'email' => $user->email])
             ->assertOk()
-            ->assertJsonPath('data.name', 'New Name')
-            ->assertJsonPath('data.email', 'new-email@skillleo.test');
+            ->assertJsonPath('data.name', 'New Name');
 
-        $this->assertDatabaseHas('users', ['id' => $user->id, 'name' => 'New Name', 'email' => 'new-email@skillleo.test']);
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'name' => 'New Name']);
+    }
+
+    public function test_changing_email_without_current_password_is_rejected(): void
+    {
+        $user = User::factory()->create(['email' => 'old@skillleo.test']);
+
+        $this->actingAs($user, 'sanctum')
+            ->putJson('/api/profile', ['name' => $user->name, 'email' => 'new-email@skillleo.test'])
+            ->assertStatus(422);
+
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'email' => 'old@skillleo.test']);
+    }
+
+    public function test_changing_email_with_wrong_current_password_is_rejected(): void
+    {
+        $user = User::factory()->create(['email' => 'old@skillleo.test', 'password' => 'correct-password']);
+
+        $this->actingAs($user, 'sanctum')
+            ->putJson('/api/profile', [
+                'name' => $user->name,
+                'email' => 'new-email@skillleo.test',
+                'current_password' => 'wrong-password',
+            ])
+            ->assertStatus(422);
+
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'email' => 'old@skillleo.test']);
+    }
+
+    public function test_changing_email_with_correct_current_password_succeeds(): void
+    {
+        $user = User::factory()->create(['email' => 'old@skillleo.test', 'password' => 'correct-password']);
+
+        $this->actingAs($user, 'sanctum')
+            ->putJson('/api/profile', [
+                'name' => $user->name,
+                'email' => 'new-email@skillleo.test',
+                'current_password' => 'correct-password',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.email', 'new-email@skillleo.test');
     }
 
     public function test_email_must_be_unique_across_other_users(): void
     {
         $other = User::factory()->create(['email' => 'taken@skillleo.test']);
-        $user = User::factory()->create();
+        $user = User::factory()->create(['password' => 'correct-password']);
 
         $this->actingAs($user, 'sanctum')
-            ->putJson('/api/profile', ['name' => $user->name, 'email' => 'taken@skillleo.test'])
+            ->putJson('/api/profile', [
+                'name' => $user->name,
+                'email' => 'taken@skillleo.test',
+                'current_password' => 'correct-password',
+            ])
             ->assertStatus(422);
     }
 
@@ -107,6 +150,19 @@ class ProfileTest extends TestCase
         Storage::fake('public');
         $user = User::factory()->create();
         $file = UploadedFile::fake()->create('not-an-image.pdf', 100);
+
+        $this->actingAs($user, 'sanctum')
+            ->postJson('/api/profile/avatar', ['avatar' => $file])
+            ->assertStatus(422);
+    }
+
+    public function test_svg_avatar_upload_is_rejected(): void
+    {
+        // SVG can carry an inline <script> - explicitly excluded even
+        // though Laravel's generic `image` rule would normally allow it.
+        Storage::fake('public');
+        $user = User::factory()->create();
+        $file = UploadedFile::fake()->create('avatar.svg', 10, 'image/svg+xml');
 
         $this->actingAs($user, 'sanctum')
             ->postJson('/api/profile/avatar', ['avatar' => $file])

@@ -15,7 +15,6 @@ class SettingsSeeder extends Seeder
     public function run(): void
     {
         app(SettingsService::class)->setMany([
-            'claude_model' => 'claude-sonnet-4-6',
             'min_budget' => 150,
             'max_proposals' => 25,
             'score_cutoff' => 7,

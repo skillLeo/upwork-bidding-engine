@@ -23,12 +23,26 @@ class ProfileController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
+            'current_password' => ['sometimes', 'nullable', 'string'],
         ]);
 
-        $user->update($validated);
+        // A leaked/stolen token shouldn't be enough to silently redirect
+        // future logins to an attacker's own email - changing it requires
+        // re-proving the password, same as changing the password itself
+        // does. Name-only edits don't need this.
+        $changingEmail = $validated['email'] !== $user->email;
+
+        if ($changingEmail && ! Hash::check((string) ($validated['current_password'] ?? ''), $user->password)) {
+            throw ValidationException::withMessages([
+                'current_password' => ['Enter your current password to change your email.'],
+            ]);
+        }
+
+        $user->update(['name' => $validated['name'], 'email' => $validated['email']]);
 
         ActivityLog::record(ActivityType::SettingUpdated, subject: $user, userId: $user->id, meta: [
             'action' => 'profile_updated',
+            'email_changed' => $changingEmail,
         ]);
 
         return response()->json(['data' => new UserResource($user)]);
@@ -70,7 +84,11 @@ class ProfileController extends Controller
         $user = $request->user();
 
         $request->validate([
-            'avatar' => ['required', 'image', 'max:4096'],
+            // Not Laravel's generic `image` rule - that permits SVG, which
+            // can carry an inline <script> and execute if its URL is ever
+            // opened directly. An explicit raster-only mimes whitelist
+            // closes that off; nothing here needs vector graphics.
+            'avatar' => ['required', 'file', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
         ]);
 
         if ($user->avatar_path) {

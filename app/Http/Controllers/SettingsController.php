@@ -122,7 +122,13 @@ class SettingsController extends Controller
 
             return ['success' => true, 'message' => "Test email sent to {$to}."];
         } catch (\Throwable $e) {
-            return ['success' => false, 'message' => 'Could not send test email: '.$e->getMessage()];
+            // The raw exception can echo back connection details (host,
+            // port, sometimes auth hints) - log the real error server-side
+            // and keep the client-facing message generic, even though this
+            // is already an admin-only route.
+            report($e);
+
+            return ['success' => false, 'message' => 'Could not send test email — check the SMTP host, port, and credentials, then check the logs for details.'];
         }
     }
 
