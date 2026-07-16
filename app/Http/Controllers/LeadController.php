@@ -32,6 +32,17 @@ class LeadController extends Controller
             $query->where('score', '>=', (int) $request->query('score_min'));
         }
 
+        // A top-level page control (like status/score), not a saved-filter
+        // criterion — always applied, including during search, so switching
+        // date ranges doesn't get silently ignored by a search term.
+        if ($postedFrom = $request->query('posted_from')) {
+            $query->where('posted_at', '>=', $postedFrom);
+        }
+
+        if ($postedTo = $request->query('posted_to')) {
+            $query->where('posted_at', '<=', $postedTo);
+        }
+
         // Searching means "find this across everything", not "search within
         // my current filter" - a saved filter's keyword/budget/etc. rules
         // are skipped entirely while a search term is present. The results

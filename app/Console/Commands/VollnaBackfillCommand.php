@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Services\VollnaProjectImporter;
 use Illuminate\Console\Command;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -14,7 +15,7 @@ use Illuminate\Support\Facades\Http;
  */
 class VollnaBackfillCommand extends Command
 {
-    protected $signature = 'vollna:backfill {token : Vollna API token (Developers > API Tokens)} {filter : The numeric filter ID, e.g. 40694 from the filter URL} {--pages=10 : Max pages to fetch, 100 projects each}';
+    protected $signature = 'vollna:backfill {token : Vollna API token (Developers > API Tokens)} {filter : The numeric filter ID, e.g. 40694 from the filter URL} {--pages=10 : Max pages to fetch, 100 projects each} {--hours= : Only import projects published within this many hours; omit for no limit}';
 
     protected $description = 'One-time import of projects an existing Vollna filter already matched, via the REST API.';
 
@@ -23,10 +24,13 @@ class VollnaBackfillCommand extends Command
         $token = (string) $this->argument('token');
         $filterId = (string) $this->argument('filter');
         $maxPages = (int) $this->option('pages');
+        $hours = $this->option('hours') !== null ? (int) $this->option('hours') : null;
+        $cutoff = $hours !== null ? now()->subHours($hours) : null;
 
         $accepted = 0;
         $duplicate = 0;
         $skipped = 0;
+        $tooOld = 0;
         $cursor = null;
 
         for ($page = 1; $page <= $maxPages; $page++) {
@@ -44,8 +48,25 @@ class VollnaBackfillCommand extends Command
 
             $body = $response->json();
             $projects = $body['data'] ?? [];
+            $reachedCutoff = false;
 
             foreach ($projects as $project) {
+                // Results come back newest-published-first, so the moment
+                // one project is older than the cutoff, every project after
+                // it (this page and all following pages) is too - safe to
+                // stop the whole backfill right here instead of importing
+                // (and paying for) hundreds of dead older briefs.
+                if ($cutoff !== null) {
+                    $publishedAt = $project['publishedAt'] ?? null;
+
+                    if ($publishedAt && Carbon::parse($publishedAt)->lt($cutoff)) {
+                        $tooOld++;
+                        $reachedCutoff = true;
+
+                        break;
+                    }
+                }
+
                 $result = $importer->importProject($this->normalizeApiProject($project));
 
                 match ($result['status']) {
@@ -56,6 +77,12 @@ class VollnaBackfillCommand extends Command
             }
 
             $this->line("Page {$page}: ".count($projects)." projects fetched.");
+
+            if ($reachedCutoff) {
+                $this->info("Reached the {$hours}h cutoff — stopping early.");
+
+                break;
+            }
 
             $isLast = (bool) ($body['pagination']['is_last'] ?? true);
             $cursor = $body['pagination']['next_cursor'] ?? null;
@@ -71,7 +98,7 @@ class VollnaBackfillCommand extends Command
             sleep(13);
         }
 
-        $this->info("Done. Accepted: {$accepted}, duplicate: {$duplicate}, skipped: {$skipped}.");
+        $this->info("Done. Accepted: {$accepted}, duplicate: {$duplicate}, skipped: {$skipped}, too old: {$tooOld}.");
 
         return self::SUCCESS;
     }

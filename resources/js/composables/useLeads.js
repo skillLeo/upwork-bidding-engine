@@ -30,6 +30,8 @@ export function buildQuery(filters) {
   if (filters.posted_within_minutes !== undefined) {
     params.set("posted_within_minutes", String(filters.posted_within_minutes));
   }
+  if (filters.posted_from) params.set("posted_from", filters.posted_from);
+  if (filters.posted_to) params.set("posted_to", filters.posted_to);
   return params.toString();
 }
 

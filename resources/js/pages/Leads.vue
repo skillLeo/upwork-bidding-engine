@@ -6,6 +6,7 @@ import { useSavedFilters } from "@/composables/useSavedFilters";
 import LeadCard from "@/components/leads/LeadCard.vue";
 import LeadFiltersRail from "@/components/leads/LeadFiltersRail.vue";
 import SavedFiltersBar from "@/components/leads/SavedFiltersBar.vue";
+import DateRangeFilter from "@/components/leads/DateRangeFilter.vue";
 import LeftRail from "@/components/layout/LeftRail.vue";
 import RightRail from "@/components/layout/RightRail.vue";
 import PageContainer from "@/components/layout/PageContainer.vue";
@@ -34,6 +35,8 @@ const sortOptions = [
 
 const status = ref("all");
 const scoreMin = ref(undefined);
+const postedFrom = ref(null);
+const postedTo = ref(null);
 const searchInput = ref("");
 const search = ref("");
 let searchDebounce;
@@ -71,13 +74,15 @@ function handleSelectFilter(filter) {
   hasAppliedDefault = true;
 }
 
-watch([status, scoreMin, search, sortParam, activeFilterId], () => {
+watch([status, scoreMin, postedFrom, postedTo, search, sortParam, activeFilterId], () => {
   page.value = 1;
 });
 
 const leadFilters = computed(() => ({
   status: status.value === "all" ? undefined : status.value,
   score_min: scoreMin.value,
+  posted_from: postedFrom.value,
+  posted_to: postedTo.value,
   search: search.value || undefined,
   sort: sortParam.value,
   page: page.value,
@@ -125,6 +130,12 @@ function clearFilters() {
             </p>
           </div>
           <div class="flex gap-2">
+            <DateRangeFilter
+              :from="postedFrom"
+              @update:from="postedFrom = $event"
+              :to="postedTo"
+              @update:to="postedTo = $event"
+            />
             <div class="relative">
               <Search class="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
               <Input
