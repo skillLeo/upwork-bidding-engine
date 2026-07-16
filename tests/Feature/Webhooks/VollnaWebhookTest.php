@@ -3,10 +3,9 @@
 namespace Tests\Feature\Webhooks;
 
 use App\Enums\LeadStatus;
-use App\Jobs\ScoreLeadJob;
 use App\Services\SettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class VollnaWebhookTest extends TestCase
@@ -57,7 +56,9 @@ class VollnaWebhookTest extends TestCase
     {
         // Vollna's own webhook UI only offers None / Bearer Token / Basic Auth -
         // Bearer is the primary real-world path, X-Vollna-Secret is a fallback.
-        Queue::fake();
+        // Scoring now runs inline on the webhook request, so this must fake
+        // the outbound OpenClaw call rather than the queue.
+        Http::fake();
 
         $response = $this->postJson(
             '/api/vollna-hook',
@@ -78,9 +79,10 @@ class VollnaWebhookTest extends TestCase
         )->assertStatus(401);
     }
 
-    public function test_accepts_valid_payload_creates_lead_and_dispatches_scoring(): void
+    public function test_accepts_valid_payload_creates_lead_and_scores_it_inline(): void
     {
-        Queue::fake();
+        app(SettingsService::class)->setMany(['openclaw_url' => 'https://openclaw.test', 'openclaw_token' => 'token']);
+        Http::fake(['openclaw.test/*' => Http::response(['score' => 9, 'reason' => 'Great fit', 'proposal' => 'Hi there...'])]);
 
         $response = $this->postJson('/api/vollna-hook', $this->batch([
             'url' => 'https://www.vollna.com/go?module=webhook&pid=3359&url=https%3A%2F%2Fwww.upwork.com%2Fjobs%2F~01',
@@ -98,20 +100,24 @@ class VollnaWebhookTest extends TestCase
 
         $response->assertStatus(201)->assertJsonPath('data.accepted', 1);
 
+        // No queue/cron involved: by the time the webhook responds, the
+        // lead is already scored and past `new`/`scoring`.
         $this->assertDatabaseHas('leads', [
             'external_id' => 'vollna_pid_3359',
             'title' => 'Laravel Developer Needed',
-            'status' => LeadStatus::New->value,
+            'status' => LeadStatus::Ready->value,
+            'score' => 9,
             'payment_verified' => true,
             'client_country' => 'United States',
         ]);
 
-        Queue::assertPushed(ScoreLeadJob::class);
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/task') && $request->data()['skill'] === 'score_and_write');
     }
 
     public function test_batch_with_multiple_projects_creates_a_lead_per_project(): void
     {
-        Queue::fake();
+        app(SettingsService::class)->setMany(['openclaw_url' => 'https://openclaw.test', 'openclaw_token' => 'token']);
+        Http::fake(['openclaw.test/*' => Http::response(['score' => 3, 'reason' => 'Weak fit', 'proposal' => ''])]);
 
         $response = $this->postJson('/api/vollna-hook', $this->batch(
             ['title' => 'Job One', 'url' => 'https://www.vollna.com/go?pid=101'],
@@ -123,12 +129,13 @@ class VollnaWebhookTest extends TestCase
             ->assertJsonPath('data.accepted', 2);
 
         $this->assertDatabaseCount('leads', 2);
-        Queue::assertPushed(ScoreLeadJob::class, 2);
+        Http::assertSentCount(2);
     }
 
     public function test_duplicate_external_id_is_idempotent_and_does_not_rescore(): void
     {
-        Queue::fake();
+        app(SettingsService::class)->setMany(['openclaw_url' => 'https://openclaw.test', 'openclaw_token' => 'token']);
+        Http::fake(['openclaw.test/*' => Http::response(['score' => 3, 'reason' => 'Weak fit', 'proposal' => ''])]);
 
         $payload = $this->batch(['title' => 'Job One', 'url' => 'https://www.vollna.com/go?pid=dup-1']);
         $headers = ['X-Vollna-Secret' => 'test-secret'];
@@ -139,7 +146,7 @@ class VollnaWebhookTest extends TestCase
             ->assertJsonPath('data.duplicate', 1);
 
         $this->assertDatabaseCount('leads', 1);
-        Queue::assertPushed(ScoreLeadJob::class, 1);
+        Http::assertSentCount(1);
     }
 
     public function test_missing_title_is_rejected(): void

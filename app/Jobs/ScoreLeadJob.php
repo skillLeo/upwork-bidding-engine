@@ -97,7 +97,11 @@ class ScoreLeadJob implements ShouldQueue
         ]);
 
         if ($isReady) {
-            NotifyBidderJob::dispatch($lead->id);
+            // Sync, not queued: the whole point of scoring inline on the
+            // webhook is that a bidder gets the WhatsApp alert within
+            // seconds — queuing this step back up would reintroduce the
+            // exact lag we just removed.
+            NotifyBidderJob::dispatchSync($lead->id);
         }
     }
 

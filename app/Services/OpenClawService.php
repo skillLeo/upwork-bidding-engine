@@ -125,15 +125,26 @@ class OpenClawService
      */
     public function sendLeadCard(Lead $lead, string $dashboardUrl): array
     {
-        $score = $lead->score !== null ? "{$lead->score}/10" : 'n/a';
+        $score = $lead->score ?? 0;
+
+        // "Ready" already means score >= score_cutoff (ScoreLeadJob is the
+        // only caller, and only for ready leads), so BID is always yes here
+        // — it's spelled out anyway since the bidder reads this message
+        // standalone, without the code path behind it in view. BOOST is a
+        // stricter bar (score 9-10): a plain threshold, not a separate AI
+        // judgment call, flagging only the strongest fits as worth spending
+        // extra Upwork Connects on.
+        $boost = $score >= 9 ? 'yes' : 'no';
 
         $lines = [
-            "🟢 *New ready lead — score {$score}*",
+            "🟢 *New ready lead*",
             $lead->title,
+            (string) $lead->url,
             '',
-            "Budget: {$lead->budget}",
-            "Proposals so far: {$lead->proposal_count}",
-            "Why: {$lead->score_reason}",
+            "SCORE: {$score}/10",
+            'BID: yes',
+            "BOOST: {$boost}",
+            "Reason: {$lead->score_reason}",
             '',
             'Proposal to paste on Upwork:',
             '—',

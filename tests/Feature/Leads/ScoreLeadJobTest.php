@@ -11,7 +11,6 @@ use App\Services\ScoringService;
 use App\Services\SettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class ScoreLeadJobTest extends TestCase
@@ -25,6 +24,7 @@ class ScoreLeadJobTest extends TestCase
         app(SettingsService::class)->setMany([
             'openclaw_url' => 'https://openclaw.test',
             'openclaw_token' => 'token',
+            'bidder_whatsapp' => '+15550001111',
             'score_cutoff' => 7,
             'max_proposals' => 25,
             'min_budget' => 150,
@@ -78,7 +78,9 @@ class ScoreLeadJobTest extends TestCase
 
     public function test_score_at_or_above_cutoff_marks_lead_ready_and_notifies_bidder(): void
     {
-        Queue::fake();
+        // NotifyBidderJob is dispatched sync (real-time WhatsApp alert), so
+        // it isn't queueable to intercept here — assert the real outbound
+        // WhatsApp call instead.
         Http::fake([
             'openclaw.test/*' => Http::response(['score' => 9, 'reason' => 'Great fit', 'proposal' => 'Hi there...']),
         ]);
@@ -92,12 +94,20 @@ class ScoreLeadJobTest extends TestCase
         $this->assertEquals(9, $lead->score);
         $this->assertEquals('Hi there...', $lead->proposal_text);
 
-        Queue::assertPushed(NotifyBidderJob::class, fn (NotifyBidderJob $job) => $job->leadId === $lead->id);
+        Http::assertSent(function ($request) {
+            $data = $request->data();
+
+            return ($data['skill'] ?? null) === 'send_whatsapp_message'
+                && $data['to'] === '+15550001111'
+                && str_contains($data['message'], 'SCORE: 9/10')
+                && str_contains($data['message'], 'BID: yes')
+                && str_contains($data['message'], 'BOOST: yes')
+                && str_contains($data['message'], 'Hi there...');
+        });
     }
 
     public function test_score_below_cutoff_archives_lead_without_notifying(): void
     {
-        Queue::fake();
         Http::fake([
             'openclaw.test/*' => Http::response(['score' => 3, 'reason' => 'Weak fit', 'proposal' => '']),
         ]);
@@ -110,7 +120,7 @@ class ScoreLeadJobTest extends TestCase
         $this->assertEquals(LeadStatus::Archived, $lead->status);
         $this->assertEquals(3, $lead->score);
 
-        Queue::assertNotPushed(NotifyBidderJob::class);
+        Http::assertNotSent(fn ($request) => ($request->data()['skill'] ?? null) === 'send_whatsapp_message');
     }
 
     public function test_openclaw_request_carries_no_anthropic_credentials(): void
@@ -118,7 +128,6 @@ class ScoreLeadJobTest extends TestCase
         // OpenClaw is authenticated to Claude on its own (CLI subscription
         // auth) — this app must never send an API key/model, only the job
         // and rules.
-        Queue::fake();
         Http::fake([
             'openclaw.test/*' => Http::response(['score' => 8, 'reason' => 'ok', 'proposal' => 'p']),
         ]);

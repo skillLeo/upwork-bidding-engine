@@ -47,7 +47,18 @@ class VollnaProjectImporter
 
         ActivityLog::record(ActivityType::LeadReceived, subject: $lead, meta: ['source' => 'vollna']);
 
-        ScoreLeadJob::dispatch($lead->id);
+        // Score inline, in the same request, so a bidder sees a real-time
+        // WhatsApp alert within seconds instead of waiting on a queue
+        // worker/cron tick. A failure here doesn't get the job's normal
+        // queue retries — it's a one-shot attempt — so on failure we reuse
+        // the job's own `failed()` handling to leave the lead visible as
+        // `new` with the error recorded, rather than stuck on `scoring`.
+        try {
+            ScoreLeadJob::dispatchSync($lead->id);
+        } catch (\Throwable $e) {
+            report($e);
+            (new ScoreLeadJob($lead->id))->failed($e);
+        }
 
         return ['status' => 'accepted', 'lead_id' => $lead->id];
     }
