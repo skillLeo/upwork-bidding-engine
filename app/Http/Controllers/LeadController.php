@@ -255,6 +255,24 @@ class LeadController extends Controller
         return response()->json(['data' => new LeadResource($lead->fresh('client'))]);
     }
 
+    /**
+     * Account-wide, not per-user — same reasoning as saved filters and lead
+     * status: this is a single-bidder tool, not multi-tenant. Lets a bidder
+     * flag a lead as worth prioritizing (or hide it from priority) without
+     * spending an AI call re-scoring it.
+     */
+    public function toggleFavorite(Request $request, Lead $lead): JsonResponse
+    {
+        $lead->update(['is_favorite' => ! $lead->is_favorite]);
+
+        ActivityLog::record(ActivityType::LeadStatusUpdated, subject: $lead, meta: [
+            'action' => 'favorite_toggled',
+            'is_favorite' => $lead->is_favorite,
+        ], userId: $request->user()?->id);
+
+        return response()->json(['data' => new LeadResource($lead->fresh('client'))]);
+    }
+
     public function rescore(Lead $lead): JsonResponse
     {
         $lead->update([

@@ -41,6 +41,7 @@ class VollnaProjectImporter
         return [
             'title' => $project['title'] ?? null,
             'description' => $project['description'] ?? null,
+            'skills' => $project['skills'] ?? $project['tags'] ?? null,
             'url' => $project['url'] ?? null,
             'published' => $project['publishedAt'] ?? null,
             'budget' => $budget['amount'] ?? null,
@@ -152,6 +153,16 @@ class VollnaProjectImporter
                 ?? Arr::get($payload, 'brief')
                 ?? Arr::get($payload, 'full_brief')
                 ?? ''
+            ),
+            // Field name/shape isn't confirmed against a real Vollna payload
+            // yet (no docs access) - defensive aliases like connects_required
+            // below, but verify against one live webhook delivery and adjust
+            // if none of these actually match.
+            'skills' => $this->normalizeSkills(
+                Arr::get($payload, 'skills')
+                    ?? Arr::get($payload, 'tags')
+                    ?? Arr::get($payload, 'category_skills')
+                    ?? Arr::get($payload, 'requiredSkills')
             ),
             'url' => $url,
             'budget' => $budget = $this->normalizeBudget($payload),
@@ -325,6 +336,32 @@ class VollnaProjectImporter
     protected function nullableInt(mixed $value): ?int
     {
         return is_numeric($value) ? (int) $value : null;
+    }
+
+    /**
+     * Skills can arrive as a plain string array or, depending on the API
+     * shape, an array of {name}/{skill}/{title} objects - flatten either
+     * into plain strings so the frontend never has to care which one it got.
+     *
+     * @return array<int, string>
+     */
+    protected function normalizeSkills(mixed $value): array
+    {
+        if (! is_array($value)) {
+            return [];
+        }
+
+        return array_values(array_filter(array_map(function ($item) {
+            if (is_string($item)) {
+                return trim($item);
+            }
+
+            if (is_array($item)) {
+                return trim((string) ($item['name'] ?? $item['skill'] ?? $item['title'] ?? ''));
+            }
+
+            return null;
+        }, $value)));
     }
 
     protected function parseDate(mixed $value): ?Carbon

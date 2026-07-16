@@ -38,6 +38,11 @@ export async function updateLeadStatus(id, status) {
   return res.data.data;
 }
 
+export async function toggleLeadFavorite(id) {
+  const res = await apiClient.post(`/leads/${id}/favorite`);
+  return res.data.data;
+}
+
 export async function rescoreLead(id) {
   const res = await apiClient.post(`/leads/${id}/rescore`);
   return res.data.data;

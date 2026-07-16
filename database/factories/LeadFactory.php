@@ -36,6 +36,15 @@ class LeadFactory extends Factory
     /**
      * @var array<int, string>
      */
+    protected array $skillPool = [
+        'Laravel', 'PHP', 'Vue.js', 'React', 'Next.js', 'Node.js', 'TypeScript',
+        'MySQL', 'PostgreSQL', 'REST API', 'Livewire', 'Tailwind CSS', 'Flutter',
+        'MongoDB', 'AWS', 'Docker', 'GraphQL', 'Stripe API',
+    ];
+
+    /**
+     * @var array<int, string>
+     */
     protected array $briefFragments = [
         'We are looking for an experienced developer to join our small team on a long-term basis.',
         'The codebase is already in production, so care and testing matter more than speed.',
@@ -55,6 +64,7 @@ class LeadFactory extends Factory
             'external_id' => 'upwork_'.fake()->unique()->numerify('####################'),
             'title' => fake()->randomElement($this->titles),
             'full_brief' => fake()->paragraph(3, true).' '.implode(' ', fake()->randomElements($this->briefFragments, 3)),
+            'skills' => fake()->randomElements($this->skillPool, fake()->numberBetween(3, 7)),
             'url' => 'https://www.upwork.com/jobs/~'.fake()->unique()->numerify('01##################'),
             'budget' => $budgetType === 'fixed'
                 ? '$'.fake()->numberBetween(1, 60).'00 fixed'
@@ -69,6 +79,7 @@ class LeadFactory extends Factory
             'score_reason' => null,
             'proposal_text' => null,
             'status' => LeadStatus::New,
+            'is_favorite' => false,
             'client_id' => null,
             'posted_at' => $postedAt,
             'created_at' => $postedAt,

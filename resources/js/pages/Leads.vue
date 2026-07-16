@@ -290,6 +290,7 @@ async function handleSync() {
                 :key="lead.id"
                 :lead="lead"
                 :active-filter-id="activeFilterId"
+                :match-keywords="activeFilter?.criteria.include_keywords ?? []"
               />
             </template>
           </div>
