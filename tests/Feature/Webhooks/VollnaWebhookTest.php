@@ -3,9 +3,11 @@
 namespace Tests\Feature\Webhooks;
 
 use App\Enums\LeadStatus;
+use App\Jobs\ScoreLeadJob;
 use App\Services\SettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class VollnaWebhookTest extends TestCase
@@ -129,7 +131,9 @@ class VollnaWebhookTest extends TestCase
             ->assertJsonPath('data.accepted', 2);
 
         $this->assertDatabaseCount('leads', 2);
-        Http::assertSentCount(2);
+        // 2 calls per lead: the isReachable() health check, then the real
+        // score_and_write call.
+        Http::assertSentCount(4);
     }
 
     public function test_duplicate_external_id_is_idempotent_and_does_not_rescore(): void
@@ -146,7 +150,39 @@ class VollnaWebhookTest extends TestCase
             ->assertJsonPath('data.duplicate', 1);
 
         $this->assertDatabaseCount('leads', 1);
+        // Health check + score_and_write for the first delivery; the
+        // duplicate delivery makes neither call.
+        Http::assertSentCount(2);
+    }
+
+    public function test_unreachable_openclaw_queues_instead_of_scoring_inline(): void
+    {
+        // OpenClaw runs on a machine that isn't always on - the health
+        // check must fail fast and the lead must still save, still
+        // respond 201, and stay `new` with a real queued retry (not lost,
+        // not hung) instead of an inline scoring attempt. Queue::fake()
+        // isolates "was it queued" from "what happens when it runs" -
+        // the queue driver itself is covered elsewhere.
+        Queue::fake();
+        app(SettingsService::class)->setMany(['openclaw_url' => 'https://openclaw.test', 'openclaw_token' => 'token']);
+        Http::fake(['openclaw.test/health' => Http::response(null, 500)]);
+
+        $response = $this->postJson('/api/vollna-hook', $this->batch([
+            'title' => 'Offline Test Job',
+            'url' => 'https://www.vollna.com/go?pid=offline-1',
+        ]), ['X-Vollna-Secret' => 'test-secret']);
+
+        $response->assertStatus(201)->assertJsonPath('data.accepted', 1);
+
+        $this->assertDatabaseHas('leads', [
+            'external_id' => 'vollna_pid_offline-1',
+            'status' => LeadStatus::New->value,
+            'score' => null,
+        ]);
+
+        // Only the health check fires - never an inline scoring call.
         Http::assertSentCount(1);
+        Queue::assertPushed(ScoreLeadJob::class);
     }
 
     public function test_missing_title_is_rejected(): void

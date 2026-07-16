@@ -48,6 +48,11 @@ class SettingsService
         'zero_history_budget_floor' => ['group' => 'rules', 'secret' => false, 'default' => 100],
         'red_flag_words' => ['group' => 'rules', 'secret' => false, 'default' => ['free test', 'unpaid sample', 'urgent no budget', 'revenue share only']],
         'followup_days' => ['group' => 'rules', 'secret' => false, 'default' => 3],
+        // A stale posting is a spend-saving pre-check, not a visibility
+        // rule — a lead that fails this still saves, still shows up in the
+        // dashboard as Archived, and is never deleted. It only skips the
+        // paid AI call for a job that's realistically already gone.
+        'max_posted_age_days' => ['group' => 'rules', 'secret' => false, 'default' => 7],
     ];
 
     public const SERVICES = ['vollna', 'openclaw', 'whatsapp'];
@@ -210,7 +215,7 @@ class SettingsService
     }
 
     /**
-     * @return array{min_budget: int, max_proposals: int, score_cutoff: int, stack_keywords: array<int, string>, hourly_floor: int, zero_history_budget_floor: int, red_flag_words: array<int, string>, followup_days: int}
+     * @return array{min_budget: int, max_proposals: int, score_cutoff: int, stack_keywords: array<int, string>, hourly_floor: int, zero_history_budget_floor: int, red_flag_words: array<int, string>, followup_days: int, max_posted_age_days: int}
      */
     public function rules(): array
     {
@@ -223,6 +228,7 @@ class SettingsService
             'zero_history_budget_floor' => (int) $this->get('zero_history_budget_floor'),
             'red_flag_words' => (array) $this->get('red_flag_words'),
             'followup_days' => (int) $this->get('followup_days'),
+            'max_posted_age_days' => (int) $this->get('max_posted_age_days'),
         ];
     }
 }

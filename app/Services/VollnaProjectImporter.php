@@ -20,6 +20,8 @@ use Illuminate\Support\Str;
  */
 class VollnaProjectImporter
 {
+    public function __construct(protected OpenClawService $openClaw) {}
+
     /**
      * @param  array<string, mixed>  $project
      * @return array<string, mixed>
@@ -48,16 +50,30 @@ class VollnaProjectImporter
         ActivityLog::record(ActivityType::LeadReceived, subject: $lead, meta: ['source' => 'vollna']);
 
         // Score inline, in the same request, so a bidder sees a real-time
-        // WhatsApp alert within seconds instead of waiting on a queue
-        // worker/cron tick. A failure here doesn't get the job's normal
-        // queue retries — it's a one-shot attempt — so on failure we reuse
-        // the job's own `failed()` handling to leave the lead visible as
-        // `new` with the error recorded, rather than stuck on `scoring`.
+        // WhatsApp alert within seconds — but only when OpenClaw actually
+        // answers a quick health check first. OpenClaw runs on a machine
+        // that isn't always on; without this check, a dead OpenClaw would
+        // make every webhook hang for minutes (this exact thing got a
+        // webhook auto-disabled by Vollna once already). Skip straight to
+        // a queued retry instead, so the response stays fast and the lead
+        // scores itself automatically once OpenClaw is back — no lead is
+        // ever lost, it just isn't always instant.
+        if (! $this->openClaw->isReachable()) {
+            ActivityLog::record('openclaw_unreachable_queued', subject: $lead);
+            ScoreLeadJob::dispatch($lead->id);
+
+            return ['status' => 'accepted', 'lead_id' => $lead->id];
+        }
+
         try {
             ScoreLeadJob::dispatchSync($lead->id);
         } catch (\Throwable $e) {
             report($e);
             (new ScoreLeadJob($lead->id))->failed($e);
+            // The inline attempt failed after passing the health check
+            // (e.g. timed out mid-call) — still queue a real retry rather
+            // than leaving it to sit until the next manual rescore.
+            ScoreLeadJob::dispatch($lead->id);
         }
 
         return ['status' => 'accepted', 'lead_id' => $lead->id];

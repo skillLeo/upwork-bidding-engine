@@ -73,6 +73,11 @@ async function handleSave() {
           <Label>Follow up after (days)</Label>
           <Input type="number" v-model.number="form.followup_days" />
         </div>
+        <div>
+          <Label>Max posting age for AI scoring (days)</Label>
+          <Input type="number" v-model.number="form.max_posted_age_days" />
+          <FieldHint>Older postings are archived without an AI call — they stay visible, just unscored.</FieldHint>
+        </div>
       </div>
 
       <div>

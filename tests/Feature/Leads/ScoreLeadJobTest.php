@@ -55,6 +55,28 @@ class ScoreLeadJobTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_stale_posting_archives_lead_without_calling_openclaw(): void
+    {
+        // Visible in the dashboard as Archived, never deleted — this only
+        // saves the AI call on a job that's realistically already gone.
+        Http::fake();
+
+        $lead = Lead::factory()->create([
+            'proposal_count' => 2,
+            'budget' => '$500 fixed',
+            'status' => LeadStatus::New,
+            'posted_at' => now()->subDays(10),
+        ]);
+
+        $this->runJob($lead);
+
+        $lead->refresh();
+        $this->assertEquals(LeadStatus::Archived, $lead->status);
+        $this->assertStringContainsString('max_posted_age_days', (string) $lead->score_reason);
+
+        Http::assertNothingSent();
+    }
+
     public function test_red_flag_word_archives_lead_without_calling_openclaw(): void
     {
         Http::fake();
@@ -66,6 +88,7 @@ class ScoreLeadJobTest extends TestCase
             'client_spend' => '$5.4K',
             'full_brief' => 'Please complete an unpaid sample task first.',
             'status' => LeadStatus::New,
+            'posted_at' => now(),
         ]);
 
         $this->runJob($lead);
@@ -85,7 +108,7 @@ class ScoreLeadJobTest extends TestCase
             'openclaw.test/*' => Http::response(['score' => 9, 'reason' => 'Great fit', 'proposal' => 'Hi there...']),
         ]);
 
-        $lead = Lead::factory()->create(['proposal_count' => 2, 'budget' => '$500 fixed', 'status' => LeadStatus::New]);
+        $lead = Lead::factory()->create(['proposal_count' => 2, 'budget' => '$500 fixed', 'status' => LeadStatus::New, 'posted_at' => now()]);
 
         $this->runJob($lead);
 
@@ -112,7 +135,7 @@ class ScoreLeadJobTest extends TestCase
             'openclaw.test/*' => Http::response(['score' => 3, 'reason' => 'Weak fit', 'proposal' => '']),
         ]);
 
-        $lead = Lead::factory()->create(['proposal_count' => 2, 'budget' => '$500 fixed', 'status' => LeadStatus::New]);
+        $lead = Lead::factory()->create(['proposal_count' => 2, 'budget' => '$500 fixed', 'status' => LeadStatus::New, 'posted_at' => now()]);
 
         $this->runJob($lead);
 
@@ -132,7 +155,7 @@ class ScoreLeadJobTest extends TestCase
             'openclaw.test/*' => Http::response(['score' => 8, 'reason' => 'ok', 'proposal' => 'p']),
         ]);
 
-        $lead = Lead::factory()->create(['proposal_count' => 2, 'budget' => '$500 fixed', 'status' => LeadStatus::New]);
+        $lead = Lead::factory()->create(['proposal_count' => 2, 'budget' => '$500 fixed', 'status' => LeadStatus::New, 'posted_at' => now()]);
 
         $this->runJob($lead);
 
@@ -148,7 +171,7 @@ class ScoreLeadJobTest extends TestCase
         Http::fake();
         app(SettingsService::class)->set('ai_engine_enabled', false);
 
-        $lead = Lead::factory()->create(['proposal_count' => 2, 'budget' => '$500 fixed', 'status' => LeadStatus::New]);
+        $lead = Lead::factory()->create(['proposal_count' => 2, 'budget' => '$500 fixed', 'status' => LeadStatus::New, 'posted_at' => now()]);
 
         $this->runJob($lead);
 

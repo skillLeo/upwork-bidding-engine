@@ -39,6 +39,32 @@ class OpenClawService
     }
 
     /**
+     * A short-timeout ping used to decide, in under a few seconds, whether
+     * it's worth attempting the real (up to 180s) scoring call inline on a
+     * webhook request. OpenClaw runs on a machine that isn't always on
+     * (currently a Mac, tunneled via ngrok) — this is what lets the webhook
+     * fail fast and fall back to a queued retry instead of hanging the
+     * Vollna delivery for minutes, which is what got a previous webhook
+     * auto-disabled by Vollna after repeated timeouts.
+     */
+    public function isReachable(): bool
+    {
+        if (! $this->settings->openClawUrl()) {
+            return false;
+        }
+
+        try {
+            return Http::baseUrl(rtrim((string) $this->settings->openClawUrl(), '/'))
+                ->withToken((string) $this->settings->openClawToken())
+                ->timeout(5)
+                ->get('/health')
+                ->successful();
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
      * @param  array<string, mixed>  $rules
      * @return array{score: int, reason: string, proposal: string}
      */

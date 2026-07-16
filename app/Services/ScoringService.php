@@ -27,6 +27,19 @@ class ScoringService
             ];
         }
 
+        if (
+            $rules['max_posted_age_days'] > 0
+            && $lead->posted_at !== null
+            && $lead->posted_at->lt(now()->subDays($rules['max_posted_age_days']))
+        ) {
+            $days = (int) $lead->posted_at->diffInDays(now());
+
+            return [
+                'passed' => false,
+                'reason' => "Posted {$days} days ago, past max_posted_age_days ({$rules['max_posted_age_days']}) — too old to realistically win.",
+            ];
+        }
+
         $amount = $this->parseBudgetAmount($lead->budget);
         $isHourly = $lead->budget !== null && str_contains(strtolower($lead->budget), 'hr');
 
