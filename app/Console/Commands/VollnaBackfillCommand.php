@@ -67,7 +67,7 @@ class VollnaBackfillCommand extends Command
                     }
                 }
 
-                $result = $importer->importProject($this->normalizeApiProject($project));
+                $result = $importer->importProject($importer->normalizeApiProject($project));
 
                 match ($result['status']) {
                     'accepted' => $accepted++,
@@ -101,38 +101,5 @@ class VollnaBackfillCommand extends Command
         $this->info("Done. Accepted: {$accepted}, duplicate: {$duplicate}, skipped: {$skipped}, too old: {$tooOld}.");
 
         return self::SUCCESS;
-    }
-
-    /**
-     * The REST API returns a differently-shaped project than the webhook
-     * batch does (camelCase, budget as {type, amount}, publishedAt) -
-     * translate it into the webhook's shape so VollnaProjectImporter's
-     * already-tested mapping logic handles both without duplicating it.
-     *
-     * @param  array<string, mixed>  $project
-     * @return array<string, mixed>
-     */
-    protected function normalizeApiProject(array $project): array
-    {
-        $client = $project['clientDetails'] ?? [];
-        $budget = $project['budget'] ?? [];
-        $budgetType = strtolower((string) ($budget['type'] ?? ''));
-
-        return [
-            'title' => $project['title'] ?? null,
-            'description' => $project['description'] ?? null,
-            'url' => $project['url'] ?? null,
-            'published' => $project['publishedAt'] ?? null,
-            'budget' => $budget['amount'] ?? null,
-            'budget_type' => str_contains($budgetType, 'hour') ? 'hourly' : 'fixed',
-            'client_details' => [
-                'country' => $client['country'] ?? null,
-                'total_spent' => $client['totalSpent'] ?? null,
-                'hire_rate' => $client['hireRate'] ?? null,
-                'payment_method_verified' => $client['paymentMethodVerified'] ?? null,
-                'rating' => $client['rating'] ?? null,
-                'reviews' => $client['reviews'] ?? null,
-            ],
-        ];
     }
 }

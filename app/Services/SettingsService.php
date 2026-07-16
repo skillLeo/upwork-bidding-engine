@@ -26,6 +26,14 @@ class SettingsService
     public const SCHEMA = [
         // Vollna
         'vollna_webhook_secret' => ['group' => 'vollna', 'secret' => true, 'default' => ''],
+        // Used only by the manual "Sync now" button (Developers > API
+        // Tokens in Vollna, and the numeric filter ID from its dashboard
+        // URL) - the live webhook above doesn't need these at all.
+        'vollna_api_token' => ['group' => 'vollna', 'secret' => true, 'default' => ''],
+        'vollna_filter_id' => ['group' => 'vollna', 'secret' => false, 'default' => ''],
+        // Written by VollnaSyncJob, read by the Settings UI to show "last
+        // synced: X added, Y removed" under the manual sync button.
+        'vollna_last_sync' => ['group' => 'vollna', 'secret' => false, 'default' => null],
 
         // AI engine — OpenClaw, on its own Claude Code CLI subscription auth.
         // No Anthropic API key/model here: OpenClaw is already authenticated,
@@ -188,6 +196,16 @@ class SettingsService
     public function vollnaWebhookSecret(): ?string
     {
         return $this->get('vollna_webhook_secret') ?: null;
+    }
+
+    public function vollnaApiToken(): ?string
+    {
+        return $this->get('vollna_api_token') ?: null;
+    }
+
+    public function vollnaFilterId(): ?string
+    {
+        return $this->get('vollna_filter_id') ?: null;
     }
 
     public function openClawUrl(): ?string

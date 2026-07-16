@@ -49,6 +49,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/leads/{lead}', [LeadController::class, 'show']);
     Route::post('/leads/{lead}/status', [LeadController::class, 'updateStatus']);
     Route::post('/leads/{lead}/rescore', [LeadController::class, 'rescore'])->middleware('role:admin');
+    Route::post('/leads/sync-vollna', [LeadController::class, 'syncVollna'])->middleware('role:admin');
 
     /*
     |----------------------------------------------------------------------

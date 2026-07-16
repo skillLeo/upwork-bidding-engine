@@ -1,5 +1,12 @@
-import { ref, watch, toValue } from "vue";
+import { ref, watch, toValue, onMounted, onUnmounted } from "vue";
 import { apiClient } from "@/lib/api-client";
+
+// Leads score themselves in real time server-side (the Vollna webhook
+// scores inline), so the only thing missing is the browser noticing - a
+// lightweight poll is far simpler than standing up websockets for a
+// single-bidder tool, and is quiet (no loading flicker) since it's a
+// background refresh, not a user-initiated fetch.
+const POLL_INTERVAL_MS = 20_000;
 
 export function buildQuery(filters) {
   const params = new URLSearchParams();
@@ -46,19 +53,20 @@ export function useLeads(filtersRef) {
   const isLoading = ref(true);
   const error = ref(null);
 
-  async function fetchLeads() {
+  async function fetchLeads({ silent = false } = {}) {
     const filters = toValue(filtersRef);
     const query = buildQuery(filters);
-    isLoading.value = true;
+    if (!silent) isLoading.value = true;
     try {
       const res = await apiClient.get(`/leads${query ? `?${query}` : ""}`);
       leads.value = res.data.data;
       meta.value = res.data.meta;
       error.value = null;
     } catch (e) {
-      error.value = e;
+      // A background poll failing silently is fine - the next tick retries.
+      if (!silent) error.value = e;
     } finally {
-      isLoading.value = false;
+      if (!silent) isLoading.value = false;
     }
   }
 
@@ -67,6 +75,12 @@ export function useLeads(filtersRef) {
     () => fetchLeads(),
     { immediate: true },
   );
+
+  let pollTimer;
+  onMounted(() => {
+    pollTimer = setInterval(() => fetchLeads({ silent: true }), POLL_INTERVAL_MS);
+  });
+  onUnmounted(() => clearInterval(pollTimer));
 
   return { leads, meta, isLoading, error, refetch: fetchLeads };
 }

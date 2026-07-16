@@ -23,6 +23,40 @@ class VollnaProjectImporter
     public function __construct(protected OpenClawService $openClaw) {}
 
     /**
+     * The REST API returns a differently-shaped project than the webhook
+     * batch does (camelCase, budget as {type, amount}, publishedAt) -
+     * translate it into the webhook's shape so importProject()'s mapping
+     * logic handles both without duplicating it. Shared by vollna:backfill
+     * and VollnaSyncJob, the two REST-API-driven callers.
+     *
+     * @param  array<string, mixed>  $project
+     * @return array<string, mixed>
+     */
+    public function normalizeApiProject(array $project): array
+    {
+        $client = $project['clientDetails'] ?? [];
+        $budget = $project['budget'] ?? [];
+        $budgetType = strtolower((string) ($budget['type'] ?? ''));
+
+        return [
+            'title' => $project['title'] ?? null,
+            'description' => $project['description'] ?? null,
+            'url' => $project['url'] ?? null,
+            'published' => $project['publishedAt'] ?? null,
+            'budget' => $budget['amount'] ?? null,
+            'budget_type' => str_contains($budgetType, 'hour') ? 'hourly' : 'fixed',
+            'client_details' => [
+                'country' => $client['country'] ?? null,
+                'total_spent' => $client['totalSpent'] ?? null,
+                'hire_rate' => $client['hireRate'] ?? null,
+                'payment_method_verified' => $client['paymentMethodVerified'] ?? null,
+                'rating' => $client['rating'] ?? null,
+                'reviews' => $client['reviews'] ?? null,
+            ],
+        ];
+    }
+
+    /**
      * @param  array<string, mixed>  $project
      * @return array<string, mixed>
      */

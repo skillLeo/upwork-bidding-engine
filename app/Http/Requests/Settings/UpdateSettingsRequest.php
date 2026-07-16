@@ -24,6 +24,8 @@ class UpdateSettingsRequest extends FormRequest
         return [
             // Vollna
             'vollna_webhook_secret' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'vollna_api_token' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'vollna_filter_id' => ['sometimes', 'nullable', 'string', 'max:50'],
 
             // AI engine (OpenClaw)
             'openclaw_url' => ['sometimes', 'nullable', 'string', 'max:500'],

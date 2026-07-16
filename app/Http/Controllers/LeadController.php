@@ -8,6 +8,7 @@ use App\Enums\LeadStatus;
 use App\Http\Requests\Leads\UpdateLeadStatusRequest;
 use App\Http\Resources\LeadResource;
 use App\Jobs\ScoreLeadJob;
+use App\Jobs\VollnaSyncJob;
 use App\Models\ActivityLog;
 use App\Models\Client;
 use App\Models\Lead;
@@ -268,5 +269,17 @@ class LeadController extends Controller
         ActivityLog::record(ActivityType::LeadStatusUpdated, subject: $lead, meta: ['action' => 'rescore_requested']);
 
         return response()->json(['data' => new LeadResource($lead->fresh())]);
+    }
+
+    /**
+     * Manual, on-demand mirror of the configured Vollna filter's current
+     * results — runs as a background job since it can take a couple of
+     * minutes (Vollna's own rate limit). Never triggered automatically.
+     */
+    public function syncVollna(): JsonResponse
+    {
+        VollnaSyncJob::dispatch();
+
+        return response()->json(['data' => ['message' => 'Sync started — this can take a couple of minutes.']]);
     }
 }
