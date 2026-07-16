@@ -119,7 +119,7 @@ function handleRowKeydown(event) {
     @keydown="handleRowKeydown"
     :class="
       cn(
-        'leads-row-grid min-h-9 items-center border-b border-border text-sm text-text-primary',
+        'leads-row-grid min-h-9 items-center border-b border-border px-3 text-sm text-text-primary',
         lead.matches_filter === false && 'opacity-60',
         expanded && 'bg-neutral-bg/40',
       )
