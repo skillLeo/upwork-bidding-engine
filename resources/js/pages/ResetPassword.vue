@@ -2,7 +2,9 @@
 import { ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { toast } from "vue-sonner";
+import { Lock, Mail } from "@lucide/vue";
 import { apiClient, apiErrorMessage } from "@/lib/api-client";
+import AuthShell from "@/components/layout/AuthShell.vue";
 import Button from "@/components/ui/Button.vue";
 import Input from "@/components/ui/Input.vue";
 import Label from "@/components/ui/Label.vue";
@@ -42,47 +44,49 @@ async function onSubmit() {
 </script>
 
 <template>
-  <div class="flex min-h-screen flex-1 flex-col items-center justify-center bg-bg px-4 py-12">
-    <div class="mb-8 flex items-center gap-2 text-2xl font-bold text-primary">
-      <span class="flex h-10 w-10 items-center justify-center rounded-md bg-primary text-base font-bold text-white">
-        SL
-      </span>
-      SkillLeo
-    </div>
+  <AuthShell tagline="Score, draft, and track Upwork proposals from one dashboard.">
+    <h1 class="text-2xl font-semibold text-text-primary">Reset your password</h1>
+    <p class="mt-1.5 text-sm text-text-secondary">Choose a new password for {{ email }}.</p>
 
-    <div class="w-full max-w-sm rounded-card border border-border bg-surface p-8 shadow-card">
-      <h1 class="text-xl font-semibold text-text-primary">Reset your password</h1>
-      <p class="mt-1 text-sm text-text-secondary">Choose a new password for {{ email }}.</p>
-
-      <form @submit.prevent="onSubmit" class="mt-6 space-y-4" novalidate>
-        <div>
-          <Label for="email">Email</Label>
-          <Input id="email" type="email" autocomplete="email" v-model="email" />
-          <FieldError :text="errors.email" />
+    <form @submit.prevent="onSubmit" class="mt-6 space-y-4" novalidate>
+      <div>
+        <Label for="email">Email</Label>
+        <div class="relative">
+          <Mail class="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
+          <Input id="email" type="email" autocomplete="email" v-model="email" class="pl-9" />
         </div>
-        <div>
-          <Label for="password">New password</Label>
+        <FieldError :text="errors.email" />
+      </div>
+      <div>
+        <Label for="password">New password</Label>
+        <div class="relative">
+          <Lock class="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
           <Input
             id="password"
             type="password"
             autocomplete="new-password"
             v-model="password"
+            class="pl-9"
           />
-          <FieldError :text="errors.password" />
         </div>
-        <div>
-          <Label for="password_confirmation">Confirm new password</Label>
+        <FieldError :text="errors.password" />
+      </div>
+      <div>
+        <Label for="password_confirmation">Confirm new password</Label>
+        <div class="relative">
+          <Lock class="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
           <Input
             id="password_confirmation"
             type="password"
             autocomplete="new-password"
             v-model="passwordConfirmation"
+            class="pl-9"
           />
         </div>
-        <Button type="submit" class="w-full" size="lg" :loading="submitting">
-          Reset password
-        </Button>
-      </form>
-    </div>
-  </div>
+      </div>
+      <Button type="submit" class="w-full" size="lg" :loading="submitting">
+        Reset password
+      </Button>
+    </form>
+  </AuthShell>
 </template>

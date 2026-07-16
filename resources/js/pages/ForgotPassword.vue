@@ -1,6 +1,8 @@
 <script setup>
 import { ref } from "vue";
+import { Mail } from "@lucide/vue";
 import { apiClient, apiErrorMessage } from "@/lib/api-client";
+import AuthShell from "@/components/layout/AuthShell.vue";
 import Button from "@/components/ui/Button.vue";
 import Input from "@/components/ui/Input.vue";
 import Label from "@/components/ui/Label.vue";
@@ -31,57 +33,52 @@ async function onSubmit() {
 </script>
 
 <template>
-  <div class="flex min-h-screen flex-1 flex-col items-center justify-center bg-bg px-4 py-12">
-    <div class="mb-8 flex items-center gap-2 text-2xl font-bold text-primary">
-      <span class="flex h-10 w-10 items-center justify-center rounded-md bg-primary text-base font-bold text-white">
-        SL
-      </span>
-      SkillLeo
-    </div>
+  <AuthShell tagline="Score, draft, and track Upwork proposals from one dashboard.">
+    <template v-if="sent">
+      <h1 class="text-2xl font-semibold text-text-primary">Check your email</h1>
+      <p class="mt-1.5 text-sm text-text-secondary">
+        If <span class="font-medium text-text-primary">{{ email }}</span> is registered, a
+        password reset link is on its way.
+      </p>
+      <router-link
+        to="/login"
+        class="mt-6 inline-block text-sm font-medium text-primary hover:underline"
+      >
+        ← Back to sign in
+      </router-link>
+    </template>
 
-    <div class="w-full max-w-sm rounded-card border border-border bg-surface p-8 shadow-card">
-      <template v-if="sent">
-        <h1 class="text-xl font-semibold text-text-primary">Check your email</h1>
-        <p class="mt-2 text-sm text-text-secondary">
-          If <span class="font-medium text-text-primary">{{ email }}</span> is registered, a
-          password reset link is on its way.
-        </p>
-        <router-link
-          to="/login"
-          class="mt-6 inline-block text-sm font-medium text-primary hover:underline"
-        >
-          Back to sign in
-        </router-link>
-      </template>
+    <template v-else>
+      <h1 class="text-2xl font-semibold text-text-primary">Forgot your password?</h1>
+      <p class="mt-1.5 text-sm text-text-secondary">We'll email you a link to reset it.</p>
 
-      <template v-else>
-        <h1 class="text-xl font-semibold text-text-primary">Forgot your password?</h1>
-        <p class="mt-1 text-sm text-text-secondary">We'll email you a link to reset it.</p>
-
-        <form @submit.prevent="onSubmit" class="mt-6 space-y-4" novalidate>
-          <div>
-            <Label for="email">Email</Label>
+      <form @submit.prevent="onSubmit" class="mt-6 space-y-4" novalidate>
+        <div>
+          <Label for="email">Email</Label>
+          <div class="relative">
+            <Mail class="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
             <Input
               id="email"
               type="email"
               autocomplete="email"
               placeholder="you@company.com"
               v-model="email"
+              class="pl-9"
             />
-            <FieldError :text="errors.email" />
           </div>
-          <Button type="submit" class="w-full" size="lg" :loading="submitting">
-            Send reset link
-          </Button>
-        </form>
+          <FieldError :text="errors.email" />
+        </div>
+        <Button type="submit" class="w-full" size="lg" :loading="submitting">
+          Send reset link
+        </Button>
+      </form>
 
-        <router-link
-          to="/login"
-          class="mt-6 inline-block text-sm font-medium text-primary hover:underline"
-        >
-          Back to sign in
-        </router-link>
-      </template>
-    </div>
-  </div>
+      <router-link
+        to="/login"
+        class="mt-6 inline-block text-sm font-medium text-primary hover:underline"
+      >
+        ← Back to sign in
+      </router-link>
+    </template>
+  </AuthShell>
 </template>
