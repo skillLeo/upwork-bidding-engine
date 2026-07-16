@@ -167,6 +167,7 @@ class VollnaProjectImporter
             'url' => $url,
             'budget' => $budget = $this->normalizeBudget($payload),
             ...$this->parseBudgetRange($budget),
+            'budget_type' => $this->resolveBudgetType($payload),
             'client_country' => Arr::get($client, 'country.name')
                 ?? Arr::get($client, 'country')
                 ?? Arr::get($payload, 'client_country'),
@@ -174,9 +175,10 @@ class VollnaProjectImporter
                 Arr::get($client, 'total_spent') ?? Arr::get($client, 'totalSpent') ?? Arr::get($payload, 'client_spend')
             )),
             'client_spend_amount' => is_numeric($rawSpend) ? (float) $rawSpend : null,
-            'client_hire_rate' => $this->stringifyPercent(
+            'client_hire_rate' => $this->stringifyPercent($rawHireRate = (
                 Arr::get($client, 'hire_rate') ?? Arr::get($client, 'hireRate') ?? Arr::get($payload, 'client_hire_rate')
-            ),
+            )),
+            'client_hire_rate_pct' => $this->parsePercentNumeric($rawHireRate),
             'client_rating' => Arr::get($client, 'rating') ?? Arr::get($payload, 'client_rating'),
             'client_reviews' => Arr::get($client, 'reviews') ?? Arr::get($payload, 'client_reviews'),
             'payment_verified' => (bool) (
@@ -270,6 +272,34 @@ class VollnaProjectImporter
     }
 
     /**
+     * Mirrors normalizeBudget()'s branches so the discrete fixed/hourly
+     * signal Vollna actually sends never disagrees with the display string
+     * built from the same payload - previously this was thrown away once
+     * baked into `budget` as a "/hr" suffix.
+     */
+    protected function resolveBudgetType(array $payload): ?string
+    {
+        $budget = Arr::get($payload, 'budget');
+        $budgetType = Arr::get($payload, 'budget_type');
+
+        if (is_string($budgetType) && $budgetType !== '') {
+            return strtolower($budgetType) === 'hourly' ? 'hourly' : 'fixed';
+        }
+
+        if (is_array($budget) && isset($budget['type'])) {
+            return strtolower((string) $budget['type']) === 'hourly' ? 'hourly' : 'fixed';
+        }
+
+        if (is_array($budget) && (Arr::get($budget, 'minimum') || Arr::get($budget, 'maximum'))) {
+            // normalizeBudget() treats a min/max range as hourly with no
+            // separate type field available - same assumption here.
+            return 'hourly';
+        }
+
+        return null;
+    }
+
+    /**
      * `budget` is kept as a free-text display string (e.g. "15 - 25 USD/hr",
      * "$5,000 fixed") since Vollna's own formatting varies by source shape -
      * this pulls the numbers back out so budget range filters can query
@@ -331,6 +361,33 @@ class VollnaProjectImporter
         }
 
         return (string) $value;
+    }
+
+    /**
+     * Same fraction-vs-percent ambiguity as stringifyPercent() (a bare `1`
+     * could mean "1%" or "100%") - kept consistent with that method's
+     * existing assumption rather than introducing a second interpretation.
+     */
+    protected function parsePercentNumeric(mixed $value): ?float
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (is_string($value)) {
+            if (! preg_match('/[\d.]+/', $value, $m)) {
+                return null;
+            }
+            $value = (float) $m[0];
+        }
+
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        $number = (float) $value;
+
+        return round($number <= 1 ? $number * 100 : $number, 1);
     }
 
     protected function nullableInt(mixed $value): ?int

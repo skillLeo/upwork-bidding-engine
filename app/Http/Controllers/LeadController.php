@@ -13,13 +13,19 @@ use App\Models\ActivityLog;
 use App\Models\Client;
 use App\Models\Lead;
 use App\Services\LeadFilterEvaluator;
+use App\Services\NlSearchParser;
+use App\Services\OpenClawService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class LeadController extends Controller
 {
-    public function __construct(protected LeadFilterEvaluator $filterEvaluator) {}
+    public function __construct(
+        protected LeadFilterEvaluator $filterEvaluator,
+        protected NlSearchParser $nlSearchParser,
+        protected OpenClawService $openClaw,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -51,12 +57,10 @@ class LeadController extends Controller
         // are still annotated below so leads that wouldn't normally pass the
         // active filter show up with a reason instead of just disappearing.
         $hasSearch = $request->filled('search');
+        $searchChips = [];
 
         if ($search = $request->query('search')) {
-            $query->where(function ($q) use ($search) {
-                $q->where('title', 'like', "%{$search}%")
-                    ->orWhere('full_brief', 'like', "%{$search}%");
-            });
+            $searchChips = $this->applySearch($query, $search);
         }
 
         $criteria = $this->criteriaFromRequest($request);
@@ -98,8 +102,144 @@ class LeadController extends Controller
                 'last_page' => $leads->lastPage(),
                 'per_page' => $leads->perPage(),
                 'total' => $leads->total(),
+                'search_chips' => $searchChips,
             ],
         ]);
+    }
+
+    /**
+     * Search box entry point: try the free (zero-token) pattern parser
+     * first, fall back to OpenClaw only when it recognized nothing at all,
+     * and fall back further to a plain keyword LIKE if OpenClaw is
+     * unreachable/unconfigured/erroring — the search box must never hang or
+     * come back empty just because the parser or OpenClaw had a bad day.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder<Lead>  $query
+     * @return array<int, array{label: string, phrase: ?string}>
+     */
+    protected function applySearch($query, string $search): array
+    {
+        $parsed = $this->nlSearchParser->parse($search);
+
+        if ($parsed['understood']) {
+            $this->applyNlCriteria($query, $parsed['criteria']);
+
+            return $parsed['chips'];
+        }
+
+        $aiCriteria = $this->tryAiSearchFallback($search);
+
+        if ($aiCriteria !== null) {
+            $this->applyNlCriteria($query, $aiCriteria);
+
+            return $this->chipsFromCriteria($aiCriteria);
+        }
+
+        $query->where(function ($q) use ($search) {
+            $q->where('title', 'like', "%{$search}%")
+                ->orWhere('full_brief', 'like', "%{$search}%");
+        });
+
+        return [];
+    }
+
+    /**
+     * Only reached when the free parser found nothing at all (a genuinely
+     * odd query) - kept to a hard 3s timeout so a slow/offline OpenClaw
+     * (it runs on a Mac that isn't always on) never makes the search box
+     * hang. Requires a `parse_search_query` skill on the OpenClaw side;
+     * not yet implemented there as of this change — see OpenClawService.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function tryAiSearchFallback(string $search): ?array
+    {
+        if (! $this->openClaw->isReachable()) {
+            return null;
+        }
+
+        try {
+            $criteria = $this->openClaw->parseSearchQuery($search);
+
+            return $criteria !== [] ? $criteria : null;
+        } catch (\Throwable $e) {
+            report($e);
+
+            return null;
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $criteria
+     * @return array<int, array{label: string, phrase: ?string}>
+     */
+    protected function chipsFromCriteria(array $criteria): array
+    {
+        $chips = [];
+
+        foreach ($criteria as $key => $value) {
+            if ($value === null || $value === [] || $value === false) {
+                continue;
+            }
+
+            $label = is_array($value) ? implode(', ', $value) : (string) $value;
+            // No matched substring to splice out of the search box for an
+            // AI-derived chip (unlike the pattern parser's chips) - the
+            // frontend clears the whole search box instead when phrase is null.
+            $chips[] = ['label' => str_replace('_', ' ', $key).': '.$label, 'phrase' => null];
+        }
+
+        return $chips;
+    }
+
+    /**
+     * Applies the search box's parsed criteria as the query's actual
+     * restriction (AND-combined, same as applyCriteria) — deliberately
+     * separate from applyCriteria/LeadFilterEvaluator, which stay scoped to
+     * the ACTIVE SAVED FILTER's own criteria for the "why doesn't this match
+     * my filter" annotation. Search criteria restrict the result set
+     * directly; they're never just advisory.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder<Lead>  $query
+     * @param  array<string, mixed>  $criteria
+     */
+    protected function applyNlCriteria($query, array $criteria): void
+    {
+        $this->applyCriteria($query, array_intersect_key($criteria, array_flip([
+            'include_keywords', 'exclude_keywords', 'budget_min', 'budget_max',
+            'payment_verified_only', 'min_client_spend', 'client_countries_include',
+            'posted_within_minutes',
+        ])));
+
+        if (isset($criteria['budget_type'])) {
+            $query->where('budget_type', $criteria['budget_type']);
+        }
+
+        if (isset($criteria['score_min'])) {
+            $query->where('score', '>=', $criteria['score_min']);
+        }
+
+        if (isset($criteria['proposal_max'])) {
+            $query->where('proposal_count', '<=', $criteria['proposal_max']);
+        }
+
+        if (isset($criteria['connects_max'])) {
+            $query->where(function ($q) use ($criteria) {
+                $q->whereNull('connects_required')->orWhere('connects_required', '<=', $criteria['connects_max']);
+            });
+        }
+
+        if (isset($criteria['hire_rate_min'])) {
+            $query->where('client_hire_rate_pct', '>=', $criteria['hire_rate_min']);
+        }
+
+        if (! empty($criteria['is_favorite'])) {
+            $query->where('is_favorite', true);
+        }
+
+        if ($statusIn = $criteria['status_in'] ?? []) {
+            $query->whereIn('status', $statusIn);
+        }
     }
 
     /**

@@ -59,6 +59,7 @@ class LeadFactory extends Factory
     {
         $postedAt = fake()->dateTimeBetween('-14 days', 'now');
         $budgetType = fake()->randomElement(['fixed', 'hourly']);
+        $hireRate = fake()->numberBetween(0, 100);
 
         return [
             'external_id' => 'upwork_'.fake()->unique()->numerify('####################'),
@@ -69,9 +70,11 @@ class LeadFactory extends Factory
             'budget' => $budgetType === 'fixed'
                 ? '$'.fake()->numberBetween(1, 60).'00 fixed'
                 : '$'.fake()->numberBetween(8, 85).'/hr',
+            'budget_type' => $budgetType,
             'client_country' => fake()->randomElement(['United States', 'United Kingdom', 'Canada', 'Australia', 'Germany', 'United Arab Emirates', 'Pakistan', 'India', 'Netherlands']),
             'client_spend' => fake()->randomElement(['$0', '$350', '$1.2K', '$5.4K', '$18K', '$62K', '$140K+']),
-            'client_hire_rate' => fake()->numberBetween(0, 100).'%',
+            'client_hire_rate' => $hireRate.'%',
+            'client_hire_rate_pct' => (float) $hireRate,
             'payment_verified' => fake()->boolean(80),
             'proposal_count' => fake()->numberBetween(0, 45),
             'connects_required' => fake()->randomElement([2, 4, 6, 8, 10, 16]),

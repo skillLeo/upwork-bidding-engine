@@ -147,6 +147,48 @@ class OpenClawService
     }
 
     /**
+     * Last-resort fallback for the leads search box - only reached when
+     * NlSearchParser's free pattern matching recognized nothing at all in
+     * the query (a rare, oddly-phrased search). Sends the query and the
+     * criteria field list only, never the leads themselves, so this stays
+     * a couple hundred tokens even when it does fire.
+     *
+     * A short direct timeout (not client()'s 180s/retry setup, which is
+     * tuned for the slow scoring/drafting calls) - the search box must
+     * degrade to plain keyword search in seconds if OpenClaw is offline,
+     * never hang.
+     *
+     * NOTE: requires a `parse_search_query` skill on the OpenClaw side
+     * that returns `{"criteria": {...}}` using the field names below. Not
+     * yet implemented there as of this change - LeadController's fallback
+     * chain treats any failure here (missing skill included) as "AI
+     * unavailable" and drops straight to plain keyword search, so this is
+     * safe to ship ahead of that skill existing.
+     *
+     * @return array<string, mixed>
+     */
+    public function parseSearchQuery(string $query): array
+    {
+        $response = Http::baseUrl(rtrim((string) $this->settings->openClawUrl(), '/'))
+            ->withToken((string) $this->settings->openClawToken())
+            ->acceptJson()
+            ->timeout(3)
+            ->post('/task', [
+                'skill' => 'parse_search_query',
+                'query' => $query,
+                'fields' => [
+                    'include_keywords', 'exclude_keywords', 'budget_min', 'budget_max', 'budget_type',
+                    'score_min', 'proposal_max', 'connects_max', 'hire_rate_min', 'payment_verified_only',
+                    'min_client_spend', 'client_countries_include', 'posted_within_minutes', 'status_in', 'is_favorite',
+                ],
+            ]);
+
+        $response->throw();
+
+        return (array) $response->json('criteria', []);
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function sendLeadCard(Lead $lead, string $dashboardUrl): array

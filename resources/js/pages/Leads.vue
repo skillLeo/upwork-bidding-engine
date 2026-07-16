@@ -11,12 +11,17 @@ import {
   ChevronDown,
   ChevronsUpDown,
   Bookmark,
+  Mic,
+  Square,
+  X,
 } from "@lucide/vue";
 import { toast } from "vue-sonner";
 import { useLeads } from "@/composables/useLeads";
 import { useSavedFilters } from "@/composables/useSavedFilters";
+import { useSpeechRecognition } from "@/composables/useSpeechRecognition";
 import { bulkToggleLeadFavorite, bulkUpdateLeadStatus } from "@/composables/useLead";
 import { apiClient, apiErrorMessage } from "@/lib/api-client";
+import { cn } from "@/lib/utils";
 import LeadRow from "@/components/leads/LeadRow.vue";
 import LeadFiltersRail from "@/components/leads/LeadFiltersRail.vue";
 import SavedFiltersBar from "@/components/leads/SavedFiltersBar.vue";
@@ -97,6 +102,34 @@ watch(searchInput, (value) => {
   }, 350);
 });
 
+// Dictation reliably mangles stack words ("Laravel" -> "level") - the
+// transcript lands in the box as editable text, appended to whatever's
+// already typed, never auto-submitted straight to search.
+const { supported: voiceSupported, listening: voiceListening, start: startVoice, stop: stopVoice } =
+  useSpeechRecognition((transcript) => {
+    searchInput.value = [searchInput.value.trim(), transcript.trim()].filter(Boolean).join(" ");
+  });
+
+function toggleVoice() {
+  voiceListening.value ? stopVoice() : startVoice();
+}
+
+/**
+ * Removing a chip strips its exact matched phrase back out of the search
+ * text (case-insensitive) and lets the normal debounce re-run the search -
+ * no separate "edited criteria" state to keep in sync with the box. A
+ * null phrase (AI-fallback chips, which don't carry a matched substring)
+ * just clears the whole search instead.
+ */
+function removeSearchChip(chip) {
+  if (chip.phrase == null) {
+    searchInput.value = "";
+    return;
+  }
+  const escaped = chip.phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  searchInput.value = searchInput.value.replace(new RegExp(escaped, "i"), "").replace(/\s+/g, " ").trim();
+}
+
 const page = ref(route.query.page ? Number(route.query.page) : 1);
 const perPage = ref(route.query.per_page ? Number(route.query.per_page) : 50);
 const perPageOptions = [25, 50, 100];
@@ -176,6 +209,10 @@ const leadFilters = computed(() => ({
 }));
 
 const { leads, meta, isLoading, refetch } = useLeads(leadFilters);
+
+// "What it understood" - the signature element. Only present once a search
+// has actually run (meta comes back empty on a plain unfiltered browse).
+const searchChips = computed(() => (search.value ? (meta.value?.search_chips ?? []) : []));
 
 function clearFilters() {
   status.value = "all";
@@ -336,9 +373,27 @@ async function handleSync() {
               <Search class="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-text-tertiary" />
               <Input
                 v-model="searchInput"
-                placeholder="Search leads…"
-                class="h-9 w-40 pl-8 text-sm sm:w-52"
+                placeholder="Try “laravel over $500, verified”…"
+                :class="cn('h-9 w-48 pl-8 text-sm sm:w-64', voiceSupported && 'pr-8')"
               />
+              <button
+                v-if="voiceSupported"
+                type="button"
+                @click="toggleVoice"
+                :title="voiceListening ? 'Stop listening' : 'Search by voice'"
+                :aria-label="voiceListening ? 'Stop listening' : 'Search by voice'"
+                :class="
+                  cn(
+                    'absolute top-1/2 right-1.5 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full transition-colors',
+                    voiceListening
+                      ? 'animate-pulse bg-danger text-white'
+                      : 'text-text-tertiary hover:bg-black/5 hover:text-text-secondary',
+                  )
+                "
+              >
+                <Square v-if="voiceListening" class="h-3 w-3 fill-current" />
+                <Mic v-else class="h-3.5 w-3.5" />
+              </button>
             </div>
 
             <select
@@ -350,6 +405,31 @@ async function handleSync() {
               </option>
             </select>
           </div>
+        </div>
+
+        <div v-if="searchChips.length" class="flex flex-wrap items-center gap-1.5">
+          <span
+            v-for="(chip, index) in searchChips"
+            :key="`${chip.label}-${index}`"
+            class="flex items-center gap-1 rounded-pill border border-primary/30 bg-primary-tint px-2 py-0.5 text-xs font-medium text-primary"
+          >
+            {{ chip.label }}
+            <button
+              type="button"
+              @click="removeSearchChip(chip)"
+              :aria-label="`Remove ${chip.label} from search`"
+              class="rounded-full p-0.5 hover:bg-primary/15"
+            >
+              <X class="h-2.5 w-2.5" />
+            </button>
+          </span>
+          <button
+            type="button"
+            @click="searchInput = ''"
+            class="text-xs font-medium text-text-tertiary hover:text-text-secondary hover:underline"
+          >
+            Clear all
+          </button>
         </div>
 
         <div v-if="mobileFiltersOpen" class="lg:hidden">
