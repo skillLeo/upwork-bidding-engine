@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\ActivityType;
 use App\Models\ActivityLog;
+use App\Models\Lead;
 use App\Services\OpenClawService;
 use App\Services\SettingsService;
 use Illuminate\Http\JsonResponse;
@@ -32,11 +33,27 @@ class DiagnosticsController extends Controller
         $lastWebhookRejected = ActivityLog::where('type', ActivityType::WebhookRejected->value)
             ->latest('id')->first();
 
+        // Avg over today's scored leads, from the duration_ms each scoring
+        // call now records. PHP-side because meta is a JSON column.
+        $scoredToday = ActivityLog::where('type', ActivityType::LeadScored->value)
+            ->whereDate('created_at', today())
+            ->get(['meta']);
+        $durations = $scoredToday->pluck('meta.duration_ms')->filter(fn ($ms) => is_numeric($ms));
+
+        $lastWebhookStamp = $settings->get('vollna_last_webhook_at');
+        $silenceThresholdHours = max(1, (int) $settings->get('vollna_silence_alert_hours', 6));
+
         return response()->json(['data' => [
             'queue_depth' => DB::table('jobs')->count(),
             'failed_jobs' => DB::table('failed_jobs')->count(),
             'ai_engine_enabled' => $settings->aiEngineEnabled(),
             'openclaw_online' => $openClaw->isReachable(),
+            'whatsapp' => $openClaw->whatsappStatus(),
+            'vollna_last_webhook_at' => $lastWebhookStamp,
+            'vollna_silence_threshold_hours' => $silenceThresholdHours,
+            'leads_today' => Lead::whereDate('created_at', today())->count(),
+            'leads_scored_today' => $scoredToday->count(),
+            'avg_scoring_ms' => $durations->isNotEmpty() ? (int) round($durations->avg()) : null,
             'last_scored_at' => $lastScored?->created_at?->toIso8601String(),
             'last_error' => $lastError ? [
                 'type' => $lastError->type,

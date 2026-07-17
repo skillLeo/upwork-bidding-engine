@@ -6,6 +6,10 @@ enum LeadStatus: string
 {
     case New = 'new';
     case Scoring = 'scoring';
+    // AI scoring failed after all retries — deliberately NOT Archived,
+    // which reads as "we evaluated this and passed". Needs-review leads
+    // stay visible and are eligible for a manual rescore.
+    case NeedsReview = 'needs_review';
     case Ready = 'ready';
     case Sent = 'sent';
     case Replied = 'replied';
@@ -17,6 +21,7 @@ enum LeadStatus: string
         return match ($this) {
             self::New => 'New',
             self::Scoring => 'Scoring',
+            self::NeedsReview => 'Needs review',
             self::Ready => 'Ready',
             self::Sent => 'Sent',
             self::Replied => 'Replied',

@@ -17,16 +17,18 @@ class NotifyBidderJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $tries = 3;
+    public int $tries = 2;
 
     public function __construct(public int $leadId) {}
 
     /**
+     * One retry, 30 seconds after the first failure.
+     *
      * @return array<int, int>
      */
     public function backoff(): array
     {
-        return [30, 120, 300];
+        return [30];
     }
 
     public function handle(OpenClawService $openClaw): void
@@ -34,6 +36,19 @@ class NotifyBidderJob implements ShouldQueue
         $lead = Lead::find($this->leadId);
 
         if (! $lead || $lead->status !== LeadStatus::Ready) {
+            return;
+        }
+
+        // Never message twice about the same lead — the sync-first,
+        // queued-retry dispatch pattern means this job can legitimately be
+        // enqueued more than once for one lead.
+        $alreadySent = ActivityLog::query()
+            ->where('type', ActivityType::BidderNotified->value)
+            ->where('subject_type', $lead->getMorphClass())
+            ->where('subject_id', $lead->id)
+            ->exists();
+
+        if ($alreadySent) {
             return;
         }
 

@@ -2,7 +2,7 @@
 import { ref, computed } from "vue";
 import { useRouter } from "vue-router";
 import { toast } from "vue-sonner";
-import { Bookmark, ChevronRight, ExternalLink, Loader2, ShieldCheck, Star } from "@lucide/vue";
+import { Bookmark, ChevronRight, Copy, ExternalLink, Loader2, ShieldCheck, Star } from "@lucide/vue";
 import StatusPill from "@/components/ui/StatusPill.vue";
 import Button from "@/components/ui/Button.vue";
 import { toggleLeadFavorite, updateLeadStatus } from "@/composables/useLead";
@@ -53,6 +53,12 @@ const ageClass = computed(() =>
 
 function isMatchedSkill(skill) {
   return props.matchKeywords.some((kw) => skill.toLowerCase().includes(kw.toLowerCase()));
+}
+
+async function handleCopyProposal() {
+  if (!props.lead.proposal_text) return;
+  await navigator.clipboard.writeText(props.lead.proposal_text);
+  toast.success("Proposal copied to clipboard.");
 }
 
 async function handleToggleFavorite() {
@@ -261,6 +267,15 @@ function handleRowKeydown(event) {
         <Bookmark v-else class="h-3 w-3" :class="lead.is_favorite && 'fill-current'" />
         {{ lead.is_favorite ? "Saved" : "Save" }}
       </button>
+
+      <Button
+        v-if="lead.proposal_text"
+        variant="ghost"
+        size="sm"
+        @click="handleCopyProposal"
+      >
+        <Copy class="h-3 w-3" /> Copy proposal
+      </Button>
 
       <Button
         v-for="action in quickActions"

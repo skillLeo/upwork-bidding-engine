@@ -22,11 +22,34 @@ class DeadMansSwitchTest extends TestCase
     {
         parent::setUp();
 
+        // Pin the clock to midday Pakistan time — silence alerts only fire
+        // during active hours (8:00–24:00 PKT), and the suite must not
+        // flake depending on when it runs.
+        $this->travelTo(now('Asia/Karachi')->setTime(12, 0));
+
         $this->settings = app(SettingsService::class);
         $this->settings->set('vollna_webhook_secret', 'test-secret');
         $this->settings->set('openclaw_url', 'https://openclaw.test');
         $this->settings->set('openclaw_token', 'token');
         $this->settings->set('bidder_whatsapp', '+15550001111');
+    }
+
+    public function test_silence_alert_is_deferred_outside_active_hours(): void
+    {
+        Http::fake(['*' => Http::response(['success' => true])]);
+        $this->travelTo(now('Asia/Karachi')->setTime(3, 0));
+        $this->settings->set('vollna_last_webhook_at', now()->subHours(10)->toIso8601String());
+
+        $this->artisan('vollna:check-silence')->assertSuccessful();
+
+        // Nothing at 3am — and no incident flag, so the first check after
+        // 8am sends the alert.
+        Http::assertNothingSent();
+        $this->assertFalse(Cache::has(VollnaCheckSilenceCommand::ALERTED_CACHE_KEY));
+
+        $this->travelTo(now('Asia/Karachi')->setTime(8, 30));
+        $this->artisan('vollna:check-silence')->assertSuccessful();
+        Http::assertSentCount(1);
     }
 
     public function test_first_run_initializes_timestamp_without_alerting(): void

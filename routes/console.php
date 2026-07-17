@@ -14,6 +14,9 @@ Schedule::command('leads:follow-up-reminders')->daily();
 // gone quiet past the configured window. See VollnaCheckSilenceCommand.
 Schedule::command('vollna:check-silence')->hourly();
 
+// OpenClaw + WhatsApp watchdog — one alert per outage, silent recovery.
+Schedule::command('health:check')->everyFiveMinutes()->withoutOverlapping();
+
 // Lets the whole app run on hosts with no persistent worker process (shared
 // hosting + cron only): drains whatever's queued, then exits, every minute.
 // Harmless alongside a real `queue:work`/Horizon deployment too — it just

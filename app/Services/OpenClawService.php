@@ -65,6 +65,46 @@ class OpenClawService
     }
 
     /**
+     * Real WhatsApp Web session state from the bridge's /status endpoint
+     * (which shells out to `openclaw channels status`) — /health only
+     * proves the bridge process is up, not that WhatsApp can deliver.
+     *
+     * @return array{configured: bool, linked: bool, connected: bool, health: string, number: ?string}
+     */
+    public function whatsappStatus(): array
+    {
+        $offline = ['configured' => false, 'linked' => false, 'connected' => false, 'health' => 'unreachable', 'number' => null];
+
+        if (! $this->settings->openClawUrl()) {
+            return $offline;
+        }
+
+        try {
+            $response = Http::baseUrl(rtrim((string) $this->settings->openClawUrl(), '/'))
+                ->withToken((string) $this->settings->openClawToken())
+                ->acceptJson()
+                ->timeout(20)
+                ->get('/status');
+
+            if (! $response->successful()) {
+                return $offline;
+            }
+
+            $wa = (array) $response->json('whatsapp', []);
+
+            return [
+                'configured' => (bool) ($wa['configured'] ?? false),
+                'linked' => (bool) ($wa['linked'] ?? false),
+                'connected' => (bool) ($wa['connected'] ?? false),
+                'health' => (string) ($wa['health'] ?? 'unknown'),
+                'number' => $wa['number'] ?? null,
+            ];
+        } catch (\Throwable) {
+            return $offline;
+        }
+    }
+
+    /**
      * @param  array<string, mixed>  $rules
      * @return array{score: int, reason: string, proposal: string}
      */
@@ -100,7 +140,7 @@ class OpenClawService
 
     /**
      * @param  array<int, array{direction: string, text: string}>  $history
-     * @return array{reply: string, needs_hassam: bool}
+     * @return array{reply: string, needs_hassam: bool, why: string}
      */
     public function draftReply(Client $client, string $incomingMessage, array $history = []): array
     {
@@ -124,6 +164,7 @@ class OpenClawService
         return [
             'reply' => (string) ($data['reply'] ?? ''),
             'needs_hassam' => (bool) ($data['needs_hassam'] ?? false),
+            'why' => (string) ($data['why'] ?? ''),
         ];
     }
 
@@ -203,32 +244,29 @@ class OpenClawService
         // stricter bar (score 9-10): a plain threshold, not a separate AI
         // judgment call, flagging only the strongest fits as worth spending
         // extra Upwork Connects on.
-        $boost = $score >= 9 ? 'yes' : 'no';
+        $boost = $score >= 9 ? 'Yes' : 'No';
+
+        $hireRate = $lead->client_hire_rate
+            ? rtrim((string) $lead->client_hire_rate, '%').'% hire rate'
+            : 'hire rate unknown';
+        $spend = $lead->client_spend
+            ? ltrim((string) $lead->client_spend, '$').' spent'
+            : 'spend unknown';
 
         $lines = [
-            "🟢 *New ready lead*",
-            $lead->title,
-            (string) $lead->url,
+            "🎯 NEW LEAD — Score: {$score}/10",
+            "BID: Yes | BOOST: {$boost}",
             '',
-            "SCORE: {$score}/10",
-            'BID: yes',
-            "BOOST: {$boost}",
-            "Reason: {$lead->score_reason}",
+            "📋 Job: {$lead->title}",
+            "🔗 Link: {$lead->url}",
+            "💰 Budget: {$lead->budget}",
+            '⏰ Posted: '.($lead->posted_at?->diffForHumans() ?? 'unknown'),
+            "👤 Client: {$hireRate} | \${$spend}",
             '',
-            "Budget: {$lead->budget}",
-            "Proposals so far: {$lead->proposal_count}",
-            "Client: {$lead->client_country} · spend {$lead->client_spend} · hire rate {$lead->client_hire_rate}"
-                .($lead->payment_verified ? ' · payment verified' : ' · payment unverified'),
+            "📊 Reason: {$lead->score_reason}",
             '',
-            'Full brief:',
-            '—',
-            (string) $lead->full_brief,
-            '—',
-            '',
-            'Proposal to paste on Upwork:',
-            '—',
+            '📝 PROPOSAL:',
             (string) $lead->proposal_text,
-            '—',
             '',
             "Open in dashboard: {$dashboardUrl}",
         ];

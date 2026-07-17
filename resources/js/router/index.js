@@ -54,6 +54,12 @@ const routes = [
     meta: { requiresAuth: true, adminOnly: true },
   },
   {
+    path: "/health",
+    name: "health",
+    component: () => import("@/pages/Health.vue"),
+    meta: { requiresAuth: true, adminOnly: true },
+  },
+  {
     path: "/analytics",
     name: "analytics",
     component: () => import("@/pages/Analytics.vue"),

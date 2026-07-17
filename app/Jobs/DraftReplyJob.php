@@ -6,6 +6,7 @@ use App\Enums\ActivityType;
 use App\Models\ActivityLog;
 use App\Models\Message;
 use App\Services\OpenClawService;
+use App\Services\SettingsService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -77,5 +78,45 @@ class DraftReplyJob implements ShouldQueue
         ActivityLog::record(ActivityType::ReplyDrafted, subject: $message, meta: [
             'needs_hassam' => $result['needs_hassam'],
         ]);
+
+        $this->notifyBidder($openClaw, $client, $message->text, $result);
+    }
+
+    /**
+     * WhatsApp copy of the draft, so a client reply can be handled from the
+     * phone without opening the dashboard. Best-effort: the draft is already
+     * saved above, and a notification failure must not undo that.
+     *
+     * @param  array{reply: string, needs_hassam: bool, why: string}  $result
+     */
+    protected function notifyBidder(OpenClawService $openClaw, $client, string $incoming, array $result): void
+    {
+        $to = app(SettingsService::class)->bidderWhatsapp();
+
+        if (! $to) {
+            return;
+        }
+
+        $decision = $result['needs_hassam']
+            ? '⚠️ NEEDS YOUR DECISION: Yes'.($result['why'] !== '' ? "\n".$result['why'] : '')
+            : 'NEEDS YOUR DECISION: No — safe to paste as-is';
+
+        $lines = [
+            '💬 CLIENT REPLIED — '.($client->lead?->title ?? $client->name),
+            $incoming,
+            '',
+            '✏️ SUGGESTED REPLY:',
+            $result['reply'],
+            '',
+            $decision,
+            '',
+            'Nothing is sent automatically — copy it into Upwork yourself.',
+        ];
+
+        try {
+            $openClaw->sendWhatsAppMessage($to, implode("\n", $lines));
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 }

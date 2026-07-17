@@ -7,6 +7,7 @@ const props = defineProps({ status: { type: String, required: true } });
 const statusLabels = {
   new: "New",
   scoring: "Scoring",
+  needs_review: "Needs review",
   ready: "Ready",
   sent: "Sent",
   replied: "Replied",
@@ -17,6 +18,7 @@ const statusLabels = {
 const statusTones = {
   new: "neutral",
   scoring: "warning",
+  needs_review: "danger",
   ready: "info",
   sent: "info",
   replied: "warning",

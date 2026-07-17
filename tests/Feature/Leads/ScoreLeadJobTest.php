@@ -122,9 +122,9 @@ class ScoreLeadJobTest extends TestCase
 
             return ($data['skill'] ?? null) === 'send_whatsapp_message'
                 && $data['to'] === '+15550001111'
-                && str_contains($data['message'], 'SCORE: 9/10')
-                && str_contains($data['message'], 'BID: yes')
-                && str_contains($data['message'], 'BOOST: yes')
+                && str_contains($data['message'], 'Score: 9/10')
+                && str_contains($data['message'], 'BID: Yes | BOOST: Yes')
+                && str_contains($data['message'], '📝 PROPOSAL:')
                 && str_contains($data['message'], 'Hi there...');
         });
     }
@@ -182,17 +182,37 @@ class ScoreLeadJobTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_final_failure_returns_lead_to_new_not_archived(): void
+    public function test_final_failure_marks_lead_needs_review_not_archived(): void
     {
         // A lead that never got a real evaluation shouldn't read as
-        // "reviewed and rejected" (archived) — it goes back to `new`,
-        // visible on the board, eligible for a manual rescore.
+        // "reviewed and rejected" (archived) — needs_review keeps it
+        // visible on the board, eligible for a manual rescore, and the
+        // operator gets a WhatsApp alert about the unscored lead.
+        Http::fake(['*' => Http::response(['success' => true])]);
         $lead = Lead::factory()->create(['status' => LeadStatus::Scoring]);
 
         (new ScoreLeadJob($lead->id))->failed(new \RuntimeException('OpenClaw timed out'));
 
         $lead->refresh();
-        $this->assertEquals(LeadStatus::New, $lead->status);
+        $this->assertEquals(LeadStatus::NeedsReview, $lead->status);
         $this->assertStringContainsString('OpenClaw timed out', (string) $lead->score_reason);
+
+        Http::assertSent(fn ($request) => ($request['skill'] ?? null) === 'send_whatsapp_message'
+            && str_contains($request['message'], 'NOT scored'));
+    }
+
+    public function test_inline_attempt_failure_skips_final_failure_treatment(): void
+    {
+        // The inline (webhook-request) attempt's failure must not mark
+        // needs_review or alert — the queued retry the importer dispatches
+        // owns the real retry cycle and its final-failure handling.
+        Http::fake();
+        $lead = Lead::factory()->create(['status' => LeadStatus::Scoring]);
+
+        (new ScoreLeadJob($lead->id, inline: true))->failed(new \RuntimeException('OpenClaw timed out'));
+
+        $lead->refresh();
+        $this->assertEquals(LeadStatus::Scoring, $lead->status);
+        Http::assertNothingSent();
     }
 }

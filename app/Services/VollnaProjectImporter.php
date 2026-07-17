@@ -102,13 +102,16 @@ class VollnaProjectImporter
         }
 
         try {
-            ScoreLeadJob::dispatchSync($lead->id);
+            // inline=true suppresses the final-failure treatment on this
+            // first attempt — the queued job below owns the retry cycle
+            // (3 tries, 10s gaps) and the needs_review + operator alert
+            // if all of those fail too.
+            ScoreLeadJob::dispatchSync($lead->id, true);
         } catch (\Throwable $e) {
             report($e);
-            (new ScoreLeadJob($lead->id))->failed($e);
             // The inline attempt failed after passing the health check
-            // (e.g. timed out mid-call) — still queue a real retry rather
-            // than leaving it to sit until the next manual rescore.
+            // (e.g. timed out mid-call) — queue a real retry rather than
+            // leaving it to sit until the next manual rescore.
             ScoreLeadJob::dispatch($lead->id);
         }
 

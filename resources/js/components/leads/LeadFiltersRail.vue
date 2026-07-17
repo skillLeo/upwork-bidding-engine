@@ -11,6 +11,7 @@ const statusOptions = [
   { value: "all", label: "All leads" },
   { value: "new", label: "New" },
   { value: "scoring", label: "Scoring" },
+  { value: "needs_review", label: "Needs review" },
   { value: "ready", label: "Ready" },
   { value: "sent", label: "Sent" },
   { value: "replied", label: "Replied" },

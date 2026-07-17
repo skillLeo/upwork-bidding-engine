@@ -64,6 +64,16 @@ class VollnaCheckSilenceCommand extends Command
             return self::SUCCESS;
         }
 
+        // Active hours: 8am–midnight Pakistan time. A quiet night isn't
+        // worth waking anyone for — the flag stays unset, so a silence
+        // that persists into the morning alerts on the first check
+        // after 8am.
+        if (now('Asia/Karachi')->hour < 8) {
+            $this->info('Silence detected but outside active hours (8:00–24:00 PKT); deferring alert.');
+
+            return self::SUCCESS;
+        }
+
         $message = sprintf(
             "⚠️ SkillLeo: no Vollna webhook deliveries for %.0f hours (alert threshold %dh).\n\n"
             ."The webhook may be off — check Vollna's dashboard: Notifications → webhook toggle, the URL, and the Bearer token.\n"

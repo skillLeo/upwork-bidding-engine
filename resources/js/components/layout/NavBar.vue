@@ -2,7 +2,7 @@
 import { ref, computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { toast } from "vue-sonner";
-import { BarChart3, ChevronDown, LayoutGrid, LogOut, Settings as SettingsIcon, UserCircle } from "@lucide/vue";
+import { Activity, BarChart3, ChevronDown, LayoutGrid, LogOut, Settings as SettingsIcon, UserCircle } from "@lucide/vue";
 import { useAuthStore } from "@/stores/auth";
 import { useBrandingStore } from "@/stores/branding";
 import { apiClient } from "@/lib/api-client";
@@ -18,6 +18,7 @@ const menuOpen = ref(false);
 const navItems = [
   { to: "/leads", label: "Leads", icon: LayoutGrid, adminOnly: false },
   { to: "/analytics", label: "Analytics", icon: BarChart3, adminOnly: true },
+  { to: "/health", label: "Health", icon: Activity, adminOnly: true },
   { to: "/settings", label: "Settings", icon: SettingsIcon, adminOnly: true },
 ];
 
