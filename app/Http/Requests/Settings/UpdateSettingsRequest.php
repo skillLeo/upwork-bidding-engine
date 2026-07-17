@@ -29,6 +29,7 @@ class UpdateSettingsRequest extends FormRequest
             'vollna_webhook_secret' => ['sometimes', 'nullable', 'string', 'max:500'],
             'vollna_api_token' => ['sometimes', 'nullable', 'string', 'max:500'],
             'vollna_filter_id' => ['sometimes', 'nullable', 'string', 'max:50'],
+            'vollna_silence_alert_hours' => ['sometimes', 'integer', 'min:1', 'max:72'],
 
             // AI engine (OpenClaw)
             'openclaw_url' => ['sometimes', 'nullable', 'string', 'max:500'],

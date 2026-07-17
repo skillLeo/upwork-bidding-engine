@@ -41,6 +41,16 @@ class SettingsService
         // Written by VollnaSyncJob, read by the Settings UI to show "last
         // synced: X added, Y removed" under the manual sync button.
         'vollna_last_sync' => ['group' => 'vollna', 'secret' => false, 'default' => null],
+        // Dead-man's switch: Vollna has gone silently dark twice (a stale
+        // secret, then an API-token outage) with zero signal until someone
+        // noticed leads had stopped. The hourly vollna:check-silence
+        // command alerts once per incident when no authenticated webhook
+        // delivery has arrived within this many hours.
+        'vollna_silence_alert_hours' => ['group' => 'vollna', 'secret' => false, 'default' => 6],
+        // Stamped by VollnaWebhookController on every authenticated
+        // delivery — even an all-duplicates one proves the webhook is
+        // alive. Read only by vollna:check-silence.
+        'vollna_last_webhook_at' => ['group' => 'vollna', 'secret' => false, 'default' => null],
 
         // AI engine — OpenClaw, on its own Claude Code CLI subscription auth.
         // No Anthropic API key/model here: OpenClaw is already authenticated,

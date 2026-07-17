@@ -17,6 +17,7 @@ use App\Services\NlSearchParser;
 use App\Services\OpenClawService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\Rule;
 
 class LeadController extends Controller
@@ -145,28 +146,42 @@ class LeadController extends Controller
 
     /**
      * Only reached when the free parser found nothing at all (a genuinely
-     * odd query) - kept to a hard 3s timeout so a slow/offline OpenClaw
-     * (it runs on a Mac that isn't always on) never makes the search box
-     * hang. Requires a `parse_search_query` skill on the OpenClaw side;
-     * not yet implemented there as of this change — see OpenClawService.
+     * odd query). The AI call runs ~10-15s through the OpenClaw CLI, so
+     * successful parses are cached — a repeated or re-typed query answers
+     * instantly instead of paying the agent round-trip again. Failures are
+     * deliberately NOT cached: a Mac that was asleep shouldn't leave a
+     * stale "AI can't do this" verdict pinned to a query for an hour.
      *
      * @return array<string, mixed>|null
      */
     protected function tryAiSearchFallback(string $search): ?array
     {
+        $cacheKey = 'nl-search:'.md5(mb_strtolower(trim($search)));
+
+        if (Cache::has($cacheKey)) {
+            $cached = Cache::get($cacheKey);
+
+            return $cached === [] ? null : $cached;
+        }
+
         if (! $this->openClaw->isReachable()) {
             return null;
         }
 
         try {
             $criteria = $this->openClaw->parseSearchQuery($search);
-
-            return $criteria !== [] ? $criteria : null;
         } catch (\Throwable $e) {
             report($e);
 
             return null;
         }
+
+        // A real parse sticks for an hour; "understood nothing" only
+        // briefly, so an improved skill (or a query that only failed by
+        // luck) gets retried soon rather than tomorrow.
+        Cache::put($cacheKey, $criteria, $criteria === [] ? 300 : 3600);
+
+        return $criteria !== [] ? $criteria : null;
     }
 
     /**

@@ -153,17 +153,18 @@ class OpenClawService
      * criteria field list only, never the leads themselves, so this stays
      * a couple hundred tokens even when it does fire.
      *
-     * A short direct timeout (not client()'s 180s/retry setup, which is
-     * tuned for the slow scoring/drafting calls) - the search box must
-     * degrade to plain keyword search in seconds if OpenClaw is offline,
-     * never hang.
+     * A direct timeout (not client()'s 180s/retry setup, which is tuned
+     * for the slow scoring/drafting calls). 30s, not shorter: the bridge
+     * runs this through an OpenClaw CLI agent turn that measures ~10-15s
+     * end-to-end when healthy (verified live), so anything tighter kills
+     * every working call. Beyond 30s the search degrades to plain keyword
+     * matching rather than hanging further; results are cached in
+     * LeadController so a repeated query never pays this twice.
      *
-     * NOTE: requires a `parse_search_query` skill on the OpenClaw side
-     * that returns `{"criteria": {...}}` using the field names below. Not
-     * yet implemented there as of this change - LeadController's fallback
-     * chain treats any failure here (missing skill included) as "AI
-     * unavailable" and drops straight to plain keyword search, so this is
-     * safe to ship ahead of that skill existing.
+     * The bridge's parse_search_query handler returns `{"criteria": {...}}`
+     * using the field names below, normalized from the workspace
+     * parse-search-query SKILL.md (its `status` key arrives here as
+     * `status_in`, `understood: false` arrives as empty criteria).
      *
      * @return array<string, mixed>
      */
@@ -172,7 +173,7 @@ class OpenClawService
         $response = Http::baseUrl(rtrim((string) $this->settings->openClawUrl(), '/'))
             ->withToken((string) $this->settings->openClawToken())
             ->acceptJson()
-            ->timeout(3)
+            ->timeout(30)
             ->post('/task', [
                 'skill' => 'parse_search_query',
                 'query' => $query,

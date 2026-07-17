@@ -3,10 +3,12 @@
 namespace App\Http\Middleware;
 
 use App\Enums\ActivityType;
+use App\Jobs\VollnaRejectedAlertJob;
 use App\Models\ActivityLog;
 use App\Services\SettingsService;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Symfony\Component\HttpFoundation\Response;
 
 class VerifyVollnaSecret
@@ -25,11 +27,22 @@ class VerifyVollnaSecret
             ?? $request->query('secret');
 
         if (! $expected || ! $provided || ! hash_equals($expected, (string) $provided)) {
+            $reason = ! $expected ? 'no_secret_configured' : 'secret_mismatch';
+
             ActivityLog::record(ActivityType::WebhookRejected, meta: [
                 'source' => 'vollna',
                 'ip' => $request->ip(),
-                'reason' => ! $expected ? 'no_secret_configured' : 'secret_mismatch',
+                'reason' => $reason,
             ]);
+
+            // Alert the operator once per incident. Cache::add is the
+            // dispatch-side guard (so a burst of rejections can't flood
+            // the queue with alert jobs); the job re-checks its own
+            // once-per-incident flag before actually sending.
+            if (! Cache::has(VollnaRejectedAlertJob::ALERTED_CACHE_KEY)
+                && Cache::add('vollna:rejected_alert_dispatched', 1, 300)) {
+                VollnaRejectedAlertJob::dispatch($reason, $request->ip());
+            }
 
             return response()->json(['message' => 'Invalid or missing webhook secret.'], 401);
         }

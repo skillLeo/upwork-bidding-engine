@@ -23,6 +23,7 @@ const emit = defineEmits(["saved"]);
 const secret = ref("");
 const apiToken = ref("");
 const filterId = ref(props.settings.vollna_filter_id ?? "");
+const silenceAlertHours = ref(props.settings.vollna_silence_alert_hours ?? 6);
 const saving = ref(false);
 const syncing = ref(false);
 
@@ -33,6 +34,7 @@ async function handleSave() {
       vollna_webhook_secret: secret.value,
       vollna_api_token: apiToken.value,
       vollna_filter_id: filterId.value,
+      vollna_silence_alert_hours: Number(silenceAlertHours.value) || 6,
     });
     secret.value = "";
     apiToken.value = "";
@@ -80,6 +82,14 @@ const webhookUrl = `${apiBase}/vollna-hook`;
       <div class="rounded-md bg-neutral-bg p-3">
         <p class="text-xs font-medium text-text-tertiary">Point Vollna's webhook at</p>
         <p class="mt-1 font-mono text-xs break-all text-text-primary">{{ webhookUrl }}</p>
+      </div>
+      <div>
+        <Label>Silence alert (hours)</Label>
+        <Input v-model="silenceAlertHours" type="number" min="1" max="72" />
+        <FieldHint>
+          Get a WhatsApp alert if no webhook delivery arrives for this many hours — catches
+          Vollna going quiet before a day of leads is lost.
+        </FieldHint>
       </div>
       <div class="flex justify-end">
         <Button @click="handleSave" :loading="saving">Save Vollna settings</Button>

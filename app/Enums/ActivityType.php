@@ -25,5 +25,7 @@ enum ActivityType: string
     case SettingUpdated = 'setting_updated';
     case ConnectionTested = 'connection_tested';
     case WebhookRejected = 'webhook_rejected';
+    case VollnaSilenceAlert = 'vollna_silence_alert';
+    case VollnaRejectedAlert = 'vollna_rejected_alert';
     case UserLoggedIn = 'user_logged_in';
 }
