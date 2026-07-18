@@ -26,15 +26,32 @@ use App\Services\SettingsService;
  * revision it is returned anyway (a slightly-off proposal the operator
  * can see beats a dead pipeline) with a proposal_quality_warning logged.
  *
- * Like scoring, the actual writing rules live in proposal_system_prompt
- * in Settings — operator-owned, browser-editable, never in code. The
- * gate's own lists/bounds are settings too (SettingsService::proposalGate).
+ * The writing rules live in Settings — operator-owned, browser-editable,
+ * never in code. Deliberately, the model receives ONLY proposal_skill
+ * (SKILL.md v2) + project_facts + the format spec below: the teaching
+ * document (proposal_reference) is written in the exact style the rules
+ * ban, and models imitate their context more than they obey it, so it
+ * must never enter a prompt. The gate's own lists/bounds are settings
+ * too (SettingsService::proposalGate).
  */
 class ProposalService
 {
     // Generous because Sonnet 5 runs adaptive thinking by default and
     // max_tokens bounds thinking + text together.
     public const MAX_TOKENS = 8000;
+
+    /**
+     * The output contract — plumbing, not bidding rules, so it lives in
+     * code where it stays byte-identical between calls (prompt caching
+     * requires the static block to never vary).
+     */
+    public const FORMAT_SPEC = <<<'SPEC'
+        ## OUTPUT FORMAT (strict)
+        - If the job post contains screening questions: answer them FIRST, each answer as plain text. Number the answers ONLY if the client numbered their questions. Then the cover letter.
+        - If there are no screening questions: output only the cover letter.
+        - Plain text only. No "---" separators, no markdown, no headers, no bold, no bullets, no code fences.
+        - End with the first-name signature line, nothing after it.
+        SPEC;
 
     public const REVIEW_MAX_TOKENS = 2000;
 
@@ -57,17 +74,8 @@ class ProposalService
         // 60s+ — never let a web-tier time limit kill it mid-generation.
         @set_time_limit(240);
 
-        $system = trim((string) $this->settings->get('proposal_system_prompt'));
-
-        if ($system === '') {
-            throw new \RuntimeException(
-                'proposal_system_prompt is empty — paste your proposal rules into Settings → AI models & prompts before generating proposals.'
-            );
-        }
-
-        $jobBlock = $this->scoring->jobContent($lead)
-            ."\n\nThis job scored {$scoring['score']}/10"
-            .($scoring['reason'] !== '' ? " — {$scoring['reason']}" : '');
+        $system = $this->systemPrompt();
+        $jobBlock = $this->jobBlock($lead, $scoring);
 
         $model = (string) $this->settings->get('proposal_model', 'claude-sonnet-5');
         $gate = $this->settings->proposalGate();
@@ -75,7 +83,7 @@ class ProposalService
         $response = $this->ai->complete(
             'proposal',
             $system,
-            $jobBlock."\nWrite the proposal now. Follow EVERY rule in your instructions, run every self-edit pass and the final self-check checklist before answering. Return ONLY the proposal text, nothing else.",
+            $this->draftUserPrompt($lead, $scoring),
             $model,
             self::MAX_TOKENS,
             $lead->id,
@@ -134,6 +142,52 @@ class ProposalService
             'clean' => $violations === [],
             'revisions' => $revisions,
         ];
+    }
+
+    /**
+     * The variable half of the draft call — job brief + client stats +
+     * score context, always LAST (after the cached static block). Public
+     * for the same verification reason as systemPrompt().
+     *
+     * @param  array{score: int, boost: bool, reason: string}  $scoring
+     */
+    public function draftUserPrompt(Lead $lead, array $scoring): string
+    {
+        return $this->jobBlock($lead, $scoring)
+            ."\nWrite the proposal now. Follow EVERY rule in your instructions, run every self-edit pass and the final self-check checklist before answering. Return ONLY the proposal text, nothing else.";
+    }
+
+    /**
+     * @param  array{score: int, boost: bool, reason: string}  $scoring
+     */
+    protected function jobBlock(Lead $lead, array $scoring): string
+    {
+        return $this->scoring->jobContent($lead)
+            ."\n\nThis job scored {$scoring['score']}/10"
+            .($scoring['reason'] !== '' ? " — {$scoring['reason']}" : '');
+    }
+
+    /**
+     * The exact static block every proposal call sends: SKILL.md v2, then
+     * the fact sheet, then the format spec — in that order, byte-identical
+     * between calls so Anthropic's cache_control on it actually hits.
+     * Public so the operator can print/verify precisely what the model
+     * sees (and confirm the teaching document is NOT in it).
+     */
+    public function systemPrompt(): string
+    {
+        $skill = trim((string) $this->settings->get('proposal_skill'));
+
+        if ($skill === '') {
+            throw new \RuntimeException(
+                'proposal_skill is empty — paste SKILL.md v2 into Settings → AI models & prompts before generating proposals.'
+            );
+        }
+
+        return $skill
+            ."\n\n## PROJECT FACTS (the ONLY source of truth about Hassam's track record — never claim anything not derivable from this sheet)\n"
+            .trim((string) $this->settings->get('project_facts'))
+            ."\n\n".self::FORMAT_SPEC;
     }
 
     /**

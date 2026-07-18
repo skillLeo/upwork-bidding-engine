@@ -75,7 +75,27 @@ class SettingsService
         'scoring_model' => ['group' => 'ai', 'secret' => false, 'default' => 'claude-haiku-4-5'],
         'proposal_model' => ['group' => 'ai', 'secret' => false, 'default' => 'claude-sonnet-5'],
         'scoring_system_prompt' => ['group' => 'ai', 'secret' => false, 'default' => ''],
-        'proposal_system_prompt' => ['group' => 'ai', 'secret' => false, 'default' => ''],
+        // The proposal rules are deliberately SPLIT: models imitate the
+        // style of their context far more than they obey instructions in
+        // it, so the dense teaching document must never enter a prompt.
+        // proposal_skill (SKILL.md v2, ~9KB) + project_facts are the ONLY
+        // operator text any proposal call ever sees; proposal_reference
+        // is the teaching addendum + guide, stored for the operator to
+        // read in the browser and nothing else.
+        'proposal_skill' => ['group' => 'ai', 'secret' => false, 'default' => ''],
+        'proposal_reference' => ['group' => 'ai', 'secret' => false, 'default' => ''],
+        // Canonical fact sheet — the only source of truth about Hassam's
+        // track record. Anything not derivable from this must never be
+        // claimed in a proposal.
+        'project_facts' => ['group' => 'ai', 'secret' => false, 'default' => 'PatrolTick: guard-management SaaS. Laravel + Vue web, Flutter mobile, PostgreSQL. Built the REST API the mobile app runs on, auth + role-based access, reporting, offline guard check-in sync.'
+            ."\nSkillLeo Financial: multi-tenant finance SaaS. Laravel backend + Flutter app. Tenant model, billing, dashboards."
+            ."\nRouteHealth: healthcare platform. Next.js + Laravel."
+            ."\niiBSOOR: e-commerce app for the Somali market. Flutter + Laravel. RTL layout."
+            ."\nMy EXtreme Trainer: fitness platform. Laravel + Next.js."
+            ."\nOdoo migrations: large Odoo-to-Odoo data migrations over XML-RPC. Batched record transfer, custom field mapping, attachment migration, resume after interruption. This was DATA MIGRATION, not an inventory sync system. Never describe it as anything else."
+            ."\nSkillLeo Bidding Engine: this system. Laravel + Vue."
+            ."\nStack: PHP, Laravel, Python, Django, FastAPI, Odoo, React, Next.js, Vue, Node, Express, MERN, TypeScript, Flutter, React Native, Dart, MySQL, PostgreSQL, Firebase."
+            ."\nAnything not on this sheet is NOT in the track record and must never be claimed. Magento is not on this sheet."],
 
         // Proposal quality gate — every generated proposal is mechanically
         // linted (banned phrases, word count, signature, required phrases)

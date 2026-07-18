@@ -40,7 +40,9 @@ const form = reactive({
   scoring_model: props.settings.scoring_model ?? "claude-haiku-4-5",
   proposal_model: props.settings.proposal_model ?? "claude-sonnet-5",
   scoring_system_prompt: props.settings.scoring_system_prompt ?? "",
-  proposal_system_prompt: props.settings.proposal_system_prompt ?? "",
+  proposal_skill: props.settings.proposal_skill ?? "",
+  project_facts: props.settings.project_facts ?? "",
+  proposal_reference: props.settings.proposal_reference ?? "",
   proposal_quality_gate: props.settings.proposal_quality_gate ?? true,
   proposal_min_words: props.settings.proposal_min_words ?? 110,
   proposal_max_words: props.settings.proposal_max_words ?? 180,
@@ -180,13 +182,41 @@ async function handleSave() {
       </div>
 
       <div>
-        <Label>Proposal rules (system prompt)</Label>
+        <Label>Proposal skill (SENT to the AI — the only proposal rules the model sees)</Label>
         <Textarea
-          v-model="form.proposal_system_prompt"
+          v-model="form.proposal_skill"
           rows="14"
           class="font-mono text-xs"
-          placeholder="Paste your full proposal-writing rules here — the 225-character preview rule, opening patterns, banned phrases, self-check."
+          placeholder="SKILL.md v2 — the operative drafting procedure. Keep it lean: the model obeys a short skill far better than a buried one."
         />
+        <FieldHint>
+          Deliberately small (~9KB). The model imitates whatever it reads, so only the drafting
+          procedure goes in — never the teaching document below.
+        </FieldHint>
+      </div>
+
+      <div>
+        <Label>Project facts (SENT to the AI — the only source of truth about your track record)</Label>
+        <Textarea
+          v-model="form.project_facts"
+          rows="8"
+          class="font-mono text-xs"
+          placeholder="One line per real project: name, what it is, exact stack, what you personally built. Anything not on this sheet must never be claimed."
+        />
+      </div>
+
+      <div>
+        <Label>Proposal reference (NEVER sent to the AI — your reading copy)</Label>
+        <Textarea
+          v-model="form.proposal_reference"
+          rows="8"
+          class="font-mono text-xs"
+          placeholder="The full teaching document — research, psychology, examples. Stored for you to read; excluded from every prompt on purpose."
+        />
+        <FieldHint>
+          Excluded on purpose: it's written in the exact analytical, em-dash-heavy style the rules
+          ban, and models copy the style of their context more than they obey instructions in it.
+        </FieldHint>
       </div>
 
       <div class="space-y-4 rounded-md border border-border bg-neutral-bg/50 p-4">

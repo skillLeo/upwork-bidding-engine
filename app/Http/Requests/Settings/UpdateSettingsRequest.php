@@ -43,10 +43,14 @@ class UpdateSettingsRequest extends FormRequest
             'scoring_model' => ['sometimes', 'string', 'max:100'],
             'proposal_model' => ['sometimes', 'string', 'max:100'],
             // The long, operator-pasted rule blocks — the whole point is
-            // that these are editable text, so the ceiling is generous
-            // (the proposal rules + 2026 addendum already run ~72KB).
+            // that these are editable text, so the ceilings are generous.
             'scoring_system_prompt' => ['sometimes', 'nullable', 'string', 'max:150000'],
-            'proposal_system_prompt' => ['sometimes', 'nullable', 'string', 'max:150000'],
+            // proposal_skill + project_facts are the ONLY proposal text
+            // sent to a model; proposal_reference is operator reading and
+            // never enters a prompt.
+            'proposal_skill' => ['sometimes', 'nullable', 'string', 'max:30000'],
+            'proposal_reference' => ['sometimes', 'nullable', 'string', 'max:150000'],
+            'project_facts' => ['sometimes', 'nullable', 'string', 'max:20000'],
 
             // Proposal quality gate (mechanical lint config)
             'proposal_quality_gate' => ['sometimes', 'boolean'],

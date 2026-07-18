@@ -25,7 +25,7 @@ class AiLayerTest extends TestCase
         $this->settings = app(SettingsService::class);
         $this->settings->set('anthropic_api_key', 'sk-ant-test');
         $this->settings->set('scoring_system_prompt', 'You score Upwork jobs. Output JSON only.');
-        $this->settings->set('proposal_system_prompt', 'You write proposals.');
+        $this->settings->set('proposal_skill', 'You write proposals.');
         // The quality gate (draft → review → revise) has its own test
         // file — ProposalQualityGateTest; off here so call counts stay
         // about what each test actually asserts.

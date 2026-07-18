@@ -34,7 +34,7 @@ class DeadMansSwitchTest extends TestCase
         $this->settings->set('bidder_whatsapp', '+15550001111');
         $this->settings->set('anthropic_api_key', 'sk-ant-test');
         $this->settings->set('scoring_system_prompt', 'THE RUBRIC');
-        $this->settings->set('proposal_system_prompt', 'THE GUIDE');
+        $this->settings->set('proposal_skill', 'THE GUIDE');
     }
 
     public function test_silence_alert_is_deferred_outside_active_hours(): void

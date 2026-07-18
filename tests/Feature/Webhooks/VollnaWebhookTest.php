@@ -24,7 +24,7 @@ class VollnaWebhookTest extends TestCase
             // the webhook request, driven by the settings-held rubric.
             'anthropic_api_key' => 'sk-ant-test',
             'scoring_system_prompt' => 'THE RUBRIC',
-            'proposal_system_prompt' => 'THE GUIDE',
+            'proposal_skill' => 'THE GUIDE',
             // The quality gate (draft → review → revise) has its own test
             // file; here it would only add nondeterministic extra calls.
             'proposal_quality_gate' => false,

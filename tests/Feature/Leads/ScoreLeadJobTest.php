@@ -33,7 +33,7 @@ class ScoreLeadJobTest extends TestCase
             // file; here it would only add nondeterministic extra calls.
             'proposal_quality_gate' => false,
             'scoring_system_prompt' => 'THE RUBRIC: score jobs 1-10, output JSON.',
-            'proposal_system_prompt' => 'THE GUIDE: write the proposal, plain text.',
+            'proposal_skill' => 'THE GUIDE: write the proposal, plain text.',
         ]);
     }
 

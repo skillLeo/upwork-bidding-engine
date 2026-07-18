@@ -29,7 +29,7 @@ class ProposalQualityGateTest extends TestCase
 
         $this->settings = app(SettingsService::class);
         $this->settings->set('anthropic_api_key', 'sk-ant-test');
-        $this->settings->set('proposal_system_prompt', 'You write proposals under the full rulebook.');
+        $this->settings->set('proposal_skill', 'You write proposals under the operative skill.');
     }
 
     /**
@@ -209,15 +209,47 @@ class ProposalQualityGateTest extends TestCase
         );
     }
 
-    public function test_sync_prompts_command_loads_repo_rules_into_settings(): void
+    public function test_sync_prompts_command_loads_split_rules_into_settings(): void
     {
-        $this->artisan('ai:sync-prompts', ['--only' => 'proposal'])->assertSuccessful();
+        $this->artisan('ai:sync-prompts')->assertSuccessful();
 
-        $prompt = (string) $this->settings->get('proposal_system_prompt');
+        $skill = (string) $this->settings->get('proposal_skill');
+        $reference = (string) $this->settings->get('proposal_reference');
 
-        $this->assertGreaterThan(60000, mb_strlen($prompt));
-        $this->assertStringContainsString('SKILL.md v2', $prompt);
-        $this->assertStringContainsString('slippery slide', $prompt);
-        $this->assertStringContainsString('OUTPUT OVERRIDE', $prompt);
+        // The skill stays lean and operative; the teaching document lands
+        // in the never-sent reference field, not the skill.
+        $this->assertStringContainsString('SKILL.md v2', $skill);
+        $this->assertLessThan(15000, mb_strlen($skill));
+        $this->assertGreaterThan(60000, mb_strlen($reference));
+        $this->assertStringContainsString('Sugarman', $reference);
+        $this->assertStringNotContainsString('Sugarman', $skill);
+    }
+
+    public function test_system_prompt_is_skill_plus_facts_plus_format_spec_and_never_the_reference(): void
+    {
+        $this->settings->set('proposal_skill', 'SKILL RULES v2 MARKER');
+        $this->settings->set('proposal_reference', 'TEACHING DOC MARKER — must never be sent');
+
+        $system = app(ProposalService::class)->systemPrompt();
+
+        $this->assertStringContainsString('SKILL RULES v2 MARKER', $system);
+        $this->assertStringContainsString('PROJECT FACTS', $system);
+        // Seeded default fact sheet rides along untouched.
+        $this->assertStringContainsString('Magento is not on this sheet', $system);
+        $this->assertStringContainsString('OUTPUT FORMAT (strict)', $system);
+        $this->assertStringNotContainsString('TEACHING DOC MARKER', $system);
+
+        // Order: skill first, facts second, format spec last — the static
+        // block must be byte-identical between calls for caching, and the
+        // brief always arrives after it in the user turn.
+        $this->assertTrue(
+            strpos($system, 'SKILL RULES v2 MARKER') < strpos($system, 'PROJECT FACTS')
+            && strpos($system, 'PROJECT FACTS') < strpos($system, 'OUTPUT FORMAT (strict)'),
+        );
+
+        // Empty skill fails loudly — no proposal may run ruleless.
+        $this->settings->set('proposal_skill', '');
+        $this->expectException(\RuntimeException::class);
+        app(ProposalService::class)->systemPrompt();
     }
 }

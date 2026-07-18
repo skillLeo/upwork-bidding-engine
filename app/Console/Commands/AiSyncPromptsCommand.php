@@ -15,7 +15,7 @@ use Illuminate\Console\Command;
  */
 class AiSyncPromptsCommand extends Command
 {
-    protected $signature = 'ai:sync-prompts {--only= : scoring|proposal — sync just one prompt}';
+    protected $signature = 'ai:sync-prompts {--only= : scoring|skill|reference — sync just one}';
 
     protected $description = 'Load docs/ai-rules prompt files into the live scoring/proposal settings';
 
@@ -23,13 +23,17 @@ class AiSyncPromptsCommand extends Command
     {
         $map = [
             'scoring' => ['scoring_system_prompt', base_path('docs/ai-rules/scoring-system-prompt.md')],
-            'proposal' => ['proposal_system_prompt', base_path('docs/ai-rules/proposal-system-prompt.md')],
+            // Split on purpose: `skill` is the ONLY proposal rules text
+            // ever sent to a model; `reference` is operator reading that
+            // must never enter a prompt (style contamination).
+            'skill' => ['proposal_skill', base_path('docs/ai-rules/proposal-skill.md')],
+            'reference' => ['proposal_reference', base_path('docs/ai-rules/proposal-reference.md')],
         ];
 
         $only = $this->option('only');
 
         if ($only !== null && ! isset($map[$only])) {
-            $this->error('--only must be "scoring" or "proposal".');
+            $this->error('--only must be "scoring", "skill", or "reference".');
 
             return self::FAILURE;
         }
