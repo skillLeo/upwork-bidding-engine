@@ -92,7 +92,7 @@ class ScoreLeadJob implements ShouldQueue
             // the proposal model only runs for BID-yes leads, so a rejected
             // lead never pays for (or shows) a proposal.
             $result = $aiScoring->score($lead);
-            $proposalText = $result['bid'] ? $proposals->write($lead, $result)['text'] : null;
+            $proposal = $result['bid'] ? $proposals->write($lead, $result) : null;
         } catch (\Throwable $e) {
             report($e);
 
@@ -111,7 +111,8 @@ class ScoreLeadJob implements ShouldQueue
         $lead->update([
             'score' => $result['score'],
             'score_reason' => $result['reason'],
-            'proposal_text' => $proposalText,
+            'proposal_text' => $proposal['text'] ?? null,
+            'proposal_warnings' => ($proposal['warnings'] ?? []) !== [] ? $proposal['warnings'] : null,
             'boost' => $result['boost'],
             'status' => $isReady ? LeadStatus::Ready : LeadStatus::Archived,
         ]);

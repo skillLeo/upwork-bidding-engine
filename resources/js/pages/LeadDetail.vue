@@ -283,7 +283,17 @@ async function handleRegenerateProposal() {
 
     <Card v-if="lead.proposal_text || lead.score !== null" class="mt-4 p-6">
       <div class="flex flex-wrap items-center justify-between gap-2">
-        <p class="text-sm font-semibold text-text-primary">Proposal</p>
+        <div class="flex items-center gap-2">
+          <p class="text-sm font-semibold text-text-primary">Proposal</p>
+          <span
+            v-if="lead.proposal_warnings?.length"
+            class="inline-flex items-center gap-1 rounded-pill border border-danger/40 bg-danger-bg px-2 py-0.5 text-xs font-semibold text-danger"
+          >
+            <AlertTriangle class="h-3 w-3" />
+            {{ lead.proposal_warnings.length }} rule
+            {{ lead.proposal_warnings.length === 1 ? "violation" : "violations" }}
+          </span>
+        </div>
         <div class="flex items-center gap-2">
           <Button
             variant="secondary"
@@ -306,6 +316,24 @@ async function handleRegenerateProposal() {
             <Copy class="h-3.5 w-3.5" /> Copy
           </Button>
         </div>
+      </div>
+      <div
+        v-if="lead.proposal_warnings?.length"
+        class="mt-3 rounded-md border border-danger-border bg-danger-bg px-4 py-3"
+      >
+        <p class="text-xs font-semibold text-danger">
+          This proposal did not pass every rule — fix by hand or hit Rewrite:
+        </p>
+        <ul class="mt-1.5 space-y-1">
+          <li
+            v-for="warning in lead.proposal_warnings"
+            :key="warning"
+            class="flex gap-1.5 text-xs text-danger/90"
+          >
+            <span aria-hidden="true">•</span>
+            {{ warning }}
+          </li>
+        </ul>
       </div>
       <p
         v-if="lead.proposal_text"

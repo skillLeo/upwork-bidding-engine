@@ -42,6 +42,7 @@ class UpdateSettingsRequest extends FormRequest
             'openai_api_key' => ['sometimes', 'nullable', 'string', 'max:300'],
             'scoring_model' => ['sometimes', 'string', 'max:100'],
             'proposal_model' => ['sometimes', 'string', 'max:100'],
+            'review_model' => ['sometimes', 'string', 'max:100'],
             // The long, operator-pasted rule blocks — the whole point is
             // that these are editable text, so the ceilings are generous.
             'scoring_system_prompt' => ['sometimes', 'nullable', 'string', 'max:150000'],

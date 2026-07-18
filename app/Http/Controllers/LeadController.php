@@ -517,9 +517,15 @@ class LeadController extends Controller
             'reason' => (string) $lead->score_reason,
         ]);
 
-        $lead->update(['proposal_text' => $result['text']]);
+        $lead->update([
+            'proposal_text' => $result['text'],
+            'proposal_warnings' => $result['warnings'] !== [] ? $result['warnings'] : null,
+        ]);
 
-        ActivityLog::record('proposal_regenerated', subject: $lead);
+        ActivityLog::record('proposal_regenerated', subject: $lead, meta: [
+            'shipped_rule' => $result['shipped_rule'],
+            'revisions' => $result['revisions'],
+        ]);
 
         return response()->json(['data' => new LeadResource($lead->fresh())]);
     }

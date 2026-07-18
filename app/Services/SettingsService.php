@@ -74,6 +74,10 @@ class SettingsService
         'openai_api_key' => ['group' => 'ai', 'secret' => true, 'default' => ''],
         'scoring_model' => ['group' => 'ai', 'secret' => false, 'default' => 'claude-haiku-4-5'],
         'proposal_model' => ['group' => 'ai', 'secret' => false, 'default' => 'claude-sonnet-5'],
+        // The review pass gets its own model: the weakest writer grading
+        // its own homework is how the tricolon shipped. Defaults to the
+        // strongest writing-tier model, independent of the writer.
+        'review_model' => ['group' => 'ai', 'secret' => false, 'default' => 'claude-sonnet-5'],
         'scoring_system_prompt' => ['group' => 'ai', 'secret' => false, 'default' => ''],
         // The proposal rules are deliberately SPLIT: models imitate the
         // style of their context far more than they obey instructions in
@@ -109,8 +113,9 @@ class SettingsService
         'proposal_signature' => ['group' => 'ai', 'secret' => false, 'default' => 'Hassam'],
         'proposal_required_phrases' => ['group' => 'ai', 'secret' => false, 'default' => ['Done =']],
         'proposal_banned_phrases' => ['group' => 'ai', 'secret' => false, 'default' => [
-            // Em/en dashes — the #1 AI tell the operator flagged.
-            '—', '–',
+            // Em/en dashes and the double hyphen — the #1 AI tell the
+            // operator flagged.
+            '—', '–', '--',
             // AI-tell vocabulary (SKILL.md v2).
             'delve', 'leverage', 'seamless', 'seamlessly', 'robust', 'elevate',
             'meticulous', 'meticulously', 'tapestry', 'testament', 'realm',

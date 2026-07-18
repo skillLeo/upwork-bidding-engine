@@ -39,6 +39,7 @@ const form = reactive({
   ai_provider: props.settings.ai_provider ?? "anthropic",
   scoring_model: props.settings.scoring_model ?? "claude-haiku-4-5",
   proposal_model: props.settings.proposal_model ?? "claude-sonnet-5",
+  review_model: props.settings.review_model ?? "claude-sonnet-5",
   scoring_system_prompt: props.settings.scoring_system_prompt ?? "",
   proposal_skill: props.settings.proposal_skill ?? "",
   project_facts: props.settings.project_facts ?? "",
@@ -68,6 +69,9 @@ watch(
     }
     if (!list.some((m) => m.id === form.proposal_model)) {
       form.proposal_model = provider === "openai" ? "gpt-4o" : "claude-sonnet-5";
+    }
+    if (!list.some((m) => m.id === form.review_model)) {
+      form.review_model = provider === "openai" ? "gpt-4o" : "claude-sonnet-5";
     }
   },
 );
@@ -130,18 +134,33 @@ async function handleSave() {
         </div>
       </div>
 
-      <div>
-        <Label>Proposal model</Label>
-        <select
-          v-model="form.proposal_model"
-          class="h-10 w-full rounded-md border border-border-strong bg-white px-3 text-sm text-text-secondary focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none"
-        >
-          <option v-for="m in modelOptions" :key="m.id" :value="m.id">{{ m.label }}</option>
-        </select>
-        <FieldHint>
-          Only runs when the score clears your cutoff — below-cutoff leads never pay for a
-          proposal.
-        </FieldHint>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label>Proposal model</Label>
+          <select
+            v-model="form.proposal_model"
+            class="h-10 w-full rounded-md border border-border-strong bg-white px-3 text-sm text-text-secondary focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none"
+          >
+            <option v-for="m in modelOptions" :key="m.id" :value="m.id">{{ m.label }}</option>
+          </select>
+          <FieldHint>
+            Only runs when the score clears your cutoff — below-cutoff leads never pay for a
+            proposal.
+          </FieldHint>
+        </div>
+        <div>
+          <Label>Review model</Label>
+          <select
+            v-model="form.review_model"
+            class="h-10 w-full rounded-md border border-border-strong bg-white px-3 text-sm text-text-secondary focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none"
+          >
+            <option v-for="m in modelOptions" :key="m.id" :value="m.id">{{ m.label }}</option>
+          </select>
+          <FieldHint>
+            Grades every draft against your rules before it ships — keep this strong; a weak
+            model grading its own homework is how violations slip through.
+          </FieldHint>
+        </div>
       </div>
 
       <div class="grid gap-4 sm:grid-cols-2">

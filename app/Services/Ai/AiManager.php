@@ -172,15 +172,18 @@ class AiManager
     /**
      * Model IDs don't cross providers, so a failed-over call maps to the
      * secondary's equivalent tier: cheap-and-fast for scoring, stronger
-     * for proposals.
+     * for anything proposal-shaped (draft, review, revision, surgical fix
+     * all carry writing/judgment weight).
      */
     protected function equivalentModel(AiProvider $provider, string $purpose): string
     {
+        $strong = str_starts_with($purpose, 'proposal');
+
         if ($provider->name() === 'openai') {
-            return $purpose === 'proposal' ? 'gpt-4o' : 'gpt-4o-mini';
+            return $strong ? 'gpt-4o' : 'gpt-4o-mini';
         }
 
-        return $purpose === 'proposal' ? 'claude-sonnet-5' : 'claude-haiku-4-5';
+        return $strong ? 'claude-sonnet-5' : 'claude-haiku-4-5';
     }
 
     protected function provider(string $name): AiProvider
