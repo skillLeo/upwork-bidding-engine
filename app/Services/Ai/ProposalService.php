@@ -162,7 +162,7 @@ class ProposalService
      */
     protected function jobBlock(Lead $lead, array $scoring): string
     {
-        return $this->scoring->jobContent($lead)
+        return $this->scoring->jobContent($lead, 'JOB POST (write a proposal for this):')
             ."\n\nThis job scored {$scoring['score']}/10"
             .($scoring['reason'] !== '' ? " — {$scoring['reason']}" : '');
     }

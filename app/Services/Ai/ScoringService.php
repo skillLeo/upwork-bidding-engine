@@ -66,12 +66,14 @@ class ScoringService
 
     /**
      * The per-lead variable content. Kept AFTER the cached system block so
-     * the long rules prefix stays byte-identical across calls.
+     * the long rules prefix stays byte-identical across calls. The heading
+     * names the task: scoring keeps the default; the proposal writer passes
+     * its own so a writing call is never framed as a scoring call.
      */
-    public function jobContent(Lead $lead): string
+    public function jobContent(Lead $lead, string $heading = 'Score this Upwork job:'): string
     {
         $lines = [
-            'Score this Upwork job:',
+            $heading,
             '',
             'TITLE: '.$lead->title,
             'BUDGET: '.($lead->budget ?? 'not specified').($lead->budget_type ? " ({$lead->budget_type})" : ''),
