@@ -400,15 +400,6 @@ async function handleRegenerateProposal() {
         >
           {{ action.label }}
         </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          :disabled="regenLoading !== null || actionLoading !== null"
-          @click="handleRegenerateScore"
-        >
-          <RefreshCw :class="['h-3.5 w-3.5', regenLoading === 'score' && 'animate-spin']" />
-          {{ regenLoading === "score" ? "Scoring…" : "Re-score" }}
-        </Button>
       </div>
 
       <router-link

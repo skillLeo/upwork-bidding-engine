@@ -108,6 +108,24 @@ class ScoringStageTest extends TestCase
         );
     }
 
+    public function test_json_followed_by_commentary_is_still_parsed(): void
+    {
+        // Seen live on production: a fenced JSON object followed by
+        // "**Notes:** ..." prose. The parser must extract the object
+        // instead of burning the retry and failing the lead.
+        Http::fake([
+            'api.anthropic.com/*' => Http::response($this->anthropicResponse(
+                "```json\n{\"score\": 8, \"bid\": true, \"reason\": \"solid\", \"sub_scores\": {\"stack_fit\": 8}}\n```\n\n**Notes:**\n- Client quality is strong.",
+            )),
+        ]);
+
+        $result = app(ScoringService::class)->score(Lead::factory()->create());
+
+        $this->assertSame(8, $result['score']);
+        $this->assertSame(['stack_fit' => 8], $result['sub_scores']);
+        Http::assertSentCount(1);
+    }
+
     public function test_missing_or_malformed_sub_scores_never_fail_scoring(): void
     {
         Http::fake([

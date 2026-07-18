@@ -142,6 +142,18 @@ class ScoringService
 
         $data = json_decode($stripped, true);
 
+        if (! is_array($data)) {
+            // Models sometimes append commentary after the JSON (seen live:
+            // a fenced object followed by "**Notes:** ..."). Extract the
+            // outermost object before refusing.
+            $start = strpos($stripped, '{');
+            $end = strrpos($stripped, '}');
+
+            if ($start !== false && $end !== false && $end > $start) {
+                $data = json_decode(substr($stripped, $start, $end - $start + 1), true);
+            }
+        }
+
         if (! is_array($data) || ! isset($data['score']) || ! is_numeric($data['score'])) {
             return null;
         }
