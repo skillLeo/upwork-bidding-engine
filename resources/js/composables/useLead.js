@@ -48,6 +48,18 @@ export async function rescoreLead(id) {
   return res.data.data;
 }
 
+export async function regenerateLeadScore(id) {
+  // Synchronous rubric re-score (~3-5s) — generous timeout for cold runs.
+  const res = await apiClient.post(`/leads/${id}/regenerate-score`, null, { timeout: 60000 });
+  return res.data.data;
+}
+
+export async function regenerateLeadProposal(id) {
+  // Proposal writing runs ~15-25s server-side.
+  const res = await apiClient.post(`/leads/${id}/regenerate-proposal`, null, { timeout: 90000 });
+  return res.data.data;
+}
+
 export async function bulkUpdateLeadStatus(ids, status) {
   const res = await apiClient.post("/leads/bulk-status", { ids, status });
   return res.data.data;

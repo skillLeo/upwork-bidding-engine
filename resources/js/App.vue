@@ -3,6 +3,7 @@ import { computed, onMounted } from "vue";
 import { useRoute } from "vue-router";
 import { Toaster } from "vue-sonner";
 import NavBar from "@/components/layout/NavBar.vue";
+import AiProgressToast from "@/components/ui/AiProgressToast.vue";
 import { useBrandingStore } from "@/stores/branding";
 
 const route = useRoute();
@@ -16,6 +17,7 @@ onMounted(() => useBrandingStore().fetch());
   <main class="flex-1">
     <router-view />
   </main>
+  <AiProgressToast />
   <Toaster
     position="top-right"
     :toast-options="{

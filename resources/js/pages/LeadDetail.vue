@@ -11,13 +11,21 @@ import {
   Globe2,
   MessageSquare,
   RefreshCw,
+  Sparkles,
   ShieldCheck,
   ShieldOff,
   Star,
   Users,
   Wallet,
 } from "@lucide/vue";
-import { useLead, updateLeadStatus, rescoreLead } from "@/composables/useLead";
+import {
+  useLead,
+  updateLeadStatus,
+  rescoreLead,
+  regenerateLeadScore,
+  regenerateLeadProposal,
+} from "@/composables/useLead";
+import { startAiTask, finishAiTask, failAiTask } from "@/stores/aiProgress";
 import { useSavedFilters } from "@/composables/useSavedFilters";
 import PageContainer from "@/components/layout/PageContainer.vue";
 import Card from "@/components/ui/Card.vue";
@@ -117,6 +125,40 @@ async function handleCopy() {
   await navigator.clipboard.writeText(lead.value.proposal_text);
   toast.success("Proposal copied to clipboard.");
 }
+
+const regenLoading = ref(null);
+
+async function handleRegenerateScore() {
+  if (!lead.value || regenLoading.value) return;
+  regenLoading.value = "score";
+  startAiTask("Re-scoring under your rubric…", 5000);
+  try {
+    lead.value = await regenerateLeadScore(lead.value.id);
+    finishAiTask();
+    toast.success(`Re-scored: ${lead.value.score}/10.`);
+  } catch (error) {
+    failAiTask();
+    toast.error(apiErrorMessage(error, "Could not re-score."));
+  } finally {
+    regenLoading.value = null;
+  }
+}
+
+async function handleRegenerateProposal() {
+  if (!lead.value || regenLoading.value) return;
+  regenLoading.value = "proposal";
+  startAiTask("Writing your proposal…", 20000);
+  try {
+    lead.value = await regenerateLeadProposal(lead.value.id);
+    finishAiTask();
+    toast.success("Fresh proposal written under your rules.");
+  } catch (error) {
+    failAiTask();
+    toast.error(apiErrorMessage(error, "Could not write the proposal."));
+  } finally {
+    regenLoading.value = null;
+  }
+}
 </script>
 
 <template>
@@ -206,22 +248,75 @@ async function handleCopy() {
     </Card>
 
     <Card v-if="lead.score !== null" class="mt-4 p-6">
-      <div class="flex items-center gap-2">
-        <ScoreBadge :score="lead.score" />
-        <p class="text-sm font-semibold text-text-primary">Why this score</p>
-      </div>
-      <p class="mt-2 text-sm text-text-secondary">{{ lead.score_reason }}</p>
-    </Card>
-
-    <Card v-if="lead.proposal_text" class="mt-4 p-6">
-      <div class="flex items-center justify-between">
-        <p class="text-sm font-semibold text-text-primary">Proposal</p>
-        <Button variant="secondary" size="sm" @click="handleCopy">
-          <Copy class="h-3.5 w-3.5" /> Copy
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <ScoreBadge :score="lead.score" />
+          <p class="text-sm font-semibold text-text-primary">Why this score</p>
+          <span
+            v-if="lead.boost"
+            class="rounded-pill border border-success/30 bg-success/10 px-2 py-0.5 text-xs font-semibold text-success"
+          >
+            BOOST
+          </span>
+        </div>
+        <Button
+          variant="secondary"
+          size="sm"
+          :disabled="regenLoading !== null"
+          title="Re-score this lead under your current rubric"
+          @click="handleRegenerateScore"
+        >
+          <RefreshCw :class="['h-3.5 w-3.5', regenLoading === 'score' && 'animate-spin']" />
+          {{ regenLoading === "score" ? "Scoring…" : "Re-score" }}
         </Button>
       </div>
-      <p class="mt-3 rounded-md bg-neutral-bg p-4 text-sm whitespace-pre-wrap text-text-primary">
+      <p
+        :class="[
+          'mt-2 text-sm text-text-secondary transition-opacity',
+          regenLoading === 'score' && 'animate-pulse opacity-50',
+        ]"
+      >
+        {{ lead.score_reason }}
+      </p>
+    </Card>
+
+    <Card v-if="lead.proposal_text || lead.score !== null" class="mt-4 p-6">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <p class="text-sm font-semibold text-text-primary">Proposal</p>
+        <div class="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            :disabled="regenLoading !== null"
+            title="Write a fresh proposal under your rules"
+            @click="handleRegenerateProposal"
+          >
+            <RefreshCw v-if="regenLoading === 'proposal'" class="h-3.5 w-3.5 animate-spin" />
+            <Sparkles v-else class="h-3.5 w-3.5" />
+            {{
+              regenLoading === "proposal"
+                ? "Writing…"
+                : lead.proposal_text
+                  ? "Rewrite"
+                  : "Write proposal"
+            }}
+          </Button>
+          <Button v-if="lead.proposal_text" variant="secondary" size="sm" @click="handleCopy">
+            <Copy class="h-3.5 w-3.5" /> Copy
+          </Button>
+        </div>
+      </div>
+      <p
+        v-if="lead.proposal_text"
+        :class="[
+          'mt-3 rounded-md bg-neutral-bg p-4 text-sm whitespace-pre-wrap text-text-primary transition-opacity',
+          regenLoading === 'proposal' && 'animate-pulse opacity-50',
+        ]"
+      >
         {{ lead.proposal_text }}
+      </p>
+      <p v-else class="mt-3 rounded-md bg-neutral-bg p-4 text-sm text-text-tertiary">
+        No proposal yet — click "Write proposal" to draft one under your rules.
       </p>
     </Card>
 

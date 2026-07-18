@@ -480,6 +480,50 @@ class LeadController extends Controller
         return response()->json(['data' => ['message' => "{$count} lead".($count === 1 ? '' : 's')." updated.", 'count' => $count]]);
     }
 
+    /**
+     * Synchronous re-score under the settings-held rubric — updates the
+     * score fields in place (status untouched, no notifications), so the
+     * UI can show the fresh verdict immediately.
+     */
+    public function regenerateScore(Lead $lead, \App\Services\Ai\ScoringService $aiScoring): JsonResponse
+    {
+        $result = $aiScoring->score($lead);
+
+        $lead->update([
+            'score' => $result['score'],
+            'score_reason' => $result['reason'],
+            'boost' => $result['boost'],
+        ]);
+
+        ActivityLog::record(ActivityType::LeadScored, subject: $lead, meta: [
+            'score' => $result['score'],
+            'boost' => $result['boost'],
+            'manual' => true,
+        ]);
+
+        return response()->json(['data' => new LeadResource($lead->fresh())]);
+    }
+
+    /**
+     * Synchronous fresh proposal under the settings-held guide, using the
+     * lead's current score as context. Runs ~15s — the SPA shows a
+     * non-blocking progress toast while it writes.
+     */
+    public function regenerateProposal(Lead $lead, \App\Services\Ai\ProposalService $proposals): JsonResponse
+    {
+        $result = $proposals->write($lead, [
+            'score' => $lead->score ?? 7,
+            'boost' => (bool) $lead->boost,
+            'reason' => (string) $lead->score_reason,
+        ]);
+
+        $lead->update(['proposal_text' => $result['text']]);
+
+        ActivityLog::record('proposal_regenerated', subject: $lead);
+
+        return response()->json(['data' => new LeadResource($lead->fresh())]);
+    }
+
     public function rescore(Lead $lead): JsonResponse
     {
         $lead->update([
