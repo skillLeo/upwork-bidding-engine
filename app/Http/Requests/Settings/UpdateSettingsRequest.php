@@ -36,6 +36,17 @@ class UpdateSettingsRequest extends FormRequest
             'openclaw_token' => ['sometimes', 'nullable', 'string', 'max:500'],
             'ai_engine_enabled' => ['sometimes', 'boolean'],
 
+            // Direct AI layer (Anthropic/OpenAI APIs)
+            'ai_provider' => ['sometimes', 'string', 'in:anthropic,openai'],
+            'anthropic_api_key' => ['sometimes', 'nullable', 'string', 'max:300'],
+            'openai_api_key' => ['sometimes', 'nullable', 'string', 'max:300'],
+            'scoring_model' => ['sometimes', 'string', 'max:100'],
+            'proposal_model' => ['sometimes', 'string', 'max:100'],
+            // The long, operator-pasted rule blocks — the whole point is
+            // that these are editable text, so the ceiling is generous.
+            'scoring_system_prompt' => ['sometimes', 'nullable', 'string', 'max:60000'],
+            'proposal_system_prompt' => ['sometimes', 'nullable', 'string', 'max:60000'],
+
             // WhatsApp — sent via OpenClaw, no Meta token/phone ID needed
             'bidder_whatsapp' => ['sometimes', 'nullable', 'string', 'max:30'],
 

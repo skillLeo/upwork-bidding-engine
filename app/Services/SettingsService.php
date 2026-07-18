@@ -64,6 +64,19 @@ class SettingsService
         // to message. openclaw_url/openclaw_token above do the connecting.
         'bidder_whatsapp' => ['group' => 'whatsapp', 'secret' => true, 'default' => ''],
 
+        // Direct AI layer — scoring/proposals via the Anthropic (or OpenAI)
+        // API from Laravel itself, no OpenClaw hop. The system prompts are
+        // deliberately settings, not code: the operator pastes and tunes
+        // their own rules in the browser, no redeploy. Model IDs verified
+        // against the current model catalog — don't add guessed IDs here.
+        'ai_provider' => ['group' => 'ai', 'secret' => false, 'default' => 'anthropic'],
+        'anthropic_api_key' => ['group' => 'ai', 'secret' => true, 'default' => ''],
+        'openai_api_key' => ['group' => 'ai', 'secret' => true, 'default' => ''],
+        'scoring_model' => ['group' => 'ai', 'secret' => false, 'default' => 'claude-haiku-4-5'],
+        'proposal_model' => ['group' => 'ai', 'secret' => false, 'default' => 'claude-sonnet-5'],
+        'scoring_system_prompt' => ['group' => 'ai', 'secret' => false, 'default' => ''],
+        'proposal_system_prompt' => ['group' => 'ai', 'secret' => false, 'default' => ''],
+
         // Mail — SMTP creds configured here instead of .env so they can be
         // changed without a redeploy. Applied at runtime in
         // AppServiceProvider::boot(); .env's MAIL_MAILER=log stays as the
@@ -92,7 +105,7 @@ class SettingsService
         'max_posted_age_days' => ['group' => 'rules', 'secret' => false, 'default' => 7],
     ];
 
-    public const SERVICES = ['vollna', 'openclaw', 'whatsapp', 'mail'];
+    public const SERVICES = ['vollna', 'openclaw', 'whatsapp', 'mail', 'anthropic', 'openai'];
 
     /**
      * All settings, decrypted, keyed by setting key. Cached forever;

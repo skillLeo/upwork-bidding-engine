@@ -6,6 +6,7 @@ import BrandingSection from "@/components/settings/BrandingSection.vue";
 import DiagnosticsSection from "@/components/settings/DiagnosticsSection.vue";
 import VollnaSection from "@/components/settings/VollnaSection.vue";
 import OpenClawSection from "@/components/settings/OpenClawSection.vue";
+import AiApiSection from "@/components/settings/AiApiSection.vue";
 import WhatsAppSection from "@/components/settings/WhatsAppSection.vue";
 import MailSection from "@/components/settings/MailSection.vue";
 import RulesSection from "@/components/settings/RulesSection.vue";
@@ -30,6 +31,7 @@ const { settings, isLoading, refetch } = useSettings();
     <DiagnosticsSection />
     <VollnaSection :settings="settings.vollna" @saved="refetch" />
     <OpenClawSection :settings="settings.openclaw" @saved="refetch" />
+    <AiApiSection :settings="settings.ai" @saved="refetch" />
     <WhatsAppSection :settings="settings.whatsapp" @saved="refetch" />
     <MailSection :settings="settings.mail" @saved="refetch" />
     <RulesSection :settings="settings.rules" @saved="refetch" />

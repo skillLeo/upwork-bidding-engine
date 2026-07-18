@@ -132,6 +132,16 @@ class SettingsController extends Controller
             'whatsapp' => $openClaw->testWhatsAppConnection(),
             'vollna' => $this->testVollna(),
             'mail' => $this->testMail($request),
+            'anthropic' => $this->testAiProvider(
+                'https://api.anthropic.com/v1/models',
+                ['x-api-key' => (string) $this->settings->get('anthropic_api_key'), 'anthropic-version' => '2023-06-01'],
+                filled($this->settings->get('anthropic_api_key')),
+            ),
+            'openai' => $this->testAiProvider(
+                'https://api.openai.com/v1/models',
+                ['Authorization' => 'Bearer '.$this->settings->get('openai_api_key')],
+                filled($this->settings->get('openai_api_key')),
+            ),
         };
 
         ActivityLog::record(
@@ -141,6 +151,34 @@ class SettingsController extends Controller
         );
 
         return response()->json(['data' => $result]);
+    }
+
+    /**
+     * Cheapest possible auth check for an AI provider: GET /v1/models
+     * costs no tokens and fails fast on a bad/revoked key.
+     *
+     * @param  array<string, string>  $headers
+     * @return array{success: bool, message: string}
+     */
+    protected function testAiProvider(string $url, array $headers, bool $keySet): array
+    {
+        if (! $keySet) {
+            return ['success' => false, 'message' => 'No API key configured yet.'];
+        }
+
+        try {
+            $response = \Illuminate\Support\Facades\Http::withHeaders($headers)->timeout(15)->get($url);
+
+            if ($response->successful()) {
+                return ['success' => true, 'message' => 'API key works — models endpoint responded OK.'];
+            }
+
+            return ['success' => false, 'message' => "Provider responded with HTTP {$response->status()} — check the API key."];
+        } catch (\Throwable $e) {
+            report($e);
+
+            return ['success' => false, 'message' => 'Could not reach the provider.'];
+        }
     }
 
     /**
