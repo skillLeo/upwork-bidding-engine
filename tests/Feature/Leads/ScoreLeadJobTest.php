@@ -29,6 +29,9 @@ class ScoreLeadJobTest extends TestCase
             'max_proposals' => 25,
             'min_budget' => 150,
             'anthropic_api_key' => 'sk-ant-test',
+            // The quality gate (draft → review → revise) has its own test
+            // file; here it would only add nondeterministic extra calls.
+            'proposal_quality_gate' => false,
             'scoring_system_prompt' => 'THE RUBRIC: score jobs 1-10, output JSON.',
             'proposal_system_prompt' => 'THE GUIDE: write the proposal, plain text.',
         ]);

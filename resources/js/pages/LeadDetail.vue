@@ -147,7 +147,8 @@ async function handleRegenerateScore() {
 async function handleRegenerateProposal() {
   if (!lead.value || regenLoading.value) return;
   regenLoading.value = "proposal";
-  startAiTask("Writing your proposal…", 20000);
+  // Draft + rule review + possible auto-revision — longer than a plain draft.
+  startAiTask("Writing & rule-checking your proposal…", 40000);
   try {
     lead.value = await regenerateLeadProposal(lead.value.id);
     finishAiTask();

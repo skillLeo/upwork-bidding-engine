@@ -55,8 +55,8 @@ export async function regenerateLeadScore(id) {
 }
 
 export async function regenerateLeadProposal(id) {
-  // Proposal writing runs ~15-25s server-side.
-  const res = await apiClient.post(`/leads/${id}/regenerate-proposal`, null, { timeout: 90000 });
+  // Draft + AI rule-review + up to 2 auto-revisions runs ~30-70s server-side.
+  const res = await apiClient.post(`/leads/${id}/regenerate-proposal`, null, { timeout: 150000 });
   return res.data.data;
 }
 

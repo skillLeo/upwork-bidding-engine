@@ -2,6 +2,8 @@
 import { ref, reactive, computed, watch } from "vue";
 import { toast } from "vue-sonner";
 import Card from "@/components/ui/Card.vue";
+import Input from "@/components/ui/Input.vue";
+import TagInput from "@/components/ui/TagInput.vue";
 import CardHeader from "@/components/ui/CardHeader.vue";
 import CardTitle from "@/components/ui/CardTitle.vue";
 import CardContent from "@/components/ui/CardContent.vue";
@@ -39,6 +41,12 @@ const form = reactive({
   proposal_model: props.settings.proposal_model ?? "claude-sonnet-5",
   scoring_system_prompt: props.settings.scoring_system_prompt ?? "",
   proposal_system_prompt: props.settings.proposal_system_prompt ?? "",
+  proposal_quality_gate: props.settings.proposal_quality_gate ?? true,
+  proposal_min_words: props.settings.proposal_min_words ?? 110,
+  proposal_max_words: props.settings.proposal_max_words ?? 180,
+  proposal_signature: props.settings.proposal_signature ?? "",
+  proposal_required_phrases: [...(props.settings.proposal_required_phrases ?? [])],
+  proposal_banned_phrases: [...(props.settings.proposal_banned_phrases ?? [])],
 });
 const saving = ref(false);
 
@@ -179,6 +187,63 @@ async function handleSave() {
           class="font-mono text-xs"
           placeholder="Paste your full proposal-writing rules here — the 225-character preview rule, opening patterns, banned phrases, self-check."
         />
+      </div>
+
+      <div class="space-y-4 rounded-md border border-border bg-neutral-bg/50 p-4">
+        <div>
+          <label
+            class="flex items-center gap-2 text-sm font-semibold text-text-primary select-none"
+          >
+            <input
+              type="checkbox"
+              v-model="form.proposal_quality_gate"
+              class="h-4 w-4 rounded border-border-strong text-primary focus:ring-primary/20"
+            />
+            Proposal quality gate
+          </label>
+          <FieldHint>
+            Every proposal is mechanically checked (banned phrases, word count, signature,
+            required elements, contact info) AND re-reviewed by the AI against your full rules,
+            then revised up to 2 times until it complies. Turn off to accept first drafts as-is.
+          </FieldHint>
+        </div>
+
+        <div class="grid gap-4 sm:grid-cols-3">
+          <div>
+            <Label>Min words</Label>
+            <Input type="number" v-model.number="form.proposal_min_words" />
+          </div>
+          <div>
+            <Label>Max words</Label>
+            <Input type="number" v-model.number="form.proposal_max_words" />
+          </div>
+          <div>
+            <Label>Must end with</Label>
+            <Input v-model="form.proposal_signature" placeholder="Hassam" />
+            <FieldHint>First name alone on the last line. Leave empty to skip.</FieldHint>
+          </div>
+        </div>
+
+        <div>
+          <Label>Required elements</Label>
+          <TagInput
+            v-model="form.proposal_required_phrases"
+            placeholder="Add a phrase every proposal must contain…"
+          />
+          <FieldHint>e.g. "Done =" — the mini-plan's finished-outcome definition.</FieldHint>
+        </div>
+
+        <div>
+          <Label>Banned words &amp; phrases</Label>
+          <TagInput
+            v-model="form.proposal_banned_phrases"
+            placeholder="Add a banned word or phrase…"
+          />
+          <FieldHint>
+            AI-tell vocabulary, clichés, and the em dash (—). Single words match whole words
+            only; phrases match anywhere. A draft containing any of these is auto-revised.
+          </FieldHint>
+        </div>
       </div>
 
       <div class="flex justify-end">

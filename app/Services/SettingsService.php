@@ -77,6 +77,41 @@ class SettingsService
         'scoring_system_prompt' => ['group' => 'ai', 'secret' => false, 'default' => ''],
         'proposal_system_prompt' => ['group' => 'ai', 'secret' => false, 'default' => ''],
 
+        // Proposal quality gate — every generated proposal is mechanically
+        // linted (banned phrases, word count, signature, required phrases)
+        // AND re-read by the model against the full rules, then revised
+        // until it complies. The gate's data lives here, not in code, so
+        // the operator can tune it in the browser like the prompts above.
+        // Defaults seeded from SKILL.md v2 in docs/ai-rules.
+        'proposal_quality_gate' => ['group' => 'ai', 'secret' => false, 'default' => true],
+        'proposal_min_words' => ['group' => 'ai', 'secret' => false, 'default' => 110],
+        'proposal_max_words' => ['group' => 'ai', 'secret' => false, 'default' => 180],
+        'proposal_signature' => ['group' => 'ai', 'secret' => false, 'default' => 'Hassam'],
+        'proposal_required_phrases' => ['group' => 'ai', 'secret' => false, 'default' => ['Done =']],
+        'proposal_banned_phrases' => ['group' => 'ai', 'secret' => false, 'default' => [
+            // Em/en dashes — the #1 AI tell the operator flagged.
+            '—', '–',
+            // AI-tell vocabulary (SKILL.md v2).
+            'delve', 'leverage', 'seamless', 'seamlessly', 'robust', 'elevate',
+            'meticulous', 'meticulously', 'tapestry', 'testament', 'realm',
+            'landscape', 'unlock', 'unleash', 'harness', 'navigate', 'navigating',
+            'dive into', 'deep dive', 'game-changer', 'cutting-edge',
+            'state-of-the-art', 'synergy', 'synergize', 'streamline', 'empower',
+            'foster', 'bolster', 'in today\'s fast-paced world', 'ever-evolving',
+            'holistic',
+            // Banned sentence starts.
+            'Moreover,', 'Furthermore,', 'Additionally,', 'In conclusion,',
+            // Banned clichés / openers.
+            'Dear Sir', 'To whom it may concern', 'I hope this message finds you well',
+            'I hope you are doing well', 'I am writing to apply',
+            'I came across your job posting', 'I am the best fit',
+            'best fit for this role', 'Kindly', 'I am excited to', 'I am thrilled',
+            'Greetings', 'Hello there', 'As an experienced professional',
+            'Please let me know if you\'re interested',
+            'Looking forward to your positive response', 'I am not a bot',
+            'I guarantee', 'you won\'t find better', '100% satisfaction',
+        ]],
+
         // Mail — SMTP creds configured here instead of .env so they can be
         // changed without a redeploy. Applied at runtime in
         // AppServiceProvider::boot(); .env's MAIL_MAILER=log stays as the
@@ -300,6 +335,24 @@ class SettingsService
         $path = $this->get('app_logo_path');
 
         return $path ? Storage::disk('public')->url($path) : null;
+    }
+
+    /**
+     * The proposal quality gate's mechanical checklist — like the prompts,
+     * this is operator data, not code.
+     *
+     * @return array{enabled: bool, min_words: int, max_words: int, signature: string, required_phrases: array<int, string>, banned_phrases: array<int, string>}
+     */
+    public function proposalGate(): array
+    {
+        return [
+            'enabled' => (bool) $this->get('proposal_quality_gate', true),
+            'min_words' => (int) $this->get('proposal_min_words'),
+            'max_words' => (int) $this->get('proposal_max_words'),
+            'signature' => trim((string) $this->get('proposal_signature')),
+            'required_phrases' => array_values(array_filter(array_map('trim', (array) $this->get('proposal_required_phrases')))),
+            'banned_phrases' => array_values(array_filter(array_map('trim', (array) $this->get('proposal_banned_phrases')))),
+        ];
     }
 
     /**

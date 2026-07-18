@@ -25,6 +25,9 @@ class VollnaWebhookTest extends TestCase
             'anthropic_api_key' => 'sk-ant-test',
             'scoring_system_prompt' => 'THE RUBRIC',
             'proposal_system_prompt' => 'THE GUIDE',
+            // The quality gate (draft → review → revise) has its own test
+            // file; here it would only add nondeterministic extra calls.
+            'proposal_quality_gate' => false,
             'openclaw_url' => 'https://openclaw.test',
             'openclaw_token' => 'token',
             'bidder_whatsapp' => '+15550001111',

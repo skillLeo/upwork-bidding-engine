@@ -24,6 +24,15 @@ class ScoreLeadJob implements ShouldQueue
     public int $tries = 3;
 
     /**
+     * Scoring + a quality-gated proposal (draft, review, up to two
+     * revisions) can legitimately run past the queue worker's 60s
+     * default — this job-level timeout overrides it. Must stay below
+     * the queue connection's retry_after so a slow-but-alive run is
+     * never handed to a second worker.
+     */
+    public int $timeout = 240;
+
+    /**
      * $inline marks the synchronous first attempt made during the webhook
      * request itself. Its failure must NOT run the final-failure treatment
      * (needs_review + operator alert) because the importer immediately

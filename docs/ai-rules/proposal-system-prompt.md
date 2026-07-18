@@ -544,6 +544,327 @@ What Hassam should never send:
 
 ---
 
+# ADDENDUM — TOP 1% TECHNIQUES + SKILL.md v2 (added 2026-07, follow completely)
+
+Everything in the guide above stays true. This addendum adds the master-craft layer on top of it. Where SKILL.md v2 (Part B below) conflicts with the earlier SKILL sections above (word count, structure, banned lists), **SKILL.md v2 WINS — it is the operative drafting procedure for every proposal.** Every rule in this addendum is mandatory.
+
+**TL;DR**
+- The genuinely new layer beyond the existing report is line-level momentum engineering (Sugarman's slippery slide), matching your opener to the job post's awareness stage (Schwartz), and writing so both Uma's AI evaluator and a human client are satisfied in the same 120–200 words. These are craft upgrades, not reply-rate miracles.
+- Since May 5, 2026, Uma Recruiter reads your proposal text and screening answers first and builds the client's shortlist; the human still sees only your first two or three sentences in the list. Write requirement-dense openings that also read human.
+- Honest expectation: the 13–17% top-quartile reply ceiling stands. These techniques mainly help you reach that ceiling more consistently. Speed, targeting, and profile do more of the heavy lifting than any single sentence trick.
+
+---
+
+## PART A — THE TEACHING DOCUMENT (ADDENDUM)
+
+### 0. What this addendum is and is not
+
+Everything in the existing report stays true. This document adds only the "master craft" layer: the specific mechanics elite direct-response copywriters use to force a reader down the page, the cognitive science of how a rushed client picks among 30 proposals, what genuinely top Upwork earners do that goes past "personalize your hook," and what actually changed on Upwork in 2026. Treat every reply-rate figure here as directional and mostly vendor-reported. None of these techniques will double your replies. They exist to help a zero-review account punch at the level its work deserves.
+
+### 1. The slippery slide: line-level momentum architecture
+
+Joe Sugarman, the direct-response copywriter behind the BluBlocker sunglasses campaign, built his craft on one rule: "The sole purpose of the first sentence is to get you to read the second sentence." Every element exists only to pull the reader one line further, "as if sliding down a slippery slide." This is the single most useful import for these proposals, because on Upwork you are not writing an essay — you are trying to survive sentence by sentence until the client clicks Read More and then messages you.
+
+The psychology: reading is effortful, and a busy client is looking for a reason to stop. Momentum is the default-killer. If line two answers a question line one raised while quietly opening a new one, the reader has no natural exit point. Sugarman's "greased chute" works because each sentence is short, one idea only, and ends with just enough incompleteness to make stopping feel unnatural. He called the small connective cues "seeds of curiosity": "Let me explain," "Here's the part that matters," "But there's a catch."
+
+How it adapts to a 120–200 word proposal: you have roughly four to seven sentences of real estate. Each one must earn the next. The structure the existing report already uses (hook / one matched proof / mini-plan with "Done =" / one closing question) is the skeleton; the slippery slide is how you connect the vertebrae so there are no dead stops.
+
+Worked example (Odoo migration job, client says "we're moving from spreadsheets/legacy to Odoo and scared of losing data"):
+
+> "Data loss in the cutover is the part that keeps these migrations up at night, not the Odoo config itself.
+> I've moved production datasets into Odoo over XML-RPC where a single mismatched field would have corrupted thousands of records.
+> The way I avoid that: a dry-run migration into a staging database first, reconcile record counts against your source, then cut over only once the numbers match exactly.
+> Done = every record in Odoo, counts reconciled, and a rollback path if anything looks off.
+> Quick question — is your legacy data coming from one system, or several that need merging first?"
+
+Notice each line hands off to the next. Line one names the fear; line two proves you've lived it; line three resolves the fear with a method; line four defines the finish; line five opens a loop the client wants to close by replying. (In actual proposals, replace that em dash in the closing line with a comma or period — SKILL.md v2 enforces this.)
+
+### 2. Enter the conversation already in the client's head (Robert Collier)
+
+Collier's most-quoted principle, from The Robert Collier Letter Book: "Always enter the conversation already taking place in the customer's mind." The client posting an Odoo job is not thinking "I want a full-stack developer." They are thinking "will this break my accounting?" or "the last dev ghosted me." Your opener should sound like the next sentence of the monologue already running in their head, not the first sentence of a stranger's pitch.
+
+Why it works psychologically: it collapses the distance between you and the reader. Instead of you announcing yourself, you appear as someone who already understands the situation. On Upwork this is the difference between "I'm a senior Laravel developer with 6 years of experience" (your monologue) and "The tricky part of a guard-management app is the offline case — guards patrol where there's no signal, and the check-ins still have to sync cleanly later" (their monologue). The second uses the PatrolTick experience without ever saying "I built PatrolTick."
+
+### 3. Diagnose the awareness stage (Eugene Schwartz)
+
+Schwartz's five stages of market awareness, from Breakthrough Advertising (1966), are the most useful diagnostic you can run on a job post before writing a word. The five stages: Unaware, Problem-Aware, Solution-Aware, Product-Aware, Most-Aware. Schwartz's rule: "The more aware your market, the easier the selling job, the less you need to say." Match your opener to where the client already sits.
+
+For Upwork, ignore "Unaware" (a client who posts a job already knows they have a problem). The four that matter:
+
+- **Problem-Aware**: The post describes pain but no solution. "Our inventory spreadsheets are a mess and orders keep getting lost." They don't know Odoo, or don't know it's the fix. Your opener should name the problem sharply and gesture at the category of solution, not lead with tech jargon. Lead with the pain, introduce the approach second.
+- **Solution-Aware**: They know the type of fix but not who. "We need someone to set up an ERP, considering Odoo or ERPNext." Your opener should take a position on the solution and show comparative judgment: why Odoo fits their described case, or an honest caveat.
+- **Product-Aware**: They've named the exact tech. "Need Odoo XML-RPC data migration from legacy MySQL." They know what they want; they're deciding who's competent. Your opener should be pure competence signal — the specific technical risk and how you handle it. No education needed.
+- **Most-Aware**: They've basically decided and want confirmation, price, or availability. "Looking for a Laravel dev for ongoing work, must know Vue, start Monday." Keep it short, confirm fit, answer the operational question (availability), close fast. Over-explaining here loses you the job.
+
+Worked example of matching, same nominal skill (Laravel), different stages:
+
+Problem-Aware post ("customers abandon our checkout, don't know why"):
+> "Checkout drop-off is usually three or four fixable things stacked together, not one big bug — slow payment calls, a form asking for too much, no error feedback."
+
+Product-Aware post ("Laravel + Stripe, fix failed webhook handling on subscription renewals"):
+> "Failed renewal webhooks almost always trace to idempotency and retry handling — Stripe resends events, and if the handler isn't idempotent you get double-charges or missed state changes. I've wired Stripe into Laravel billing on My EXtreme Trainer."
+
+The second says almost nothing about the problem because the client already owns it. It spends every word on proof.
+
+### 4. Gary Halbert's A-pile / B-pile
+
+Halbert taught that people sort mail into two piles: the A-pile (things they want to open) and the B-pile (obvious junk, discarded unread). Your first line decides which pile you land in before the client reads anything else. Given Uma now truncates your proposal to the first two or three sentences in the client's list, this is literally true on Upwork: the snippet is the envelope. A B-pile opener ("I hope this message finds you well," "I am writing to apply") gets archived unread no matter how good sentence four is.
+
+The practical rule: your first sentence must be impossible to have written for any other job. If you could paste it into a different client's proposal unchanged, it's a B-pile line.
+
+### 5. Gary Bencivenga: never make a claim bigger than your proof
+
+Bencivenga, widely called the most effective living direct-response copywriter, is the "king of proof." His rule for believability: "Never make your claims bigger than your proof." His persuasion equation frames it as Urgent Problem + Unique Promise + Unquestionable Proof + User-friendly Proposition + Urgency of Purchase. For a zero-review Upwork account this is the single most important discipline, because you have no ratings to borrow credibility from. Every claim must be immediately backed by something concrete and checkable.
+
+This is why specificity beats adjectives. "I'm an experienced Flutter developer" is a claim with no proof. "I built iiBSOOR, a Somali e-commerce app in Flutter with a Laravel backend, including the RTL Arabic layout and offline cart" is proof that implies the claim. The client infers your experience instead of being told it. Claude Hopkins put it a century ago in Scientific Advertising: "Platitudes and generalities roll off the human understanding like water from a duck." He demanded "specific facts" instead. The real projects are the proof arsenal. Never describe yourself; describe what you built.
+
+### 6. David Ogilvy: inform, don't persuade; be specific and concise
+
+Ogilvy's relevant lessons: "The more informative your advertising, the more persuasive it will be," and "Use short words, short sentences, short paragraphs." His most famous line ("At 60 miles an hour the loudest noise in this new Rolls-Royce comes from the electric clock") sells by specific fact, not adjective. For proposals: a concrete technical observation about the client's project ("your described sync-on-reconnect requirement is the hard part") does more persuading than any amount of "I'm passionate and detail-oriented." Inform the client of something true and useful about their own project, and competence is proven by the act of informing.
+
+### 7. Open loops and the Zeigarnik effect
+
+The Zeigarnik effect (Bluma Zeigarnik, 1927): people remember and mentally fixate on incomplete tasks far more than completed ones. The brain hates an open loop. This is the mechanism underneath the slippery slide and behind why a question-opener outperforms a statement. When your proposal ends on a specific question ("is your legacy data in one system or several?"), you've opened a loop in the client's mind that only a reply can close. When your opener poses a diagnosis that the next line resolves, you're using the same tension at sentence level.
+
+Ethical boundary: open loops must be real, not clickbait. "You're making one mistake with your API integration…" followed by nothing useful is manipulative and will read as such. The loop must be genuine curiosity tied to genuine value.
+
+### 8. The "so what?" test
+
+Every experienced copywriter runs it: after each sentence, ask "so what?" from the client's chair. If the sentence doesn't survive — if the honest answer is "who cares" — cut it. "I have 6 years of experience." So what? Cut, or convert to proof: "I've shipped healthcare and fintech platforms end to end." Run the "so what?" test on every line of a draft. Most weak proposals are 60% sentences that fail it.
+
+### 9. The client's decision psychology at the moment of shortlisting
+
+Clients don't read proposals; they triage them under time pressure, often 20–50 at once. The cognitive science of that moment:
+
+- **Processing fluency**: information that's easy to process feels more true and more trustworthy. Daniel Oppenheimer's Ig Nobel–winning study ("Consequences of erudite vernacular utilized irrespective of necessity," Applied Cognitive Psychology, 2006, conducted at Stanford) found a negative relationship between needless text complexity and judged intelligence of the author, mediated by processing fluency — simpler writing made authors seem smarter. Practical move: short sentences, plain words, clean structure, zero jargon that isn't the client's own jargon. A proposal that's effortless to read feels like it came from someone who's effortless to work with. This is also why AI-bloat vocabulary hurts you twice — it's both a robot-tell and a fluency-killer.
+- **Primacy effect and first impressions**: in hiring, initial information carries disproportionate weight and gets "locked in." Recruiter research repeatedly finds first impressions form in seconds and then drive confirmation bias — the reader spends the rest of the proposal looking for reasons to confirm the snap judgment. On Upwork the snippet is that snap judgment. A strong first line flips the client into "find reasons to shortlist" mode; a weak one into "find reasons to archive."
+- **Halo effect**: one strong signal (a precisely relevant project, an exactly-right technical observation) colors the client's read of everything else. The best move for a zero-review account is to manufacture a legitimate halo with one tightly-matched proof, rather than spreading thin across the whole stack.
+- **Labor illusion**: visible effort raises perceived value. A proposal that obviously took thought — a specific diagnosis, a tailored mini-plan — signals care even before any work starts. This is why a three-point teardown of the client's problem out-converts a generic pitch: the effort is visible.
+- **The pratfall effect**: this is the subtle one. Aronson, Willerman and Floyd's 1966 experiment ("The effect of a pratfall on increasing interpersonal attractiveness," Psychonomic Science) used a confederate portrayed as highly competent (92% of quiz questions correct) or mediocre (30% correct); a clumsy coffee-spill blunder *raised* the competent person's attractiveness but dropped the average person's rating from +17.8 to −2.5, a 20.3-point fall. The condition is strict: competence must be established first. For proposals this validates the "mild imperfection" rule in the existing anti-AI ruleset — a slightly informal aside, a small admission ("I'd want to see the current schema before promising a timeline") humanizes a clearly expert message. But it only works after competence is proven, and the imperfection must be minor. Never manufacture a flaw. Never admit incompetence. A zero-review account has thin competence margin, so use this sparingly.
+- **Risk aversion**: hiring an unknown is scary. Everything that reduces perceived risk (a concrete plan, a defined "Done =", a clarifying question that shows you won't run off in the wrong direction) beats everything that adds excitement. Clients aren't buying upside; they're avoiding downside.
+- **Time pressure changes evaluation**: under load, clients lean harder on fluency and primacy and shortcut everything else. The rushed client is the default client. Write for someone deciding in eight seconds.
+
+### 10. What the actual top 1% do differently
+
+Cutting through recycled blog spam, the credible practitioner signal (six-figure Upwork earners like Morgan Overholt at $600k+, Danny Margulies of Freelance to Win who reviewed tens of thousands of proposals, and the freelancer behind the $158,500 single-contract case study) converges on a few things that genuinely go beyond "personalize your hook":
+
+- **They flip the ratio: ~80% about the client, ~20% about themselves.** New freelancers write resumes. Top earners write about the client's situation and slot proof in as evidence, never as biography. Margulies frames it as answering the client's three invisible questions: can you do the job, will you do it well, and are you low-risk to work with.
+- **They target ruthlessly and apply fast.** The near-universal theme in credible teardowns and in GigRadar's pipeline data (vendor-sourced, 133,872 proposals Dec 2025–Feb 2026) is that job selection and speed matter more than proposal wording. GigRadar reports a sub-5-minute bid carries a large reply lift and that the same template attached to different freelancer profiles gets very different reply rates. Interpretation: a great proposal on a bad-fit or stale job loses to a decent proposal on a fresh, well-matched one. This means niche discipline (Odoo and Laravel first) beats spraying across the whole stack.
+- **They demonstrate instead of assert ("show, don't tell").** The strongest single tactic in the practitioner literature is delivering a sliver of the work inside the proposal — a specific diagnosis, a short plan, a spotted risk. The devta.so case (a developer who pasted a client's brief, generated a clear plan with tech stack, timeline and build breakdown, then sent it with a short human note) had the client say the proposal stood out from all others and effectively decided before the call. This is the labor illusion and proof principles combined. The equivalent here: a two or three line technical read of their actual problem.
+- **They use the presumptive close.** Morgan Overholt and others end assuming forward motion ("looking forward to hearing what you decide on the data source") rather than begging ("please let me know if you're interested"). It signals confidence without arrogance.
+- **They keep it short.** The six-figure sample proposals repeatedly land at 80–120 words. Career Sidekick's documented winning proposals were 83, 91, 87, 116, 87 words. The 120–200 range is defensible for technical work where a mini-plan adds value, but lean toward the low end and cut everything that fails the "so what?" test.
+
+### 11. Elite cold outreach mechanics, adapted to Upwork
+
+A proposal is a cold message to a stranger, so SDR/cold-email craft transfers directly. The current benchmark reality: Instantly's 2026 Cold Email Benchmark Report puts the platform-wide average reply rate at 3.43%, with top performers exceeding 10% and tightly-targeted, signal-based outreach reaching 15–25% (Reachoutly reports moving from 7% to ~20% after switching to signal-based outreach). It's volume-independent: it comes from relevance, not send count. The transferable mechanics:
+
+- **The one-sentence relevance bridge.** Top cold-email writers open with one specific observed signal, then immediately bridge to why it matters: "I noticed X. Teams at that stage usually hit Y." On Upwork the "signal" is a specific detail in the job post, and the bridge is the technical consequence you can foresee. This is the highest-leverage single move: it proves you read the brief AND that you understand the domain.
+- **70/30 balance.** Roughly 70% of the message carries your core value, 30% is the personalization. Don't let a clever opener crowd out the reason you're a fit.
+- **Results, not features.** "Our clients see X" beats "we offer X." Here: "the guard app I built syncs offline check-ins cleanly on reconnect" beats "I know Flutter and PostgreSQL."
+- **One low-friction CTA.** Cold-email reply rates collapse when there are multiple asks. One clear, easy question. On Upwork this is forced anyway (no links to calls, no contact info) — so make the single question genuinely easy and specific.
+- **Brevity forces clarity.** Instantly's 2026 data notes elite performers average fewer than 80 words per first-touch email. These proposals carry a mini-plan so they run longer, but the instinct — cut anything that doesn't earn its place — is the same.
+- **Plain, human register.** The whole industry has moved to plain-text, "written on a phone in 60 seconds" tone because polished marketing language now signals spam. This directly reinforces the anti-AI ruleset.
+
+The Upwork constraint that breaks the cold-email playbook: you cannot offer to "book a 15-minute call" with a link, cannot drop contact info, cannot move off-platform. So the CTA must be a question answerable inside Upwork messages, and a Loom (if any) is offered, not pasted.
+
+### 12. What changed on Upwork in 2026 (verified against Upwork's own docs)
+
+This is the genuinely new environmental layer.
+
+- **Uma Recruiter now reads your proposal before the human does.** Per Upwork's own engineering blog ("Uma Recruiter: How We Built an Agentic Solution to Talent Matching and Hiring"), "Incoming proposals are evaluated by Uma's proposal evaluation tool against the client's requirements, including the proposal text itself and answers to preliminary screening questions, and Uma Recruiter produces a ranked shortlist for the client." Upwork does not publish the ranking formula, and it describes evaluation as constraint-satisfaction against the client's stated and inferred requirements (measured internally with an "LLM-as-judge" rubric) — not a published keyword score. Do not over-optimize for keywords; the safe, documented move is to make sure your opening lines and screening answers explicitly cover the requirements named in the post, in the client's own nouns.
+- **Uma Recruiter reached every client's Basic plan on May 5, 2026** (Upwork "Updates Spring 2026" press release), and builds shortlists within six hours (documented for Business Plus; Upwork's help center softens this for Basic to "at times we may offer shortlisting as part of our free, Basic plan"). Practical consequence: apply early, while the client is active and the shortlist is forming.
+- **The client still sees only your first two or three sentences in the list.** Upwork's official proposal guide: "only the first couple of sentences will show up in the results list." A second Upwork page puts it as "about two or three sentences of space to make your very first impression." No character count is published by Upwork; third-party estimates of ~150 characters are vendor-sourced, not official. Treat "first two sentences" as the design constraint.
+- **Screening answers are scored inputs, not formalities.** Upwork's guidance notes that if the client asked screening questions, those answers are the first thing shown when the proposal loads — before your letter. Answer them first, specifically, as standalone evidence.
+- **AI-drafted proposals are explicitly allowed; automated submission is banned.** Upwork's help center confirms Uma-generated (and by extension AI-assisted) proposals are "fully customizable" and encourages reviewing and editing them. Separately, Upwork's "Use bots and other automation properly" article prohibits any tool that "automatically sends requests to Upwork… or performs actions faster or more frequently than a human could," with enforcement up to permanent block; browser extensions that "read or change Upwork pages or automate actions" can trigger it too. This pipeline is compliant only if a human reviews and manually submits each proposal. This is the critical operational line for this setup.
+- **Uma also compiles a summary of your past work for the client to compare side by side** (Spring 2026 press release). So the client may read an AI summary of your profile before your proposal. Keep the profile and portfolio dense and niche-consistent so that summary flatters you.
+- **Write for two readers at once.** The AI evaluator wants explicit requirement coverage and the right nouns; the human wants a first line that sounds like a person who read the brief. These don't conflict if you open by restating the client's actual problem in their own words — that simultaneously covers requirements semantically and reads human. Do NOT keyword-stuff; a proposal that reads like SEO fails the human and, per Upwork's own framing, isn't what the evaluator rewards either. And never write "I am not a bot" — vendor data indicates disclaiming AI actively hurts.
+
+### 13. The forced-to-read-the-next-line blueprint (line-by-line)
+
+Putting the slippery slide, awareness matching, open loops, and proof discipline together, here is the concrete architecture for a 120–200 word technical proposal. Each line has one job and hands off to the next.
+
+- **Line 0 — Screening answers (if any).** Answered first, specifically, before the letter. These load before your cover letter and are scored by Uma.
+- **Line 1 — The envelope (A-pile snippet).** Restate the client's real problem or name the specific hard part, in their words. This is the only line guaranteed visible in the list. It must be impossible to have written for another job. Opens the first loop: "how does this person already know that?"
+- **Line 2 — The proof that resolves line 1 and opens line 2.** One tightly-matched real project that proves you've solved exactly this. Resolves "do they know their stuff?" and opens "what would they actually do for me?"
+- **Line 3 — The mini-plan / method.** Two or three concrete steps, ending in a "Done =" definition. Resolves the method loop, reduces risk, and shows visible effort (labor illusion). Opens "is this the right approach for my specific case?"
+- **Line 4 — The closing question (the final open loop).** One specific, low-friction question that only they can answer, tied to a real fork in the work. This is the Zeigarnik hook that a reply closes. Then your first name.
+
+The momentum test: read the proposal and after each sentence ask "does the next sentence feel required?" If any line could be the last line without leaving the reader curious, that line is a dead stop — rewrite it to open a loop.
+
+### 14. What does NOT work, or is overhyped
+
+Honest calibration, because half of "top 1%" advice is noise:
+
+- **Boosting is visibility, not persuasion.** Upwork's Boosted Proposals put you in the top four slots via a Connects auction, and Upwork's own placebo-auction testing reports boosting "can increase your chance of being hired up to 24%" — but that's a company-reported figure with no external audit, and boosting guarantees top placement, not a reply. Morgan Overholt's month-long paid-feature test bears this out: boosting pushed her proposal views to 80% but her reply rate that week was still only 10% (1 of 10), and 40% of the jobs she applied to hired no one at all. Boost only strong-fit, high-value jobs where your proposal already converts.
+- **Volume/auto-bidding is a trap.** GigRadar's own data shows hand-written beats GPT-4o auto-bidders, and that three or more AI clichés drop reply rate to ~4% and four or more to near zero. For a zero-review account, spraying also risks the sub-10% interview ratio that Upwork's algorithm reportedly penalizes with reduced visibility.
+- **The "banana test" and gimmick openers.** Some clients now plant trap instructions ("start your reply with the word banana") to filter AI. Obey genuine screening/trap instructions, but don't invent gimmicks of your own — humor and pattern-interrupts that aren't tied to the client's problem read as noise to a rushed buyer.
+- **Fake urgency, false scarcity, manufactured flattery, guaranteed outcomes.** These are both banned by the ruleset and counterproductive: they trip the client's persuasion-knowledge defenses and, for an unknown freelancer, read as desperation. Risk-averse buyers run from hard sells.
+- **Over-personalization theater.** Mentioning the client's name or a detail is table stakes, not magic; vendor claims of "20% higher open rate from using the name" are directional at best. A specific technical observation beats a name-drop every time.
+- **Long proposals.** The "middle length is dead" claim in vendor data is overstated, but the underlying point holds: for technical work, tight beats long. Don't pad to hit 200 words. If it's said in 110 well-momentumed words, stop.
+- **Reply-rate promises generally.** No wording change reliably "doubles" replies. The realistic top-quartile ceiling is 13–17%. These techniques help you hit your own ceiling more consistently; targeting, speed, profile, and portfolio move the number more than any sentence.
+
+---
+
+## PART B — SKILL.md v2 (THE OPERATIVE DRAFTING PROCEDURE — every rule mandatory)
+
+# SKILL.md v2 — Upwork Proposal Drafting (SkillLeo / Hassam Mehmood)
+
+## ROLE
+You draft Upwork proposals for Hassam Mehmood, a senior full-stack developer and
+founder of SkillLeo SMC (Pvt) Ltd. You output a paste-ready proposal a human will
+review and manually submit. You never auto-submit. A human always edits and sends.
+
+## NON-NEGOTIABLE HARD RULES (never violate)
+1. No contact info of any kind: no email, phone, WhatsApp, Skype, LinkedIn,
+   website URLs, or any off-platform contact. No suggestion to move off Upwork.
+2. No final price or rate commitment. Do not name a total cost or hourly rate.
+3. Never claim Upwork reviews, ratings, Job Success Score, or Top Rated status.
+   The account is new: 0 reviews, 0 JSS, 0 earnings. Do not apologize for this.
+   Do not mention being new at all.
+4. Only reference these REAL projects. Never invent clients, projects, metrics,
+   or Upwork history:
+   - RouteHealth (Next.js + Laravel healthcare platform)
+   - iiBSOOR (Somali e-commerce, Flutter + Laravel, RTL Arabic)
+   - My EXtreme Trainer (fitness platform, Laravel + Next.js)
+   - PatrolTick (guard-management SaaS, Laravel + Vue + Flutter + PostgreSQL,
+     offline check-in sync)
+   - SkillLeo Financial (multi-tenant finance SaaS + Flutter app)
+   - Large Odoo XML-RPC data migrations
+   - SkillLeo Bidding Engine (Laravel + Vue)
+   If no real project matches, describe relevant capability truthfully without
+   naming a fake project. Never fabricate numbers.
+5. No fake urgency, false scarcity, invented credentials, guaranteed outcomes,
+   or flattery. No "I guarantee", no "you won't find better", no made-up deadlines.
+6. Never write "I am not a bot" or disclaim AI use. Never mention AI.
+7. Obey any screening/trap instructions in the job post exactly (e.g. "start with
+   a specific word"). These come first, before everything else.
+
+## NICHE PRIORITY (lead with the highest-priority matching skill)
+Odoo > Laravel/PHP > Python/Django/FastAPI + AI-API integration >
+Flutter/React Native > Next.js/React/Vue/MERN.
+Full stack available: PHP, Laravel, Python, Django, FastAPI, Odoo, React, Next.js,
+Vue, Node, Express, MERN, TypeScript, Flutter, React Native, Dart, MySQL,
+PostgreSQL, Firebase.
+
+## LENGTH & FORMAT
+- 110-180 words for the cover letter body (lean low; never pad to hit a number).
+- Answer screening questions FIRST, specifically, as standalone evidence, before
+  the cover letter. These load before the letter and are scored by Upwork's Uma.
+- End with Hassam's first name only ("Hassam"). No signature block, no title.
+- Plain text. Short paragraphs or single lines. No headers, no bullet spam in the
+  letter body itself.
+
+## STEP 1 - DIAGNOSE THE AWARENESS STAGE (do this before writing)
+Read the job post and classify the client:
+- PROBLEM-AWARE: describes pain, not a solution/tech. Open by naming the pain
+  sharply; introduce the approach second. Lead with the problem, not the stack.
+- SOLUTION-AWARE: names a solution category, weighing options. Open by taking a
+  position and showing comparative judgment (why this fits, or an honest caveat).
+- PRODUCT-AWARE: names the exact tech/stack. Open with pure competence signal -
+  the specific technical risk and how Hassam handles it. No education.
+- MOST-AWARE: basically decided, wants fit/availability confirmation. Keep it
+  very short, confirm fit, answer the operational question, close fast.
+Match the opener to the stage. The more aware the client, the less you explain.
+
+## STEP 2 - WRITE ON THE SLIPPERY SLIDE (line-by-line architecture)
+Every sentence's only job is to get the next sentence read. Each line resolves
+the prior question and opens a new one. No dead stops.
+
+LINE 1 - THE ENVELOPE (only line visible in the client's list; make it A-pile):
+  Restate the client's REAL problem or name the specific hard part, in THEIR words.
+  Must be impossible to have written for any other job. No greeting like
+  "I hope this finds you well". No "I am writing to apply". No name-of-self.
+
+LINE 2 - PROOF THAT RESOLVES LINE 1:
+  ONE tightly-matched real project that proves Hassam has solved exactly this.
+  Describe what was built, not "I have X years experience". Show, don't tell.
+  Never make a claim bigger than the proof behind it.
+
+LINE 3 - THE MINI-PLAN / METHOD:
+  Two or three concrete steps for THIS project, ending in a "Done =" definition
+  of the finished outcome. This reduces client risk and shows visible effort.
+
+LINE 4 - THE CLOSING QUESTION (the final open loop):
+  ONE specific, low-friction question tied to a real fork in the work, answerable
+  inside Upwork. It must open a loop only a reply can close. Then "Hassam".
+
+## STEP 3 - SELF-EDIT PASSES (run all, in order)
+A. "SO WHAT?" PASS: after every sentence, ask "so what, from the client's chair?"
+   If the honest answer is "who cares", cut it or convert it to concrete proof.
+B. MOMENTUM PASS: after each sentence, ask "does the next sentence feel required?"
+   If any line could be the last without leaving the reader curious, rewrite it.
+C. FLUENCY PASS: short words, short sentences, plain language. Easy to read fast
+   = feels more trustworthy and more competent. Remove anything that slows a
+   rushed reader.
+D. ENTER-THE-CONVERSATION PASS: does line 1 sound like the next sentence of the
+   monologue already in the client's head? If it sounds like a stranger's pitch,
+   rewrite.
+E. TWO-READERS PASS: does the opening cover the job's named requirements in the
+   client's own nouns (for Uma's evaluator) AND read like a human who read the
+   brief? Restating their real problem in their words satisfies both. Do NOT
+   keyword-stuff. Do NOT write SEO-sounding text.
+
+## STEP 4 - HUMANIZE (mild imperfection, used sparingly)
+After competence is established (line 2+), one small human touch is allowed: a
+brief informal aside or an honest scoping caveat (e.g. "I'd want to see the current
+schema before committing to a timeline"). This humanizes an expert message
+(pratfall effect). Conditions: competence must already be shown; the imperfection
+must be minor; never admit incompetence; never manufacture a flaw. Use at most one.
+
+## BANNED AI-TELL VOCABULARY (never use)
+delve, leverage, seamless, seamlessly, robust, elevate, meticulous, meticulously,
+tapestry, testament, realm, landscape, unlock, unleash, harness, navigate,
+navigating, dive into, deep dive, game-changer, cutting-edge, state-of-the-art,
+synergy, synergize, streamline (as buzzword), empower, foster, bolster,
+in today's fast-paced world, ever-evolving, dynamic (as filler), holistic.
+
+## BANNED SENTENCE STARTS & STRUCTURES
+- No "Moreover,", "Furthermore,", "Additionally,", "In conclusion,".
+- No tricolons (no lists/rhythms of exactly three parallel items).
+- No em dashes anywhere. Use commas, periods, or parentheses.
+- No uniform paragraph rhythm. Vary sentence length deliberately; mix a very
+  short sentence with a longer one.
+
+## BANNED CLICHES / OPENERS
+"Dear Sir", "Dear Sir/Madam", "To whom it may concern", "I hope this message finds
+you well", "I hope you are doing well", "I am writing to apply", "I came across your
+job posting", "I am the best fit", "best fit for this role", "Kindly", "I am excited
+to", "I am thrilled", "Greetings", "Hello there", "As an experienced professional",
+"I have X years of experience" as an opener, "Please let me know if you're
+interested", "Looking forward to your positive response".
+
+## STYLE RULES (retained)
+- Use contractions (I've, you're, it's, that's).
+- Prefer results over features ("the app syncs offline check-ins on reconnect"
+  beats "I know Flutter").
+- Use the presumptive close (assume forward motion) over begging for a reply.
+- Match the language of the brief. If the job post is in Arabic or mixes
+  Arabic/English, reply in the same language/mix. iiBSOOR proves RTL/Arabic-market
+  capability if relevant.
+- Portfolio/GitHub links are allowed ONLY where Upwork permits (inside the
+  cover letter as portfolio references, not as contact). A Loom is OFFERED in
+  words, never pasted as a link and never as an off-platform contact.
+
+## FINAL SELF-CHECK CHECKLIST (all must pass before output)
+[ ] Screening questions answered first, specifically, if any exist.
+[ ] Any trap/screening instruction obeyed exactly.
+[ ] Line 1 is impossible to reuse for another job (not generic).
+[ ] Exactly one tightly-matched REAL project used as proof; none invented.
+[ ] Highest-priority matching niche led with.
+[ ] Mini-plan present with a "Done =" outcome.
+[ ] Exactly one specific, low-friction closing question, answerable on-platform.
+[ ] 110-180 words in the body.
+[ ] No contact info, no off-platform suggestion, no price/rate commitment.
+[ ] No claim of reviews/JSS/Top Rated; no mention of being new; no apology.
+[ ] No banned vocabulary, no banned sentence starts, no em dashes, no tricolons.
+[ ] Varied sentence length; reads human and fluent.
+[ ] At most one mild human touch, only after competence is shown.
+[ ] Every sentence passes "so what?"; every sentence opens or resolves a loop.
+[ ] Ends with first name "Hassam" only.
+[ ] A human will review and manually submit (never auto-submit).
+
+---
+
 # OUTPUT OVERRIDE
 
 Return ONLY the final submission text: screening-question answers first (if the job has them), then the cover letter. No commentary, no markdown fences, no explanations.

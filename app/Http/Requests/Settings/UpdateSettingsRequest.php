@@ -43,9 +43,20 @@ class UpdateSettingsRequest extends FormRequest
             'scoring_model' => ['sometimes', 'string', 'max:100'],
             'proposal_model' => ['sometimes', 'string', 'max:100'],
             // The long, operator-pasted rule blocks — the whole point is
-            // that these are editable text, so the ceiling is generous.
-            'scoring_system_prompt' => ['sometimes', 'nullable', 'string', 'max:60000'],
-            'proposal_system_prompt' => ['sometimes', 'nullable', 'string', 'max:60000'],
+            // that these are editable text, so the ceiling is generous
+            // (the proposal rules + 2026 addendum already run ~72KB).
+            'scoring_system_prompt' => ['sometimes', 'nullable', 'string', 'max:150000'],
+            'proposal_system_prompt' => ['sometimes', 'nullable', 'string', 'max:150000'],
+
+            // Proposal quality gate (mechanical lint config)
+            'proposal_quality_gate' => ['sometimes', 'boolean'],
+            'proposal_min_words' => ['sometimes', 'integer', 'min:0', 'max:1000'],
+            'proposal_max_words' => ['sometimes', 'integer', 'min:0', 'max:2000'],
+            'proposal_signature' => ['sometimes', 'nullable', 'string', 'max:50'],
+            'proposal_required_phrases' => ['sometimes', 'array'],
+            'proposal_required_phrases.*' => ['string', 'max:100'],
+            'proposal_banned_phrases' => ['sometimes', 'array'],
+            'proposal_banned_phrases.*' => ['string', 'max:100'],
 
             // WhatsApp — sent via OpenClaw, no Meta token/phone ID needed
             'bidder_whatsapp' => ['sometimes', 'nullable', 'string', 'max:30'],
