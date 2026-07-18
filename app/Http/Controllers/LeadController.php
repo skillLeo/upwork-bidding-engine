@@ -492,6 +492,7 @@ class LeadController extends Controller
         $lead->update([
             'score' => $result['score'],
             'score_reason' => $result['reason'],
+            'sub_scores' => $result['sub_scores'],
             'boost' => $result['boost'],
         ]);
 

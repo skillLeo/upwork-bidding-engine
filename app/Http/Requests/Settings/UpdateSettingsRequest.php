@@ -46,6 +46,8 @@ class UpdateSettingsRequest extends FormRequest
             // The long, operator-pasted rule blocks — the whole point is
             // that these are editable text, so the ceilings are generous.
             'scoring_system_prompt' => ['sometimes', 'nullable', 'string', 'max:150000'],
+            'account_stage' => ['sometimes', 'string', 'in:stage_1_new,stage_2_established'],
+            'stage_2_scoring_addendum' => ['sometimes', 'nullable', 'string', 'max:5000'],
             // proposal_skill + project_facts are the ONLY proposal text
             // sent to a model; proposal_reference is operator reading and
             // never enters a prompt.

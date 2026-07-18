@@ -120,6 +120,11 @@ class ScoreLeadJobTest extends TestCase
 
     public function test_bid_yes_scores_writes_proposal_and_notifies_bidder(): void
     {
+        // Stage 2 so the model's boost verdict flows through to the DB —
+        // stage 1 (the default) force-disables boost, covered in
+        // ScoringStageTest.
+        app(SettingsService::class)->set('account_stage', 'stage_2_established');
+
         // Scoring then proposal hit the Anthropic API sequentially; the
         // WhatsApp alert still goes out through OpenClaw.
         Http::fake([
@@ -182,9 +187,13 @@ class ScoreLeadJobTest extends TestCase
 
         Http::assertSent(function ($request) {
             $body = $request->data();
+            $system = (string) ($body['system'][0]['text'] ?? '');
 
+            // Rubric first, then the code-side sub-scores output spec —
+            // exact composition is asserted byte-for-byte in ScoringStageTest.
             return str_contains((string) $request->url(), 'api.anthropic.com')
-                && ($body['system'][0]['text'] ?? null) === 'THE RUBRIC: score jobs 1-10, output JSON.'
+                && str_starts_with($system, 'THE RUBRIC: score jobs 1-10, output JSON.')
+                && str_contains($system, '"sub_scores"')
                 && ($body['system'][0]['cache_control']['type'] ?? null) === 'ephemeral';
         });
     }

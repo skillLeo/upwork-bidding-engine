@@ -79,6 +79,14 @@ class SettingsService
         // strongest writing-tier model, independent of the writer.
         'review_model' => ['group' => 'ai', 'secret' => false, 'default' => 'claude-sonnet-5'],
         'scoring_system_prompt' => ['group' => 'ai', 'secret' => false, 'default' => ''],
+        // Account stage: the rubric's own Recommendations section defines a
+        // two-phase plan (new account with tight floors and no boosting,
+        // then established with raised floors). This makes that switch a
+        // setting instead of a memory. stage_1_new = today's rubric behavior
+        // with boost force-disabled; stage_2_established appends the
+        // (editable) addendum below to the scoring prompt.
+        'account_stage' => ['group' => 'ai', 'secret' => false, 'default' => 'stage_1_new'],
+        'stage_2_scoring_addendum' => ['group' => 'ai', 'secret' => false, 'default' => 'Account update: SkillLeo now has reviews and a Job Success Score. Adjust: budget floors rise to fixed >= $400 and hourly >= $20 (operator-editable). Hourly contracts are now acceptable; remove the fixed-price-small-job bonus. Boost may be recommended on scores 9-10 worth >= $1,000. Client spend of $10k+ is now a positive signal, not out of reach. Everything else in the rubric is unchanged.'],
         // The proposal rules are deliberately SPLIT: models imitate the
         // style of their context far more than they obey instructions in
         // it, so the dense teaching document must never enter a prompt.

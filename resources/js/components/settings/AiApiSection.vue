@@ -41,6 +41,8 @@ const form = reactive({
   proposal_model: props.settings.proposal_model ?? "claude-sonnet-5",
   review_model: props.settings.review_model ?? "claude-sonnet-5",
   scoring_system_prompt: props.settings.scoring_system_prompt ?? "",
+  account_stage: props.settings.account_stage ?? "stage_1_new",
+  stage_2_scoring_addendum: props.settings.stage_2_scoring_addendum ?? "",
   proposal_skill: props.settings.proposal_skill ?? "",
   project_facts: props.settings.project_facts ?? "",
   proposal_reference: props.settings.proposal_reference ?? "",
@@ -198,6 +200,34 @@ async function handleSave() {
           Must end by asking for JSON only:
           {"score": n, "bid": true/false, "boost": true/false, "reason": "one line"}
         </FieldHint>
+      </div>
+
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label>Account stage</Label>
+          <select
+            v-model="form.account_stage"
+            class="h-10 w-full rounded-md border border-border-strong bg-white px-3 text-sm text-text-secondary focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none"
+          >
+            <option value="stage_1_new">Stage 1 — new account (no reviews yet)</option>
+            <option value="stage_2_established">Stage 2 — established (has reviews + JSS)</option>
+          </select>
+          <FieldHint>
+            Stage 1 scores exactly as today and force-disables BOOST (the rubric's own Stage 1
+            advice). Flip to Stage 2 once the account has reviews — it appends the addendum on
+            the right to the scoring rules.
+          </FieldHint>
+        </div>
+        <div>
+          <Label>Stage 2 scoring addendum</Label>
+          <Textarea
+            v-model="form.stage_2_scoring_addendum"
+            rows="6"
+            class="font-mono text-xs"
+            placeholder="Appended to the scoring rules only while Account stage is Stage 2."
+          />
+          <FieldHint>Ignored while in Stage 1 — future plumbing until the first reviews land.</FieldHint>
+        </div>
       </div>
 
       <div>

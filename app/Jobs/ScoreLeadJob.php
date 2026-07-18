@@ -111,6 +111,7 @@ class ScoreLeadJob implements ShouldQueue
         $lead->update([
             'score' => $result['score'],
             'score_reason' => $result['reason'],
+            'sub_scores' => $result['sub_scores'],
             'proposal_text' => $proposal['text'] ?? null,
             'proposal_warnings' => ($proposal['warnings'] ?? []) !== [] ? $proposal['warnings'] : null,
             'boost' => $result['boost'],

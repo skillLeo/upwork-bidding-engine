@@ -128,6 +128,20 @@ async function handleCopy() {
 
 const regenLoading = ref(null);
 
+const subScoreBlocks = computed(() => {
+  const subScores = lead.value?.sub_scores;
+  if (!subScores) return [];
+  return [
+    { key: "client_quality", label: "Client quality", weight: "30%" },
+    { key: "competition", label: "Competition & timing", weight: "25%" },
+    { key: "stack_fit", label: "Stack fit", weight: "20%" },
+    { key: "budget", label: "Budget", weight: "15%" },
+    { key: "post_quality", label: "Post quality", weight: "10%" },
+  ]
+    .filter((block) => subScores[block.key] != null)
+    .map((block) => ({ ...block, value: subScores[block.key] }));
+});
+
 async function handleRegenerateScore() {
   if (!lead.value || regenLoading.value) return;
   regenLoading.value = "score";
@@ -279,6 +293,30 @@ async function handleRegenerateProposal() {
       >
         {{ lead.score_reason }}
       </p>
+
+      <div
+        v-if="subScoreBlocks.length"
+        class="mt-4 grid grid-cols-2 gap-3 border-t border-border pt-4 sm:grid-cols-5"
+      >
+        <div v-for="block in subScoreBlocks" :key="block.key">
+          <div class="flex items-baseline justify-between gap-1">
+            <p class="truncate text-xs font-medium text-text-tertiary" :title="block.label">
+              {{ block.label }}
+            </p>
+            <span class="text-[10px] text-text-tertiary/70">{{ block.weight }}</span>
+          </div>
+          <p class="mt-0.5 text-sm font-semibold text-text-primary">{{ block.value }}/10</p>
+          <div class="mt-1 h-1.5 overflow-hidden rounded-pill bg-neutral-bg">
+            <div
+              :class="[
+                'h-full rounded-pill transition-all',
+                block.value >= 7 ? 'bg-success' : block.value >= 5 ? 'bg-warning' : 'bg-danger',
+              ]"
+              :style="{ width: `${block.value * 10}%` }"
+            />
+          </div>
+        </div>
+      </div>
     </Card>
 
     <Card v-if="lead.proposal_text || lead.score !== null" class="mt-4 p-6">

@@ -17,24 +17,25 @@ class ScoringService
 {
     public const MAX_TOKENS = 1000;
 
+    /**
+     * Output plumbing appended after the rubric (same precedent as
+     * ProposalService::FORMAT_SPEC living in code): the five pillar
+     * sub-scores make a 6 explainable on the lead page. The overall
+     * score and verdict still follow the rubric's weights and gates.
+     */
+    public const SUB_SCORES_SPEC = 'ADDITIONAL OUTPUT REQUIREMENT: besides the keys your output format already requires, include a "sub_scores" object rating each pillar 1-10: {"client_quality": n, "competition": n, "stack_fit": n, "budget": n, "post_quality": n}. These explain the overall score; the overall score and verdict still follow the rubric.';
+
     public function __construct(
         protected SettingsService $settings,
         protected AiManager $ai,
     ) {}
 
     /**
-     * @return array{score: int, bid: bool, boost: bool, reason: string, response: AiResponse}
+     * @return array{score: int, bid: bool, boost: bool, reason: string, sub_scores: array<string, int>|null, response: AiResponse}
      */
     public function score(Lead $lead): array
     {
-        $system = trim((string) $this->settings->get('scoring_system_prompt'));
-
-        if ($system === '') {
-            throw new \RuntimeException(
-                'scoring_system_prompt is empty — paste your scoring rules into Settings → AI models & prompts before scoring.'
-            );
-        }
-
+        $system = $this->systemPrompt();
         $user = $this->jobContent($lead);
         $model = (string) $this->settings->get('scoring_model', 'claude-haiku-4-5');
 
@@ -61,7 +62,45 @@ class ScoringService
             );
         }
 
+        // Stage 1 (new account): the rubric's thresholds allow BOOST at
+        // 9+, but its own Stage 1 recommendation says never boost yet.
+        // The recommendation wins — force it off regardless of what the
+        // model returned, until the operator flips to stage 2.
+        if ($this->settings->get('account_stage', 'stage_1_new') !== 'stage_2_established') {
+            $parsed['boost'] = false;
+        }
+
         return [...$parsed, 'response' => $response];
+    }
+
+    /**
+     * The static block every scoring call sends: the operator's rubric,
+     * the sub-scores output spec, and (in stage 2 only) the stage
+     * addendum. Public so the operator can print and diff exactly what
+     * each stage sends — stage 1 and stage 2 differ by the addendum
+     * alone, byte for byte.
+     */
+    public function systemPrompt(): string
+    {
+        $rubric = trim((string) $this->settings->get('scoring_system_prompt'));
+
+        if ($rubric === '') {
+            throw new \RuntimeException(
+                'scoring_system_prompt is empty — paste your scoring rules into Settings → AI models & prompts before scoring.'
+            );
+        }
+
+        $system = $rubric."\n\n".self::SUB_SCORES_SPEC;
+
+        if ($this->settings->get('account_stage', 'stage_1_new') === 'stage_2_established') {
+            $addendum = trim((string) $this->settings->get('stage_2_scoring_addendum'));
+
+            if ($addendum !== '') {
+                $system .= "\n\n".$addendum;
+            }
+        }
+
+        return $system;
     }
 
     /**
@@ -95,7 +134,7 @@ class ScoringService
     }
 
     /**
-     * @return array{score: int, bid: bool, boost: bool, reason: string}|null
+     * @return array{score: int, bid: bool, boost: bool, reason: string, sub_scores: array<string, int>|null}|null
      */
     protected function parse(string $text): ?array
     {
@@ -120,6 +159,31 @@ class ScoringService
             'bid' => (bool) ($data['bid'] ?? $score >= $cutoff),
             'boost' => (bool) ($data['boost'] ?? $score >= 9),
             'reason' => (string) ($data['reason'] ?? ''),
+            'sub_scores' => $this->parseSubScores($data),
         ];
+    }
+
+    /**
+     * Explainability only — a missing or malformed sub_scores block never
+     * fails a scoring run; the verdict fields above are the contract.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, int>|null
+     */
+    protected function parseSubScores(array $data): ?array
+    {
+        if (! isset($data['sub_scores']) || ! is_array($data['sub_scores'])) {
+            return null;
+        }
+
+        $subScores = [];
+
+        foreach (['client_quality', 'competition', 'stack_fit', 'budget', 'post_quality'] as $key) {
+            if (isset($data['sub_scores'][$key]) && is_numeric($data['sub_scores'][$key])) {
+                $subScores[$key] = max(1, min(10, (int) $data['sub_scores'][$key]));
+            }
+        }
+
+        return $subScores === [] ? null : $subScores;
     }
 }

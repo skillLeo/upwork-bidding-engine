@@ -108,6 +108,11 @@ class VollnaWebhookTest extends TestCase
 
     public function test_accepts_valid_payload_creates_lead_and_scores_it_inline(): void
     {
+        // Stage 2 so the model's boost verdict flows through to the DB —
+        // stage 1 (the default) force-disables boost, covered in
+        // ScoringStageTest.
+        app(SettingsService::class)->set('account_stage', 'stage_2_established');
+
         Http::fake([
             'api.anthropic.com/*' => Http::sequence()
                 ->push($this->anthropic('{"score": 9, "bid": true, "boost": true, "reason": "Great fit"}'))

@@ -57,6 +57,7 @@ class AgentScoreController extends Controller
             'bid' => $result['bid'],
             'boost' => $result['boost'],
             'reason' => $result['reason'],
+            'sub_scores' => $result['sub_scores'],
         ]]);
     }
 }
