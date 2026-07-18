@@ -32,6 +32,9 @@ class DeadMansSwitchTest extends TestCase
         $this->settings->set('openclaw_url', 'https://openclaw.test');
         $this->settings->set('openclaw_token', 'token');
         $this->settings->set('bidder_whatsapp', '+15550001111');
+        $this->settings->set('anthropic_api_key', 'sk-ant-test');
+        $this->settings->set('scoring_system_prompt', 'THE RUBRIC');
+        $this->settings->set('proposal_system_prompt', 'THE GUIDE');
     }
 
     public function test_silence_alert_is_deferred_outside_active_hours(): void
@@ -113,13 +116,17 @@ class DeadMansSwitchTest extends TestCase
 
     public function test_authenticated_delivery_stamps_liveness_and_resets_incidents(): void
     {
-        Http::fake();
+        Http::fake([
+            'api.anthropic.com/*' => Http::response([
+                'content' => [['type' => 'text', 'text' => '{"score": 3, "bid": false, "reason": "weak"}']],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 100, 'output_tokens' => 20],
+            ]),
+        ]);
         Cache::forever(VollnaCheckSilenceCommand::ALERTED_CACHE_KEY, 'x');
         Cache::forever(VollnaRejectedAlertJob::ALERTED_CACHE_KEY, 'x');
         $this->settings->set('vollna_last_webhook_at', now()->subHours(10)->toIso8601String());
 
-        // A minimal project that fails hard filters — enough to prove the
-        // delivery was authenticated without exercising the scoring path.
         $this->postJson(
             '/api/vollna-hook',
             ['projects' => [['title' => 'Job', 'url' => 'https://www.upwork.com/jobs/x?pid=99']]],

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AgentScoreController;
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ClientController;
@@ -20,6 +21,11 @@ use Illuminate\Support\Facades\Route;
 */
 Route::post('/vollna-hook', VollnaWebhookController::class)
     ->middleware([VerifyVollnaSecret::class, 'throttle:webhooks']);
+
+// OpenClaw's "score this brief" path — same rubric, same brain as the
+// pipeline. Token-checked inside the controller (OpenClaw bearer token).
+Route::post('/agent/score', AgentScoreController::class)
+    ->middleware('throttle:webhooks');
 
 // Product name + logo — the sign-in screen needs these before anyone has
 // a token, so this stays outside auth:sanctum entirely.

@@ -211,6 +211,32 @@ class AiLayerTest extends TestCase
         $this->assertTrue(AiCall::where('success', false)->whereNotNull('error')->exists());
     }
 
+    public function test_agent_score_endpoint_uses_same_rubric_and_requires_token(): void
+    {
+        $this->settings->set('openclaw_token', 'agent-token');
+
+        Http::fake([
+            'api.anthropic.com/*' => Http::response($this->anthropicResponse(
+                '{"score": 8, "bid": true, "boost": false, "reason": "solid fit"}',
+            )),
+        ]);
+
+        // Wrong token → 401, no AI spend.
+        $this->postJson('/api/agent/score', ['brief' => 'Build a Laravel API'], ['Authorization' => 'Bearer nope'])
+            ->assertStatus(401);
+        Http::assertNothingSent();
+
+        $this->postJson(
+            '/api/agent/score',
+            ['brief' => 'Build a Laravel API for our mobile app', 'title' => 'Laravel API', 'budget' => '$800 fixed'],
+            ['Authorization' => 'Bearer agent-token'],
+        )
+            ->assertStatus(200)
+            ->assertJsonPath('data.score', 8)
+            ->assertJsonPath('data.bid', true)
+            ->assertJsonPath('data.reason', 'solid fit');
+    }
+
     public function test_proposal_service_returns_plain_text(): void
     {
         Http::fake([

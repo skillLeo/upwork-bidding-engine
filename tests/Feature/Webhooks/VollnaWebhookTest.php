@@ -18,7 +18,17 @@ class VollnaWebhookTest extends TestCase
     {
         parent::setUp();
 
-        app(SettingsService::class)->set('vollna_webhook_secret', 'test-secret');
+        app(SettingsService::class)->setMany([
+            'vollna_webhook_secret' => 'test-secret',
+            // Inline scoring now runs against the AI provider directly on
+            // the webhook request, driven by the settings-held rubric.
+            'anthropic_api_key' => 'sk-ant-test',
+            'scoring_system_prompt' => 'THE RUBRIC',
+            'proposal_system_prompt' => 'THE GUIDE',
+            'openclaw_url' => 'https://openclaw.test',
+            'openclaw_token' => 'token',
+            'bidder_whatsapp' => '+15550001111',
+        ]);
     }
 
     /**
@@ -32,6 +42,18 @@ class VollnaWebhookTest extends TestCase
             'filter' => ['id' => 1, 'name' => 'Backend Development'],
             'filters' => [['id' => 1, 'name' => 'Backend Development']],
             'projects' => $projects,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function anthropic(string $text): array
+    {
+        return [
+            'content' => [['type' => 'text', 'text' => $text]],
+            'stop_reason' => 'end_turn',
+            'usage' => ['input_tokens' => 500, 'output_tokens' => 60, 'cache_read_input_tokens' => 0, 'cache_creation_input_tokens' => 0],
         ];
     }
 
@@ -58,9 +80,9 @@ class VollnaWebhookTest extends TestCase
     {
         // Vollna's own webhook UI only offers None / Bearer Token / Basic Auth -
         // Bearer is the primary real-world path, X-Vollna-Secret is a fallback.
-        // Scoring now runs inline on the webhook request, so this must fake
-        // the outbound OpenClaw call rather than the queue.
-        Http::fake();
+        Http::fake([
+            'api.anthropic.com/*' => Http::response($this->anthropic('{"score": 3, "bid": false, "reason": "weak"}')),
+        ]);
 
         $response = $this->postJson(
             '/api/vollna-hook',
@@ -83,8 +105,12 @@ class VollnaWebhookTest extends TestCase
 
     public function test_accepts_valid_payload_creates_lead_and_scores_it_inline(): void
     {
-        app(SettingsService::class)->setMany(['openclaw_url' => 'https://openclaw.test', 'openclaw_token' => 'token']);
-        Http::fake(['openclaw.test/*' => Http::response(['score' => 9, 'reason' => 'Great fit', 'proposal' => 'Hi there...'])]);
+        Http::fake([
+            'api.anthropic.com/*' => Http::sequence()
+                ->push($this->anthropic('{"score": 9, "bid": true, "boost": true, "reason": "Great fit"}'))
+                ->push($this->anthropic('Hi there...')),
+            'openclaw.test/*' => Http::response(['success' => true]),
+        ]);
 
         $response = $this->postJson('/api/vollna-hook', $this->batch([
             'url' => 'https://www.vollna.com/go?module=webhook&pid=3359&url=https%3A%2F%2Fwww.upwork.com%2Fjobs%2F~01',
@@ -104,24 +130,29 @@ class VollnaWebhookTest extends TestCase
         $response->assertStatus(201)->assertJsonPath('data.accepted', 1);
 
         // No queue/cron involved: by the time the webhook responds, the
-        // lead is already scored and past `new`/`scoring`.
+        // lead is already scored (by the rubric), proposal written, and
+        // past `new`/`scoring`.
         $this->assertDatabaseHas('leads', [
             'external_id' => 'vollna_pid_3359',
             'title' => 'Laravel Developer Needed',
             'status' => LeadStatus::Ready->value,
             'score' => 9,
+            'boost' => true,
+            'proposal_text' => 'Hi there...',
             'payment_verified' => true,
             'client_country' => 'United States',
             'connects_required' => 6,
         ]);
 
-        Http::assertSent(fn ($request) => str_contains($request->url(), '/task') && $request->data()['skill'] === 'score_and_write');
+        // The WhatsApp alert still routes through OpenClaw.
+        Http::assertSent(fn ($request) => ($request->data()['skill'] ?? null) === 'send_whatsapp_message');
     }
 
     public function test_batch_with_multiple_projects_creates_a_lead_per_project(): void
     {
-        app(SettingsService::class)->setMany(['openclaw_url' => 'https://openclaw.test', 'openclaw_token' => 'token']);
-        Http::fake(['openclaw.test/*' => Http::response(['score' => 3, 'reason' => 'Weak fit', 'proposal' => ''])]);
+        Http::fake([
+            'api.anthropic.com/*' => Http::response($this->anthropic('{"score": 3, "bid": false, "reason": "weak"}')),
+        ]);
 
         $response = $this->postJson('/api/vollna-hook', $this->batch(
             ['title' => 'Job One', 'url' => 'https://www.vollna.com/go?pid=101'],
@@ -133,15 +164,16 @@ class VollnaWebhookTest extends TestCase
             ->assertJsonPath('data.accepted', 2);
 
         $this->assertDatabaseCount('leads', 2);
-        // 2 calls per lead: the isReachable() health check, then the real
-        // score_and_write call.
-        Http::assertSentCount(4);
+        // One scoring call per lead — bid:no means no proposal call and no
+        // health checks (the OpenClaw gate is gone).
+        Http::assertSentCount(2);
     }
 
     public function test_duplicate_external_id_is_idempotent_and_does_not_rescore(): void
     {
-        app(SettingsService::class)->setMany(['openclaw_url' => 'https://openclaw.test', 'openclaw_token' => 'token']);
-        Http::fake(['openclaw.test/*' => Http::response(['score' => 3, 'reason' => 'Weak fit', 'proposal' => ''])]);
+        Http::fake([
+            'api.anthropic.com/*' => Http::response($this->anthropic('{"score": 3, "bid": false, "reason": "weak"}')),
+        ]);
 
         $payload = $this->batch(['title' => 'Job One', 'url' => 'https://www.vollna.com/go?pid=dup-1']);
         $headers = ['X-Vollna-Secret' => 'test-secret'];
@@ -152,38 +184,33 @@ class VollnaWebhookTest extends TestCase
             ->assertJsonPath('data.duplicate', 1);
 
         $this->assertDatabaseCount('leads', 1);
-        // Health check + score_and_write for the first delivery; the
-        // duplicate delivery makes neither call.
-        Http::assertSentCount(2);
+        // One scoring call for the first delivery; the duplicate makes none.
+        Http::assertSentCount(1);
     }
 
-    public function test_unreachable_openclaw_queues_instead_of_scoring_inline(): void
+    public function test_inline_scoring_failure_still_saves_lead_and_queues_retry(): void
     {
-        // OpenClaw runs on a machine that isn't always on - the health
-        // check must fail fast and the lead must still save, still
-        // respond 201, and stay `new` with a real queued retry (not lost,
-        // not hung) instead of an inline scoring attempt. Queue::fake()
-        // isolates "was it queued" from "what happens when it runs" -
-        // the queue driver itself is covered elsewhere.
+        // Whatever breaks the inline attempt (provider down, key revoked),
+        // the lead must still save, the webhook must still 201 fast, and a
+        // real queued retry must exist — no lead is ever lost.
         Queue::fake();
-        app(SettingsService::class)->setMany(['openclaw_url' => 'https://openclaw.test', 'openclaw_token' => 'token']);
-        Http::fake(['openclaw.test/health' => Http::response(null, 500)]);
+        Http::fake(['api.anthropic.com/*' => Http::response(['error' => 'overloaded'], 529)]);
 
         $response = $this->postJson('/api/vollna-hook', $this->batch([
-            'title' => 'Offline Test Job',
-            'url' => 'https://www.vollna.com/go?pid=offline-1',
+            'title' => 'Provider Down Job',
+            'url' => 'https://www.vollna.com/go?pid=down-1',
+            'budget' => '500 USD',
+            'budget_type' => 'fixed',
+            'published' => now()->toIso8601String(),
         ]), ['X-Vollna-Secret' => 'test-secret']);
 
         $response->assertStatus(201)->assertJsonPath('data.accepted', 1);
 
         $this->assertDatabaseHas('leads', [
-            'external_id' => 'vollna_pid_offline-1',
-            'status' => LeadStatus::New->value,
+            'external_id' => 'vollna_pid_down-1',
             'score' => null,
         ]);
 
-        // Only the health check fires - never an inline scoring call.
-        Http::assertSentCount(1);
         Queue::assertPushed(ScoreLeadJob::class);
     }
 

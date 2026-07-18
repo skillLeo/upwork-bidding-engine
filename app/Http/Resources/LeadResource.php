@@ -37,6 +37,7 @@ class LeadResource extends JsonResource
             'proposal_count' => $this->proposal_count,
             'connects_required' => $this->connects_required,
             'score' => $this->score,
+            'boost' => $this->boost,
             'score_reason' => $this->score_reason,
             'proposal_text' => $this->proposal_text,
             'status' => $this->status->value,

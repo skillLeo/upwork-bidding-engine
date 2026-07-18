@@ -244,7 +244,9 @@ class OpenClawService
         // stricter bar (score 9-10): a plain threshold, not a separate AI
         // judgment call, flagging only the strongest fits as worth spending
         // extra Upwork Connects on.
-        $boost = $score >= 9 ? 'Yes' : 'No';
+        // The rubric's own BOOST verdict when present (post-wiring leads);
+        // score>=9 shorthand only for older leads scored before it existed.
+        $boost = ($lead->boost ?? $score >= 9) ? 'Yes' : 'No';
 
         $hireRate = $lead->client_hire_rate
             ? rtrim((string) $lead->client_hire_rate, '%').'% hire rate'

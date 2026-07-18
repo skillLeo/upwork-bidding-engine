@@ -6,7 +6,8 @@ use App\Enums\ActivityType;
 use App\Enums\LeadStatus;
 use App\Models\ActivityLog;
 use App\Models\Lead;
-use App\Services\OpenClawService;
+use App\Services\Ai\ProposalService;
+use App\Services\Ai\ScoringService as AiScoringService;
 use App\Services\OpsAlertService;
 use App\Services\ScoringService;
 use App\Services\SettingsService;
@@ -38,7 +39,7 @@ class ScoreLeadJob implements ShouldQueue
         return [10, 10];
     }
 
-    public function handle(ScoringService $scoring, OpenClawService $openClaw, SettingsService $settings): void
+    public function handle(ScoringService $scoring, AiScoringService $aiScoring, ProposalService $proposals, SettingsService $settings): void
     {
         $lead = Lead::find($this->leadId);
 
@@ -77,7 +78,12 @@ class ScoreLeadJob implements ShouldQueue
         $startedAt = microtime(true);
 
         try {
-            $result = $openClaw->scoreAndWrite($lead, $settings->rules());
+            // Direct API scoring under the operator's full rubric (Settings).
+            // The rubric's own BID verdict decides ready-vs-archived — and
+            // the proposal model only runs for BID-yes leads, so a rejected
+            // lead never pays for (or shows) a proposal.
+            $result = $aiScoring->score($lead);
+            $proposalText = $result['bid'] ? $proposals->write($lead, $result)['text'] : null;
         } catch (\Throwable $e) {
             report($e);
 
@@ -91,19 +97,20 @@ class ScoreLeadJob implements ShouldQueue
             throw $e;
         }
 
-        $cutoff = $settings->get('score_cutoff', 7);
-        $isReady = $result['score'] >= (int) $cutoff;
+        $isReady = $result['bid'];
 
         $lead->update([
             'score' => $result['score'],
             'score_reason' => $result['reason'],
-            'proposal_text' => $result['proposal'],
+            'proposal_text' => $proposalText,
+            'boost' => $result['boost'],
             'status' => $isReady ? LeadStatus::Ready : LeadStatus::Archived,
         ]);
 
         ActivityLog::record(ActivityType::LeadScored, subject: $lead, meta: [
             'score' => $result['score'],
             'ready' => $isReady,
+            'boost' => $result['boost'],
             'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
         ]);
 
@@ -157,7 +164,7 @@ class ScoreLeadJob implements ShouldQueue
         ]);
 
         app(OpsAlertService::class)->send(sprintf(
-            "⚠️ SkillLeo: OpenClaw unreachable — lead \"%s\" was NOT scored after 3 attempts.\n\nError: %s\n\nIt's marked Needs review in the dashboard; rescore it once OpenClaw is back.",
+            "⚠️ SkillLeo: AI scoring failed — lead \"%s\" was NOT scored after 3 attempts.\n\nError: %s\n\nIt's marked Needs review in the dashboard; rescore it once the AI provider is healthy.",
             $lead->title,
             $exception->getMessage(),
         ));

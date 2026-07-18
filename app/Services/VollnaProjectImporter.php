@@ -20,7 +20,6 @@ use Illuminate\Support\Str;
  */
 class VollnaProjectImporter
 {
-    public function __construct(protected OpenClawService $openClaw) {}
 
     /**
      * The REST API returns a differently-shaped project than the webhook
@@ -85,33 +84,17 @@ class VollnaProjectImporter
 
         ActivityLog::record(ActivityType::LeadReceived, subject: $lead, meta: ['source' => 'vollna']);
 
-        // Score inline, in the same request, so a bidder sees a real-time
-        // WhatsApp alert within seconds — but only when OpenClaw actually
-        // answers a quick health check first. OpenClaw runs on a machine
-        // that isn't always on; without this check, a dead OpenClaw would
-        // make every webhook hang for minutes (this exact thing got a
-        // webhook auto-disabled by Vollna once already). Skip straight to
-        // a queued retry instead, so the response stays fast and the lead
-        // scores itself automatically once OpenClaw is back — no lead is
-        // ever lost, it just isn't always instant.
-        if (! $this->openClaw->isReachable()) {
-            ActivityLog::record('openclaw_unreachable_queued', subject: $lead);
-            ScoreLeadJob::dispatch($lead->id);
-
-            return ['status' => 'accepted', 'lead_id' => $lead->id];
-        }
-
+        // Score inline, in the same request, so the bidder gets the
+        // real-time alert within seconds. Scoring now runs against the
+        // AI provider's API directly (seconds, always-on) — no OpenClaw
+        // health gate needed. inline=true suppresses the final-failure
+        // treatment on this first attempt; the queued retry below owns
+        // the real retry cycle (3 tries, 10s gaps) and the needs_review
+        // + operator alert if those fail too. No lead is ever lost.
         try {
-            // inline=true suppresses the final-failure treatment on this
-            // first attempt — the queued job below owns the retry cycle
-            // (3 tries, 10s gaps) and the needs_review + operator alert
-            // if all of those fail too.
             ScoreLeadJob::dispatchSync($lead->id, true);
         } catch (\Throwable $e) {
             report($e);
-            // The inline attempt failed after passing the health check
-            // (e.g. timed out mid-call) — queue a real retry rather than
-            // leaving it to sit until the next manual rescore.
             ScoreLeadJob::dispatch($lead->id);
         }
 
