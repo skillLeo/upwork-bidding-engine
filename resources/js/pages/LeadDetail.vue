@@ -21,7 +21,6 @@ import {
 import {
   useLead,
   updateLeadStatus,
-  rescoreLead,
   regenerateLeadScore,
   regenerateLeadProposal,
 } from "@/composables/useLead";
@@ -37,11 +36,9 @@ import SkeletonText from "@/components/ui/SkeletonText.vue";
 import EmptyState from "@/components/ui/EmptyState.vue";
 import { relativeTime } from "@/lib/utils";
 import { apiErrorMessage } from "@/lib/api-client";
-import { useAuthStore } from "@/stores/auth";
 
 const route = useRoute();
 const router = useRouter();
-const auth = useAuthStore();
 
 const statusActions = [
   { status: "sent", label: "Mark Sent" },
@@ -106,19 +103,6 @@ async function handleStatus(status) {
   }
 }
 
-async function handleRescore() {
-  if (!lead.value) return;
-  actionLoading.value = "rescore";
-  try {
-    const updated = await rescoreLead(lead.value.id);
-    lead.value = updated;
-    toast.success("Rescoring started — check back shortly.");
-  } catch (error) {
-    toast.error(apiErrorMessage(error, "Could not rescore."));
-  } finally {
-    actionLoading.value = null;
-  }
-}
 
 async function handleCopy() {
   if (!lead.value?.proposal_text) return;
@@ -145,7 +129,8 @@ const subScoreBlocks = computed(() => {
 async function handleRegenerateScore() {
   if (!lead.value || regenLoading.value) return;
   regenLoading.value = "score";
-  startAiTask("Re-scoring under your rubric…", 5000);
+  // Live scoring runs 5-20s (rubric + sub-scores on the current model).
+  startAiTask("Re-scoring under your rubric…", 18000);
   try {
     lead.value = await regenerateLeadScore(lead.value.id);
     finishAiTask();
@@ -402,14 +387,13 @@ async function handleRegenerateProposal() {
           {{ action.label }}
         </Button>
         <Button
-          v-if="auth.isAdmin"
           variant="ghost"
           size="sm"
-          :disabled="actionLoading !== null"
-          :loading="actionLoading === 'rescore'"
-          @click="handleRescore"
+          :disabled="regenLoading !== null || actionLoading !== null"
+          @click="handleRegenerateScore"
         >
-          <RefreshCw class="h-3.5 w-3.5" /> Rescore
+          <RefreshCw :class="['h-3.5 w-3.5', regenLoading === 'score' && 'animate-spin']" />
+          {{ regenLoading === "score" ? "Scoring…" : "Re-score" }}
         </Button>
       </div>
 

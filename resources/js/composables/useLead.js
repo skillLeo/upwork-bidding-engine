@@ -43,11 +43,6 @@ export async function toggleLeadFavorite(id) {
   return res.data.data;
 }
 
-export async function rescoreLead(id) {
-  const res = await apiClient.post(`/leads/${id}/rescore`);
-  return res.data.data;
-}
-
 export async function regenerateLeadScore(id) {
   // Synchronous rubric re-score (~3-5s) — generous timeout for cold runs.
   const res = await apiClient.post(`/leads/${id}/regenerate-score`, null, { timeout: 60000 });
