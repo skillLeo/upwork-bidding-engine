@@ -211,6 +211,31 @@ class AiLayerTest extends TestCase
         $this->assertTrue(AiCall::where('success', false)->whereNotNull('error')->exists());
     }
 
+    public function test_provider_switch_to_openai_maps_stale_claude_model_to_equivalent(): void
+    {
+        // The operator flips ai_provider to openai while scoring_model
+        // still holds a Claude ID — the call must genuinely run on OpenAI
+        // with its equivalent tier, not fail into a boomerang-failover
+        // back to Anthropic.
+        $this->settings->set('ai_provider', 'openai');
+        $this->settings->set('openai_api_key', 'sk-test-openai');
+        $this->settings->set('scoring_model', 'claude-haiku-4-5');
+
+        Http::fake([
+            'api.openai.com/*' => Http::response([
+                'choices' => [['message' => ['content' => '{"score": 6, "bid": false, "reason": "ok"}']]],
+                'usage' => ['prompt_tokens' => 700, 'completion_tokens' => 40],
+            ]),
+        ]);
+
+        $result = app(ScoringService::class)->score(Lead::factory()->create());
+
+        $this->assertSame('openai', $result['response']->provider);
+        $this->assertSame('gpt-4o-mini', $result['response']->model);
+        Http::assertSent(fn ($request) => str_contains((string) $request->url(), 'api.openai.com')
+            && $request->data()['model'] === 'gpt-4o-mini');
+    }
+
     public function test_agent_score_endpoint_uses_same_rubric_and_requires_token(): void
     {
         $this->settings->set('openclaw_token', 'agent-token');

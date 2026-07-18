@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive } from "vue";
+import { ref, reactive, computed, watch } from "vue";
 import { toast } from "vue-sonner";
 import Card from "@/components/ui/Card.vue";
 import CardHeader from "@/components/ui/CardHeader.vue";
@@ -26,6 +26,11 @@ const anthropicModels = [
   { id: "claude-opus-4-8", label: "Claude Opus 4.8 — $5/$25 per MTok (most capable)" },
 ];
 
+const openaiModels = [
+  { id: "gpt-4o-mini", label: "GPT-4o mini — $0.15/$0.60 per MTok (fast, cheap)" },
+  { id: "gpt-4o", label: "GPT-4o — $2.50/$10 per MTok" },
+];
+
 const anthropicKey = ref("");
 const openaiKey = ref("");
 const form = reactive({
@@ -36,6 +41,26 @@ const form = reactive({
   proposal_system_prompt: props.settings.proposal_system_prompt ?? "",
 });
 const saving = ref(false);
+
+const modelOptions = computed(() =>
+  form.ai_provider === "openai" ? openaiModels : anthropicModels,
+);
+
+// Switching provider swaps the model lists — snap any model that belongs
+// to the other provider onto this provider's equivalent tier, so what you
+// see is exactly what the backend will run.
+watch(
+  () => form.ai_provider,
+  (provider) => {
+    const list = provider === "openai" ? openaiModels : anthropicModels;
+    if (!list.some((m) => m.id === form.scoring_model)) {
+      form.scoring_model = provider === "openai" ? "gpt-4o-mini" : "claude-haiku-4-5";
+    }
+    if (!list.some((m) => m.id === form.proposal_model)) {
+      form.proposal_model = provider === "openai" ? "gpt-4o" : "claude-sonnet-5";
+    }
+  },
+);
 
 async function handleSave() {
   saving.value = true;
@@ -89,7 +114,7 @@ async function handleSave() {
             v-model="form.scoring_model"
             class="h-10 w-full rounded-md border border-border-strong bg-white px-3 text-sm text-text-secondary focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none"
           >
-            <option v-for="m in anthropicModels" :key="m.id" :value="m.id">{{ m.label }}</option>
+            <option v-for="m in modelOptions" :key="m.id" :value="m.id">{{ m.label }}</option>
           </select>
           <FieldHint>Runs on every lead that passes the free hard filters — keep it cheap.</FieldHint>
         </div>
@@ -101,7 +126,7 @@ async function handleSave() {
           v-model="form.proposal_model"
           class="h-10 w-full rounded-md border border-border-strong bg-white px-3 text-sm text-text-secondary focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none"
         >
-          <option v-for="m in anthropicModels" :key="m.id" :value="m.id">{{ m.label }}</option>
+          <option v-for="m in modelOptions" :key="m.id" :value="m.id">{{ m.label }}</option>
         </select>
         <FieldHint>
           Only runs when the score clears your cutoff — below-cutoff leads never pay for a

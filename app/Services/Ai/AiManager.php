@@ -44,6 +44,13 @@ class AiManager
         $primary = $this->provider($this->settings->get('ai_provider', 'anthropic'));
         $secondary = $primary->name() === 'anthropic' ? $this->openAi : $this->anthropic;
 
+        // Model IDs are provider-specific. If the configured model belongs
+        // to the OTHER provider (e.g. the operator switched provider but a
+        // Claude model ID is still stored), silently sending it would fail
+        // 3x and boomerang to failover — instead map to this provider's
+        // equivalent tier so a provider switch genuinely takes effect.
+        $model = $this->resolveModel($primary, $model, $purpose);
+
         if ($this->failoverActive() && $secondary->isConfigured()) {
             return $this->attempt($secondary, $purpose, $systemPrompt, $userContent, $this->equivalentModel($secondary, $purpose), $maxTokens, $leadId);
         }
@@ -147,6 +154,19 @@ class AiManager
     protected function failoverActive(): bool
     {
         return Cache::has(self::FAILOVER_UNTIL_KEY);
+    }
+
+    protected function resolveModel(AiProvider $provider, string $model, string $purpose): string
+    {
+        if ($provider->name() === 'openai' && ! str_starts_with($model, 'gpt-')) {
+            return $this->equivalentModel($provider, $purpose);
+        }
+
+        if ($provider->name() === 'anthropic' && ! str_starts_with($model, 'claude-')) {
+            return $this->equivalentModel($provider, $purpose);
+        }
+
+        return $model;
     }
 
     /**
