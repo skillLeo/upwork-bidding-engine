@@ -247,11 +247,19 @@ async function handleRegenerateProposal() {
       </div>
     </Card>
 
-    <Card v-if="lead.score !== null" class="mt-4 p-6">
+    <Card class="mt-4 p-6">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div class="flex items-center gap-2">
-          <ScoreBadge :score="lead.score" />
-          <p class="text-sm font-semibold text-text-primary">Why this score</p>
+          <span
+            v-if="regenLoading === 'score'"
+            class="inline-flex items-center gap-1.5 rounded-pill bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary"
+          >
+            <RefreshCw class="h-3.5 w-3.5 animate-spin" /> Scoring…
+          </span>
+          <ScoreBadge v-else-if="lead.score !== null" :score="lead.score" />
+          <p class="text-sm font-semibold text-text-primary">
+            {{ lead.score !== null ? "Why this score" : "Not scored yet" }}
+          </p>
           <span
             v-if="lead.boost"
             class="rounded-pill border border-success/30 bg-success/10 px-2 py-0.5 text-xs font-semibold text-success"
@@ -263,20 +271,26 @@ async function handleRegenerateProposal() {
           variant="secondary"
           size="sm"
           :disabled="regenLoading !== null"
-          title="Re-score this lead under your current rubric"
+          title="Score this lead under your current rubric"
           @click="handleRegenerateScore"
         >
           <RefreshCw :class="['h-3.5 w-3.5', regenLoading === 'score' && 'animate-spin']" />
-          {{ regenLoading === "score" ? "Scoring…" : "Re-score" }}
+          {{
+            regenLoading === "score" ? "Scoring…" : lead.score !== null ? "Re-score" : "Score now"
+          }}
         </Button>
       </div>
       <p
+        v-if="lead.score_reason"
         :class="[
           'mt-2 text-sm text-text-secondary transition-opacity',
           regenLoading === 'score' && 'animate-pulse opacity-50',
         ]"
       >
         {{ lead.score_reason }}
+      </p>
+      <p v-else-if="lead.score === null && regenLoading !== 'score'" class="mt-2 text-sm text-text-tertiary">
+        Run the rubric to get the score, verdict, and the five-pillar breakdown.
       </p>
 
       <div

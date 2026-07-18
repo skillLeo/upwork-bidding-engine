@@ -44,6 +44,10 @@ class DiagnosticsController extends Controller
         $silenceThresholdHours = max(1, (int) $settings->get('vollna_silence_alert_hours', 6));
 
         return response()->json(['data' => [
+            // Stamped by the scheduler every minute; read here on a web
+            // request so a dead cron is visible even though the scheduler
+            // can't alert about its own death.
+            'cron_last_tick' => \Illuminate\Support\Facades\Cache::get('cron:last_tick'),
             'queue_depth' => DB::table('jobs')->count(),
             'failed_jobs' => DB::table('failed_jobs')->count(),
             'ai_engine_enabled' => $settings->aiEngineEnabled(),

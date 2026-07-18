@@ -39,9 +39,23 @@ const vollnaHealthy = computed(() => {
   return ageHours < (data.value.vollna_silence_threshold_hours ?? 6);
 });
 
+const cronHealthy = computed(() => {
+  if (!data.value?.cron_last_tick) return false;
+  return Date.now() - new Date(data.value.cron_last_tick).getTime() < 3 * 60_000;
+});
+
 const services = computed(() => {
   if (!data.value) return [];
   return [
+    {
+      name: "Scheduler (cron)",
+      healthy: cronHealthy.value,
+      detail: data.value.cron_last_tick
+        ? cronHealthy.value
+          ? `last tick ${relativeTime(data.value.cron_last_tick)}`
+          : `DEAD — last tick ${relativeTime(data.value.cron_last_tick)}. Queue, health checks and alerts are all stopped. Re-enable the schedule:run cron job in Hostinger hPanel.`
+        : "never ticked — the schedule:run cron job is not running on the server",
+    },
     {
       name: "Vollna webhook",
       healthy: vollnaHealthy.value,

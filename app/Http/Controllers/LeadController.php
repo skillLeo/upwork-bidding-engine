@@ -482,19 +482,29 @@ class LeadController extends Controller
 
     /**
      * Synchronous re-score under the settings-held rubric — updates the
-     * score fields in place (status untouched, no notifications), so the
-     * UI can show the fresh verdict immediately.
+     * score fields in place, so the UI can show the fresh verdict
+     * immediately. A lead still in the intake stages (new / scoring /
+     * needs_review — e.g. one wiped by the old queued rescore, or one the
+     * dead queue never processed) also gets its status set by the verdict
+     * so it lands in the right list; a lead already worked (ready, sent,
+     * replied, won) keeps its status — re-scoring must never demote it.
      */
     public function regenerateScore(Lead $lead, \App\Services\Ai\ScoringService $aiScoring): JsonResponse
     {
         $result = $aiScoring->score($lead);
 
-        $lead->update([
+        $updates = [
             'score' => $result['score'],
             'score_reason' => $result['reason'],
             'sub_scores' => $result['sub_scores'],
             'boost' => $result['boost'],
-        ]);
+        ];
+
+        if (in_array($lead->status, [LeadStatus::New, LeadStatus::Scoring, LeadStatus::NeedsReview], true)) {
+            $updates['status'] = $result['bid'] ? LeadStatus::Ready : LeadStatus::Archived;
+        }
+
+        $lead->update($updates);
 
         ActivityLog::record(ActivityType::LeadScored, subject: $lead, meta: [
             'score' => $result['score'],
