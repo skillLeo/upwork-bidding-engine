@@ -37,6 +37,8 @@ Route::prefix('agent')->middleware(['agent', 'throttle:60,1'])->group(function (
     Route::get('/summary', [\App\Http\Controllers\AgentApiController::class, 'summary']);
     Route::get('/clients/{client}', [\App\Http\Controllers\AgentApiController::class, 'client']);
     Route::post('/leads/{lead}/status', [\App\Http\Controllers\AgentApiController::class, 'updateStatus']);
+    Route::post('/leads/{lead}/rescore', [\App\Http\Controllers\AgentApiController::class, 'rescore']);
+    Route::post('/leads/{lead}/rewrite', [\App\Http\Controllers\AgentApiController::class, 'rewrite']);
 });
 
 // Product name + logo — the sign-in screen needs these before anyone has

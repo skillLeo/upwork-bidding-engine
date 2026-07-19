@@ -481,62 +481,32 @@ class LeadController extends Controller
     }
 
     /**
-     * Synchronous re-score under the settings-held rubric — updates the
-     * score fields in place, so the UI can show the fresh verdict
-     * immediately. A lead still in the intake stages (new / scoring /
-     * needs_review — e.g. one wiped by the old queued rescore, or one the
-     * dead queue never processed) also gets its status set by the verdict
-     * so it lands in the right list; a lead already worked (ready, sent,
-     * replied, won) keeps its status — re-scoring must never demote it.
+     * Synchronous re-score — one shared pipeline (LeadRefreshService)
+     * with the Agent API; this is just the dashboard's mouth on it.
      */
-    public function regenerateScore(Lead $lead, \App\Services\Ai\ScoringService $aiScoring): JsonResponse
+    public function regenerateScore(Lead $lead, \App\Services\LeadRefreshService $refresh): JsonResponse
     {
-        $result = $aiScoring->score($lead);
-
-        $updates = [
-            'score' => $result['score'],
-            'score_reason' => $result['reason'],
-            'sub_scores' => $result['sub_scores'],
-            'boost' => $result['boost'],
-        ];
-
-        if (in_array($lead->status, [LeadStatus::New, LeadStatus::Scoring, LeadStatus::NeedsReview], true)) {
-            $updates['status'] = $result['bid'] ? LeadStatus::Ready : LeadStatus::Archived;
+        try {
+            $refresh->rescore($lead, 'dashboard');
+        } catch (\App\Services\LeadRunInProgressException $e) {
+            return response()->json(['message' => $e->getMessage()], 409);
         }
-
-        $lead->update($updates);
-
-        ActivityLog::record(ActivityType::LeadScored, subject: $lead, meta: [
-            'score' => $result['score'],
-            'boost' => $result['boost'],
-            'manual' => true,
-        ]);
 
         return response()->json(['data' => new LeadResource($lead->fresh())]);
     }
 
     /**
-     * Synchronous fresh proposal under the settings-held guide, using the
-     * lead's current score as context. Runs ~15s — the SPA shows a
-     * non-blocking progress toast while it writes.
+     * Synchronous fresh proposal — same shared pipeline as the Agent
+     * API's rewrite. The SPA shows a non-blocking progress toast while
+     * it runs (~15-60s with the quality gate).
      */
-    public function regenerateProposal(Lead $lead, \App\Services\Ai\ProposalService $proposals): JsonResponse
+    public function regenerateProposal(Lead $lead, \App\Services\LeadRefreshService $refresh): JsonResponse
     {
-        $result = $proposals->write($lead, [
-            'score' => $lead->score ?? 7,
-            'boost' => (bool) $lead->boost,
-            'reason' => (string) $lead->score_reason,
-        ]);
-
-        $lead->update([
-            'proposal_text' => $result['text'],
-            'proposal_warnings' => $result['warnings'] !== [] ? $result['warnings'] : null,
-        ]);
-
-        ActivityLog::record('proposal_regenerated', subject: $lead, meta: [
-            'shipped_rule' => $result['shipped_rule'],
-            'revisions' => $result['revisions'],
-        ]);
+        try {
+            $refresh->rewrite($lead, 'dashboard');
+        } catch (\App\Services\LeadRunInProgressException $e) {
+            return response()->json(['message' => $e->getMessage()], 409);
+        }
 
         return response()->json(['data' => new LeadResource($lead->fresh())]);
     }

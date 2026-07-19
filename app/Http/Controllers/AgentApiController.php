@@ -109,6 +109,48 @@ class AgentApiController extends Controller
     }
 
     /**
+     * WhatsApp-triggered re-score — the EXACT same pipeline as the
+     * dashboard button (LeadRefreshService), so rules always come from
+     * Settings at this second. Synchronous by design: a chat is a
+     * conversation, and 10-60s is an acceptable wait for a real answer.
+     * No body params are read — lead id only; rules are never accepted
+     * from a caller.
+     */
+    public function rescore(Lead $lead, \App\Services\LeadRefreshService $refresh): JsonResponse
+    {
+        try {
+            return response()->json(['data' => $refresh->rescore($lead, 'agent_api')]);
+        } catch (\App\Services\LeadRunInProgressException $e) {
+            return response()->json(['message' => 'Already in progress — a rescore or rewrite is running for this lead.'], 409);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'message' => 'The run failed or timed out — check the dashboard at upwork.skillleo.com for the current state.',
+            ], 500);
+        }
+    }
+
+    /**
+     * WhatsApp-triggered proposal rewrite — same shared pipeline as the
+     * dashboard's Rewrite button, full quality gate included.
+     */
+    public function rewrite(Lead $lead, \App\Services\LeadRefreshService $refresh): JsonResponse
+    {
+        try {
+            return response()->json(['data' => $refresh->rewrite($lead, 'agent_api')]);
+        } catch (\App\Services\LeadRunInProgressException $e) {
+            return response()->json(['message' => 'Already in progress — a rescore or rewrite is running for this lead.'], 409);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'message' => 'The run failed or timed out — check the dashboard at upwork.skillleo.com for the current state.',
+            ], 500);
+        }
+    }
+
+    /**
      * @return array<string, mixed>
      */
     protected function leadSummary(Lead $lead): array

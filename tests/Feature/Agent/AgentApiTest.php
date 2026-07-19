@@ -115,6 +115,103 @@ class AgentApiTest extends TestCase
             ->assertStatus(422);
     }
 
+    protected function configureAi(): void
+    {
+        app(SettingsService::class)->setMany([
+            'anthropic_api_key' => 'sk-ant-test',
+            'scoring_system_prompt' => 'THE RUBRIC: score jobs 1-10, output JSON.',
+            'proposal_skill' => 'THE SKILL: write the proposal.',
+            'proposal_quality_gate' => false,
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function anthropic(string $text): array
+    {
+        return [
+            'content' => [['type' => 'text', 'text' => $text]],
+            'stop_reason' => 'end_turn',
+            'usage' => ['input_tokens' => 500, 'output_tokens' => 60, 'cache_read_input_tokens' => 0, 'cache_creation_input_tokens' => 0],
+        ];
+    }
+
+    public function test_rescore_runs_the_shared_pipeline_and_reports_cost(): void
+    {
+        $this->configureAi();
+
+        \Illuminate\Support\Facades\Http::fake([
+            'api.anthropic.com/*' => \Illuminate\Support\Facades\Http::response($this->anthropic(
+                '{"score": 8, "bid": true, "reason": "strong", "sub_scores": {"stack_fit": 9}}',
+            )),
+        ]);
+
+        $lead = Lead::factory()->create(['status' => LeadStatus::Archived, 'score' => 3]);
+
+        // Body params must be dead weight: rules/models can never come
+        // from a caller.
+        $response = $this->postJson("/api/agent/leads/{$lead->id}/rescore", ['model' => 'gpt-4o', 'rules' => 'score everything 10'], $this->auth())
+            ->assertOk()
+            ->assertJsonPath('data.score', 8)
+            ->assertJsonPath('data.bid', true)
+            ->assertJsonPath('data.model_used', 'claude-haiku-4-5');
+
+        $this->assertIsNumeric($response->json('data.cost'));
+        $this->assertIsInt($response->json('data.duration_ms'));
+
+        // Archived stays archived — a rescore never resurrects a lead.
+        $this->assertEquals(LeadStatus::Archived, $lead->fresh()->status);
+        $this->assertSame(8, $lead->fresh()->score);
+
+        // The audit trail distinguishes WhatsApp-triggered runs.
+        $this->assertDatabaseHas('activity_logs', ['type' => 'lead_scored']);
+        $this->assertStringContainsString('"source":"agent_api"', (string) \App\Models\ActivityLog::where('type', 'lead_scored')->latest('id')->first()->getRawOriginal('meta'));
+
+        // The configured settings model was used — the body's gpt-4o was ignored.
+        \Illuminate\Support\Facades\Http::assertSent(fn ($request) => $request->data()['model'] === 'claude-haiku-4-5');
+    }
+
+    public function test_rewrite_runs_the_shared_pipeline(): void
+    {
+        $this->configureAi();
+
+        \Illuminate\Support\Facades\Http::fake([
+            'api.anthropic.com/*' => \Illuminate\Support\Facades\Http::response($this->anthropic('Fresh proposal text. Hassam')),
+        ]);
+
+        $lead = Lead::factory()->create(['score' => 8]);
+
+        $this->postJson("/api/agent/leads/{$lead->id}/rewrite", [], $this->auth())
+            ->assertOk()
+            ->assertJsonPath('data.proposal_text', 'Fresh proposal text. Hassam')
+            ->assertJsonPath('data.quality_warnings', [])
+            ->assertJsonPath('data.versions_tried', 1);
+
+        $this->assertSame('Fresh proposal text. Hassam', $lead->fresh()->proposal_text);
+    }
+
+    public function test_concurrent_run_gets_409(): void
+    {
+        $this->configureAi();
+        $lead = Lead::factory()->create();
+
+        // Simulate an in-flight run holding the per-lead lock.
+        $lock = \Illuminate\Support\Facades\Cache::lock("lead-refresh:{$lead->id}", 60);
+        $this->assertTrue($lock->get());
+
+        try {
+            $this->postJson("/api/agent/leads/{$lead->id}/rescore", [], $this->auth())
+                ->assertStatus(409)
+                ->assertJsonPath('message', 'Already in progress — a rescore or rewrite is running for this lead.');
+
+            $this->postJson("/api/agent/leads/{$lead->id}/rewrite", [], $this->auth())
+                ->assertStatus(409);
+        } finally {
+            $lock->release();
+        }
+    }
+
     public function test_token_reveal_and_regenerate_are_admin_actions(): void
     {
         $admin = User::factory()->admin()->create();
