@@ -135,6 +135,28 @@ class PollApiTest extends TestCase
         $this->assertSame($aiCallsAfterFirst, \App\Models\AiCall::count(), 'A duplicate must never pay for a second scoring call.');
     }
 
+    public function test_poll_queues_scoring_instead_of_running_it_inline(): void
+    {
+        // The poller runs INSIDE the scheduler process (proc_open is
+        // disabled on the host), so it must return in seconds: scoring is
+        // queued for the scheduler's queue closure, never run in-line.
+        \Illuminate\Support\Facades\Bus::fake([\App\Jobs\ScoreLeadJob::class]);
+
+        Http::fake([
+            'api.vollna.com/*' => Http::response($this->apiResponse([
+                $this->project('444', 'Queued scoring job'),
+            ])),
+        ]);
+
+        $this->artisan('vollna:poll-api')->assertSuccessful();
+
+        $lead = Lead::where('external_id', 'vollna_pid_444')->firstOrFail();
+        \Illuminate\Support\Facades\Bus::assertDispatched(\App\Jobs\ScoreLeadJob::class, fn ($job) => $job->leadId === $lead->id);
+
+        // No AI call happened during the poll itself.
+        Http::assertNotSent(fn ($request) => str_contains((string) $request->url(), 'api.anthropic.com'));
+    }
+
     public function test_api_failure_alerts_once_per_incident(): void
     {
         Http::fake([

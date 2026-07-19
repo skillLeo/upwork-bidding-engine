@@ -61,7 +61,14 @@ class VollnaProjectImporter
      * @param  array<string, mixed>  $project
      * @return array<string, mixed>
      */
-    public function importProject(array $project): array
+    /**
+     * $scoreInline: true (webhook-style) scores in the same request so an
+     * alert lands within seconds; false (the scheduled poller) just queues
+     * the scoring — the poller runs INSIDE the scheduler process, and a
+     * burst of inline 60-90s scoring runs there would starve every other
+     * scheduled task and risk the whole cron being killed mid-run.
+     */
+    public function importProject(array $project, bool $scoreInline = true): array
     {
         $mapped = $this->mapPayload($project);
 
@@ -91,6 +98,12 @@ class VollnaProjectImporter
         // treatment on this first attempt; the queued retry below owns
         // the real retry cycle (3 tries, 10s gaps) and the needs_review
         // + operator alert if those fail too. No lead is ever lost.
+        if (! $scoreInline) {
+            ScoreLeadJob::dispatch($lead->id);
+
+            return ['status' => 'accepted', 'lead_id' => $lead->id];
+        }
+
         try {
             ScoreLeadJob::dispatchSync($lead->id, true);
         } catch (\Throwable $e) {

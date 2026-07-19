@@ -9,32 +9,54 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-Schedule::command('leads:follow-up-reminders')->daily();
+/*
+|--------------------------------------------------------------------------
+| Every task below runs IN-PROCESS via Artisan::call, never as a
+| Schedule::command. This host (Hostinger shared) disables proc_open, so
+| Schedule::command — which spawns a subprocess — throws a LogicException
+| on every run and silently executes NOTHING; only closures work. That is
+| exactly how the poller, queue drain, and health checks were all dead
+| for hours on 2026-07-19 while the heartbeat closure kept ticking.
+|
+| Consequences respected here:
+| 1. Tasks run sequentially inside one schedule:run, so each must be
+|    FAST — the poller queues scoring instead of running it inline.
+| 2. Every closure gets withoutOverlapping with a SHORT expiry so a
+|    killed cron self-heals in minutes, never the 24h default.
+*/
+
+Schedule::call(fn () => Artisan::call('leads:follow-up-reminders'))
+    ->daily()
+    ->name('follow-up-reminders')
+    ->withoutOverlapping(30);
 
 // The live intake door. Vollna moved webhooks behind their Agency plan,
 // so new leads now arrive by polling the filter API every 2 minutes.
 // Additive only — never deletes (that's the manual Sync now button).
-Schedule::command('vollna:poll-api --quiet-ok')
+Schedule::call(fn () => Artisan::call('vollna:poll-api --quiet-ok'))
     ->everyTwoMinutes()
-    ->withoutOverlapping();
+    ->name('vollna-poll-api')
+    ->withoutOverlapping(10);
 
-// Dead-man's switch: alerts (once per incident) if Vollna's webhook has
+// Dead-man's switch: alerts (once per incident) if Vollna intake has
 // gone quiet past the configured window. See VollnaCheckSilenceCommand.
-// Every 15 minutes, not hourly: the webhook went dark for 40 hours on
-// 2026-07-17 and nothing shouted, so detection latency matters more than
-// the negligible cost of a settings read.
-Schedule::command('vollna:check-silence')->everyFifteenMinutes()->withoutOverlapping();
+Schedule::call(fn () => Artisan::call('vollna:check-silence'))
+    ->everyFifteenMinutes()
+    ->name('vollna-check-silence')
+    ->withoutOverlapping(10);
 
 // OpenClaw + WhatsApp watchdog — one alert per outage, silent recovery.
-Schedule::command('health:check')->everyFiveMinutes()->withoutOverlapping();
+Schedule::call(fn () => Artisan::call('health:check'))
+    ->everyFiveMinutes()
+    ->name('health-check')
+    ->withoutOverlapping(10);
 
-// Lets the whole app run on hosts with no persistent worker process (shared
-// hosting + cron only): drains whatever's queued, then exits, every minute.
-// Harmless alongside a real `queue:work`/Horizon deployment too — it just
-// finds nothing to do and returns immediately.
-Schedule::command('queue:work --stop-when-empty --max-time=50')
+// Drains the queue (scoring, proposals, notifications) with a hard time
+// box, then exits; the next minute's run continues where it left off.
+Schedule::call(fn () => Artisan::call('queue:work --stop-when-empty --max-time=45'))
     ->everyMinute()
-    ->withoutOverlapping();
+    ->name('queue-drain')
+    ->withoutOverlapping(15);
 
 // Cron heartbeat — every task above (queue draining, health checks, the
 // dead-man's switch itself) rides the single hPanel `schedule:run` cron,

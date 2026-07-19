@@ -78,7 +78,11 @@ class VollnaPollApiCommand extends Command
 
         foreach ($projects as $project) {
             try {
-                $result = $importer->importProject($importer->normalizeApiProject($project));
+                // scoreInline false: this command runs INSIDE the scheduler
+                // process (proc_open is disabled on this host), so it must
+                // return in seconds — scoring is queued and drained by the
+                // scheduler's queue closure within the next minute.
+                $result = $importer->importProject($importer->normalizeApiProject($project), scoreInline: false);
             } catch (\Throwable $e) {
                 report($e);
                 $skipped++;
