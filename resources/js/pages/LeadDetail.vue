@@ -34,7 +34,7 @@ import StatusPill from "@/components/ui/StatusPill.vue";
 import Skeleton from "@/components/ui/Skeleton.vue";
 import SkeletonText from "@/components/ui/SkeletonText.vue";
 import EmptyState from "@/components/ui/EmptyState.vue";
-import { relativeTime } from "@/lib/utils";
+import { cn, relativeTime } from "@/lib/utils";
 import { apiErrorMessage } from "@/lib/api-client";
 
 const route = useRoute();
@@ -88,6 +88,14 @@ const statBlocks = computed(() => {
     },
   ];
 });
+
+// Same match-highlighting as the leads list's row preview (LeadRow.vue) -
+// a skill matching the active saved filter's keywords stands out here too,
+// instead of the detail page being the one place that context is lost.
+function isMatchedSkill(skill) {
+  const keywords = activeFilter.value?.criteria.include_keywords ?? [];
+  return keywords.some((kw) => skill.toLowerCase().includes(kw.toLowerCase()));
+}
 
 async function handleStatus(status) {
   if (!lead.value) return;
@@ -177,7 +185,7 @@ async function handleRegenerateProposal() {
     </EmptyState>
   </PageContainer>
 
-  <PageContainer v-else class="max-w-[1400px]">
+  <PageContainer v-else class="max-w-[1600px]">
     <router-link
       to="/leads"
       class="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-text-secondary hover:text-primary"
@@ -229,6 +237,23 @@ async function handleRegenerateProposal() {
                 {{ reason }}
               </li>
             </ul>
+          </div>
+
+          <div v-if="lead.skills?.length" class="mt-4 flex flex-wrap items-center gap-1.5">
+            <span
+              v-for="skill in lead.skills"
+              :key="skill"
+              :class="
+                cn(
+                  'rounded-pill border px-2.5 py-1 text-xs font-medium',
+                  isMatchedSkill(skill)
+                    ? 'border-warning-border bg-warning-bg text-warning'
+                    : 'border-border-strong text-text-secondary',
+                )
+              "
+            >
+              {{ skill }}
+            </span>
           </div>
 
           <div class="mt-5 border-t border-border pt-5">
@@ -308,7 +333,7 @@ async function handleRegenerateProposal() {
           </div>
         </Card>
 
-        <Card v-if="lead.proposal_text || lead.score !== null" class="p-6">
+        <Card v-if="lead.proposal_text || lead.score !== null" class="border-l-[3px] border-l-primary p-6">
           <div class="flex flex-wrap items-center justify-between gap-2">
             <div class="flex items-center gap-2">
               <p class="text-sm font-semibold text-text-primary">Proposal</p>

@@ -25,7 +25,7 @@ const recentActivity = computed(() => analytics.value?.recent_activity ?? []);
 </script>
 
 <template>
-  <PageContainer v-if="isLoading || !analytics" class="space-y-4">
+  <PageContainer v-if="isLoading || !analytics" class="max-w-[1600px] space-y-4">
     <Skeleton class="h-7 w-40" />
     <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
       <Skeleton v-for="i in 6" :key="i" class="h-24 w-full" />
@@ -33,7 +33,7 @@ const recentActivity = computed(() => analytics.value?.recent_activity ?? []);
     <Skeleton class="h-72 w-full" />
   </PageContainer>
 
-  <PageContainer v-else class="space-y-4">
+  <PageContainer v-else class="max-w-[1600px] space-y-4">
     <div>
       <h1 class="text-xl font-semibold text-text-primary">Analytics</h1>
       <p class="text-sm text-text-secondary">Last 14 days of pipeline activity.</p>

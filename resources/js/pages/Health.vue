@@ -99,7 +99,7 @@ const stats = computed(() => {
 </script>
 
 <template>
-  <PageContainer>
+  <PageContainer class="max-w-[1600px]">
     <div class="mb-5 flex items-center justify-between">
       <div class="flex items-center gap-2">
         <Activity class="h-5 w-5 text-primary" />
