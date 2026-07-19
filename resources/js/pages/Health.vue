@@ -133,6 +133,24 @@ const stats = computed(() => {
         </Card>
       </div>
 
+      <Card v-if="data.notification_failures?.length" class="mt-4 px-5 py-3.5">
+        <p class="text-xs font-semibold text-danger">Recent WhatsApp notification failures</p>
+        <ul class="mt-1.5 space-y-1">
+          <li
+            v-for="f in data.notification_failures"
+            :key="f.at + f.lead_id"
+            class="text-sm text-text-secondary"
+          >
+            <router-link :to="`/leads/${f.lead_id}`" class="font-medium text-primary hover:underline">
+              lead #{{ f.lead_id }}
+            </router-link>
+            — {{ f.error }}
+            <span v-if="f.final" class="font-semibold text-danger">(gave up after retries)</span>
+            <span class="text-text-tertiary">({{ relativeTime(f.at) }})</span>
+          </li>
+        </ul>
+      </Card>
+
       <Card v-if="data.last_error" class="mt-4 px-5 py-3.5">
         <p class="text-xs font-medium text-text-tertiary">Last error</p>
         <p class="mt-1 text-sm text-text-secondary">

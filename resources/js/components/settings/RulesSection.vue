@@ -78,6 +78,14 @@ async function handleSave() {
           <Input type="number" v-model.number="form.max_posted_age_days" />
           <FieldHint>Older postings are archived without an AI call — they stay visible, just unscored.</FieldHint>
         </div>
+        <div>
+          <Label>WhatsApp alert freshness (hours)</Label>
+          <Input type="number" v-model.number="form.notification_freshness_hours" />
+          <FieldHint>
+            Leads older than this at scoring time are still scored and written, but never ring
+            your phone — fresh leads are the strategy. 0 disables the gate.
+          </FieldHint>
+        </div>
       </div>
 
       <div>

@@ -205,6 +205,20 @@ async function handleRegenerateProposal() {
               </p>
             </div>
             <div class="flex shrink-0 items-center gap-2">
+              <span
+                v-if="lead.notify_error"
+                class="inline-flex items-center gap-1 rounded-pill border border-danger/40 bg-danger-bg px-2 py-0.5 text-xs font-semibold text-danger"
+                :title="lead.notify_error"
+              >
+                <AlertTriangle class="h-3 w-3" /> WhatsApp alert failed
+              </span>
+              <span
+                v-else-if="lead.notification_skipped_reason"
+                class="rounded-pill border border-border bg-neutral-bg px-2 py-0.5 text-xs font-medium text-text-tertiary"
+                :title="lead.notification_skipped_reason"
+              >
+                not sent to phone — stale
+              </span>
               <StatusPill :status="lead.status" />
               <ScoreBadge :score="lead.score" />
             </div>

@@ -31,10 +31,14 @@ Schedule::call(fn () => Artisan::call('leads:follow-up-reminders'))
     ->withoutOverlapping(30);
 
 // The live intake door. Vollna moved webhooks behind their Agency plan,
-// so new leads now arrive by polling the filter API every 2 minutes.
+// so new leads arrive by polling the filter API — every minute, the
+// honest latency ceiling on the Freelancer plan (worst case ~60s from
+// Vollna publishing to the lead existing here). Vollna publishes no
+// documented rate limit; at 1 request/min the failure alert (once per
+// incident) is the tripwire if they ever object with 429s.
 // Additive only — never deletes (that's the manual Sync now button).
 Schedule::call(fn () => Artisan::call('vollna:poll-api --quiet-ok'))
-    ->everyTwoMinutes()
+    ->everyMinute()
     ->name('vollna-poll-api')
     ->withoutOverlapping(10);
 

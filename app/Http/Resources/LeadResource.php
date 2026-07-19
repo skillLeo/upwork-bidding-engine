@@ -42,6 +42,8 @@ class LeadResource extends JsonResource
             'sub_scores' => $this->sub_scores,
             'proposal_text' => $this->proposal_text,
             'proposal_warnings' => $this->proposal_warnings,
+            'notification_skipped_reason' => $this->notification_skipped_reason,
+            'notify_error' => $this->notify_error,
             'status' => $this->status->value,
             'is_favorite' => (bool) $this->is_favorite,
             'client_id' => $this->client_id,

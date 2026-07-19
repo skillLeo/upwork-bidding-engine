@@ -97,6 +97,7 @@ class UpdateSettingsRequest extends FormRequest
             'red_flag_words' => ['sometimes', 'array'],
             'red_flag_words.*' => ['string', 'max:100'],
             'followup_days' => ['sometimes', 'integer', 'min:1', 'max:30'],
+            'notification_freshness_hours' => ['sometimes', 'integer', 'min:0', 'max:168'],
             'max_posted_age_days' => ['sometimes', 'integer', 'min:1', 'max:90'],
         ];
     }

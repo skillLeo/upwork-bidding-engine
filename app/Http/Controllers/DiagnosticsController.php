@@ -64,6 +64,16 @@ class DiagnosticsController extends Controller
                 'message' => $lastError->meta['error'] ?? null,
                 'at' => $lastError->created_at->toIso8601String(),
             ] : null,
+            // A dead tunnel or logged-out WhatsApp session must be visible
+            // here, not buried in activity logs.
+            'notification_failures' => ActivityLog::where('type', ActivityType::BidderNotifyFailed->value)
+                ->latest('id')->take(5)->get()
+                ->map(fn (ActivityLog $log) => [
+                    'lead_id' => $log->subject_id,
+                    'error' => mb_substr((string) ($log->meta['error'] ?? ''), 0, 160),
+                    'final' => (bool) ($log->meta['final'] ?? false),
+                    'at' => $log->created_at->toIso8601String(),
+                ])->all(),
             'last_webhook_received_at' => $lastWebhookReceived?->created_at?->toIso8601String(),
             'last_webhook_rejected' => $lastWebhookRejected ? [
                 'reason' => $lastWebhookRejected->meta['reason'] ?? null,

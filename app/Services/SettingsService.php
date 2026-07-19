@@ -191,6 +191,11 @@ class SettingsService
         'zero_history_budget_floor' => ['group' => 'rules', 'secret' => false, 'default' => 100],
         'red_flag_words' => ['group' => 'rules', 'secret' => false, 'default' => ['free test', 'unpaid sample', 'urgent no budget', 'revenue share only']],
         'followup_days' => ['group' => 'rules', 'secret' => false, 'default' => 3],
+        // Separate from the rubric's 7-day auto-reject: a 3-day-old 8/10
+        // still gets scored and written (visible on the dashboard), but a
+        // lead older than this at scoring time doesn't ring the phone —
+        // fresh leads are the whole bidding strategy. 0 disables the gate.
+        'notification_freshness_hours' => ['group' => 'rules', 'secret' => false, 'default' => 48],
         // A stale posting is a spend-saving pre-check, not a visibility
         // rule — a lead that fails this still saves, still shows up in the
         // dashboard as Archived, and is never deleted. It only skips the
