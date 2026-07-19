@@ -369,7 +369,11 @@ class SettingsService
             'port' => (int) $this->get('imap_port'),
             'folder' => (string) $this->get('imap_folder'),
             'address' => (string) $this->get('gmail_address'),
-            'password' => (string) $this->get('gmail_app_password'),
+            // Google displays App Passwords as "abcd efgh ijkl mnop"; the
+            // spaces are presentation only and Gmail rejects them on some
+            // IMAP paths, so strip whitespace rather than make the
+            // operator guess why auth failed.
+            'password' => preg_replace('/\s+/', '', (string) $this->get('gmail_app_password')) ?? '',
             'sender' => (string) $this->get('vollna_sender_filter'),
             'enabled' => (bool) $this->get('imap_poll_enabled', true),
         ];

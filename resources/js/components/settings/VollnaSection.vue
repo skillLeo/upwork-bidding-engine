@@ -183,7 +183,7 @@ const webhookUrl = `${apiBase}/vollna-hook`;
           :is-set="settings.gmail_app_password?.is_set ?? false"
           :masked="settings.gmail_app_password?.masked ?? ''"
           v-model="gmailAppPassword"
-          hint="16-character App Password, NOT your Gmail password. Google Account → Security → 2-Step Verification → App passwords."
+          hint="16-character App Password, NOT your Gmail password. Create one at myaccount.google.com/apppasswords (it is no longer listed on the 2-Step Verification page). Spaces are fine — they're stripped automatically."
         />
 
         <div class="grid gap-4 sm:grid-cols-3">
