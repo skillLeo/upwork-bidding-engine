@@ -11,6 +11,13 @@ Artisan::command('inspire', function () {
 
 Schedule::command('leads:follow-up-reminders')->daily();
 
+// The live intake door. Vollna moved webhooks behind their Agency plan,
+// so new leads now arrive by polling the filter API every 2 minutes.
+// Additive only — never deletes (that's the manual Sync now button).
+Schedule::command('vollna:poll-api --quiet-ok')
+    ->everyTwoMinutes()
+    ->withoutOverlapping();
+
 // Dead-man's switch: alerts (once per incident) if Vollna's webhook has
 // gone quiet past the configured window. See VollnaCheckSilenceCommand.
 // Every 15 minutes, not hourly: the webhook went dark for 40 hours on

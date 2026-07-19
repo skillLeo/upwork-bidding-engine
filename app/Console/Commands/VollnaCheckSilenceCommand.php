@@ -29,7 +29,14 @@ class VollnaCheckSilenceCommand extends Command
     public function handle(SettingsService $settings, OpsAlertService $alerts): int
     {
         $threshold = max(1, (int) $settings->get('vollna_silence_alert_hours', 6));
-        $lastRaw = $settings->get('vollna_last_webhook_at');
+
+        // Watches intake from ANY door — the API poller (the live path now
+        // that webhooks are Agency-only) or a webhook delivery, whichever
+        // is more recent — so restoring either one clears the alarm.
+        $lastRaw = collect([
+            $settings->get('vollna_last_intake_at'),
+            $settings->get('vollna_last_webhook_at'),
+        ])->filter()->max();
 
         $last = null;
 
