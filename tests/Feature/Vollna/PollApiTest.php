@@ -157,6 +157,20 @@ class PollApiTest extends TestCase
         Http::assertNotSent(fn ($request) => str_contains((string) $request->url(), 'api.anthropic.com'));
     }
 
+    public function test_projects_older_than_the_scoring_window_are_never_imported(): void
+    {
+        // The resurrection bug: a mirror sync re-added 515 deleted
+        // two-week-old leads. Old postings now never get a row at all.
+        $old = $this->project('555', 'Ancient job');
+        $old['publishedAt'] = now()->subDays(10)->toIso8601String();
+
+        Http::fake(['api.vollna.com/*' => Http::response($this->apiResponse([$old]))]);
+
+        $this->artisan('vollna:poll-api')->assertSuccessful();
+
+        $this->assertDatabaseMissing('leads', ['external_id' => 'vollna_pid_555']);
+    }
+
     public function test_api_failure_alerts_once_per_incident(): void
     {
         Http::fake([

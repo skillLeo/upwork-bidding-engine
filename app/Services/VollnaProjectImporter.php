@@ -20,6 +20,8 @@ use Illuminate\Support\Str;
  */
 class VollnaProjectImporter
 {
+    public function __construct(protected SettingsService $settings) {}
+
 
     /**
      * The REST API returns a differently-shaped project than the webhook
@@ -74,6 +76,17 @@ class VollnaProjectImporter
 
         if ($mapped['external_id'] === '' || $mapped['title'] === '') {
             return ['status' => 'skipped', 'reason' => 'missing job identifier or title'];
+        }
+
+        // Age gate at the door: a posting older than the scoring window
+        // is never even inserted. Learned live on 2026-07-19: a mirror
+        // sync resurrected 515 deleted two-week-old leads and dispatched
+        // scoring for all of them. Old jobs are dead inventory — they
+        // don't get a row, a score, or an alert. (0 disables the gate.)
+        $maxAgeDays = (int) $this->settings->get('max_posted_age_days', 7);
+
+        if ($maxAgeDays > 0 && $mapped['posted_at'] !== null && $mapped['posted_at']->lt(now()->subDays($maxAgeDays))) {
+            return ['status' => 'skipped', 'reason' => "posted more than {$maxAgeDays} days ago — not imported"];
         }
 
         $existing = Lead::query()->where('external_id', $mapped['external_id'])->first();

@@ -73,7 +73,10 @@ class VollnaSyncJob implements ShouldQueue
             $projects = $body['data'] ?? [];
 
             foreach ($projects as $project) {
-                $result = $importer->importProject($importer->normalizeApiProject($project));
+                // Queue the scoring: a mirror sync can add dozens of leads,
+                // and inline 60-90s scoring runs are what made this job
+                // blow past its timeout and die mid-run.
+                $result = $importer->importProject($importer->normalizeApiProject($project), scoreInline: false);
 
                 if (in_array($result['status'], ['accepted', 'duplicate'], true)) {
                     $lead = Lead::find($result['lead_id']);

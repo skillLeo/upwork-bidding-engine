@@ -174,10 +174,16 @@ class ScoreLeadJob implements ShouldQueue
             'final' => true,
         ]);
 
-        app(OpsAlertService::class)->send(sprintf(
-            "⚠️ SkillLeo: AI scoring failed — lead \"%s\" was NOT scored after 3 attempts.\n\nError: %s\n\nIt's marked Needs review in the dashboard; rescore it once the AI provider is healthy.",
-            $lead->title,
-            $exception->getMessage(),
-        ));
+        // Once per incident, not once per lead: a dead API key during a
+        // sync burst turned this into 29+ identical WhatsApp messages.
+        // One alert opens the incident; the rest stay in the dashboard's
+        // Needs review list; the flag self-clears after 30 minutes.
+        if (\Illuminate\Support\Facades\Cache::add('ai:scoring_failure_alerted', now()->toIso8601String(), now()->addMinutes(30))) {
+            app(OpsAlertService::class)->send(sprintf(
+                "⚠️ SkillLeo: AI scoring is failing — e.g. lead \"%s\" was NOT scored after 3 attempts.\n\nError: %s\n\nFailed leads are marked Needs review in the dashboard; rescore them once the AI provider is healthy. Further scoring-failure alerts are muted for 30 minutes.",
+                $lead->title,
+                $exception->getMessage(),
+            ));
+        }
     }
 }

@@ -231,6 +231,18 @@ class ScoreLeadJobTest extends TestCase
 
         Http::assertSent(fn ($request) => ($request['skill'] ?? null) === 'send_whatsapp_message'
             && str_contains($request['message'], 'NOT scored'));
+
+        // Once per incident, not once per lead — a dead API key during a
+        // sync burst must not become dozens of identical alerts.
+        $second = Lead::factory()->create(['status' => LeadStatus::Scoring]);
+        (new ScoreLeadJob($second->id))->failed(new \RuntimeException('Provider timed out'));
+
+        $this->assertEquals(LeadStatus::NeedsReview, $second->fresh()->status);
+        $this->assertSame(
+            1,
+            count(Http::recorded(fn ($r) => ($r['skill'] ?? null) === 'send_whatsapp_message')),
+            'Second failure in the same incident must not send another alert.',
+        );
     }
 
     public function test_inline_attempt_failure_skips_final_failure_treatment(): void
