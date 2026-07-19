@@ -15,7 +15,10 @@ use App\Services\SettingsService;
  */
 class ScoringService
 {
-    public const MAX_TOKENS = 1000;
+    // Seen live: at 1000 the model ran out of room mid-JSON after adding
+    // an uninvited "details" object, and the truncated output failed the
+    // lead. Generous headroom costs fractions of a cent.
+    public const MAX_TOKENS = 2500;
 
     /**
      * Output plumbing appended after the rubric (same precedent as
@@ -23,7 +26,7 @@ class ScoringService
      * sub-scores make a 6 explainable on the lead page. The overall
      * score and verdict still follow the rubric's weights and gates.
      */
-    public const SUB_SCORES_SPEC = 'ADDITIONAL OUTPUT REQUIREMENT: besides the keys your output format already requires, include a "sub_scores" object rating each pillar 1-10: {"client_quality": n, "competition": n, "stack_fit": n, "budget": n, "post_quality": n}. These explain the overall score; the overall score and verdict still follow the rubric.';
+    public const SUB_SCORES_SPEC = 'ADDITIONAL OUTPUT REQUIREMENT: besides the keys your output format already requires, include a "sub_scores" object rating each pillar 1-10: {"client_quality": n, "competition": n, "stack_fit": n, "budget": n, "post_quality": n}. These explain the overall score; the overall score and verdict still follow the rubric. Do NOT add any other keys, objects, notes, or commentary — the required keys plus sub_scores, nothing else.';
 
     public function __construct(
         protected SettingsService $settings,
