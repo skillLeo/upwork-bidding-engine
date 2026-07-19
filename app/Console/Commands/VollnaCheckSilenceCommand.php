@@ -64,12 +64,14 @@ class VollnaCheckSilenceCommand extends Command
             return self::SUCCESS;
         }
 
-        // Active hours: 8am–midnight Pakistan time. A quiet night isn't
-        // worth waking anyone for — the flag stays unset, so a silence
-        // that persists into the morning alerts on the first check
-        // after 8am.
-        if (now('Asia/Karachi')->hour < 8) {
-            $this->info('Silence detected but outside active hours (8:00–24:00 PKT); deferring alert.');
+        // Active hours: 09:00–23:00 Pakistan time. A quiet night isn't
+        // worth waking anyone for — the flag stays unset, so the silence
+        // CLOCK keeps running overnight and a night outage alerts on the
+        // first check after 09:00 with the full elapsed hours.
+        $hour = now('Asia/Karachi')->hour;
+
+        if ($hour < 9 || $hour >= 23) {
+            $this->info('Silence detected but outside active hours (09:00–23:00 PKT); deferring alert.');
 
             return self::SUCCESS;
         }

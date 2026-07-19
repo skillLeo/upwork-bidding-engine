@@ -13,7 +13,10 @@ Schedule::command('leads:follow-up-reminders')->daily();
 
 // Dead-man's switch: alerts (once per incident) if Vollna's webhook has
 // gone quiet past the configured window. See VollnaCheckSilenceCommand.
-Schedule::command('vollna:check-silence')->hourly();
+// Every 15 minutes, not hourly: the webhook went dark for 40 hours on
+// 2026-07-17 and nothing shouted, so detection latency matters more than
+// the negligible cost of a settings read.
+Schedule::command('vollna:check-silence')->everyFifteenMinutes()->withoutOverlapping();
 
 // OpenClaw + WhatsApp watchdog — one alert per outage, silent recovery.
 Schedule::command('health:check')->everyFiveMinutes()->withoutOverlapping();

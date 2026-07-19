@@ -46,11 +46,16 @@ class DeadMansSwitchTest extends TestCase
         $this->artisan('vollna:check-silence')->assertSuccessful();
 
         // Nothing at 3am — and no incident flag, so the first check after
-        // 8am sends the alert.
+        // 09:00 sends the alert with the full overnight elapsed time.
         Http::assertNothingSent();
         $this->assertFalse(Cache::has(VollnaCheckSilenceCommand::ALERTED_CACHE_KEY));
 
-        $this->travelTo(now('Asia/Karachi')->setTime(8, 30));
+        // Late evening is also outside the window (23:00–09:00 is quiet).
+        $this->travelTo(now('Asia/Karachi')->setTime(23, 30));
+        $this->artisan('vollna:check-silence')->assertSuccessful();
+        Http::assertNothingSent();
+
+        $this->travelTo(now('Asia/Karachi')->setTime(9, 30));
         $this->artisan('vollna:check-silence')->assertSuccessful();
         Http::assertSentCount(1);
     }
