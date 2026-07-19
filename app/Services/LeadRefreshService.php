@@ -136,6 +136,15 @@ class LeadRefreshService
      */
     protected function locked(Lead $lead, callable $run)
     {
+        // The quality-gate rewrite can run 40-80s, past the host proxy's
+        // ~60s ceiling. When the proxy 504s and drops the client (e.g. a
+        // WhatsApp rewrite), the run must FINISH and save anyway, so the
+        // "check the dashboard" fallback is honest instead of a lost run.
+        // ignore_user_abort keeps PHP going after the disconnect; the time
+        // limit covers the full pipeline.
+        ignore_user_abort(true);
+        @set_time_limit(180);
+
         $lock = Cache::lock("lead-refresh:{$lead->id}", self::LOCK_SECONDS);
 
         if (! $lock->get()) {
