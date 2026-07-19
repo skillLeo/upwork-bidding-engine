@@ -31,6 +31,15 @@ class UpdateSettingsRequest extends FormRequest
             'vollna_filter_id' => ['sometimes', 'nullable', 'string', 'max:50'],
             'vollna_silence_alert_hours' => ['sometimes', 'integer', 'min:1', 'max:72'],
 
+            // Vollna email intake (IMAP)
+            'gmail_address' => ['sometimes', 'nullable', 'email', 'max:255'],
+            'gmail_app_password' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'imap_host' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'imap_port' => ['sometimes', 'integer', 'min:1', 'max:65535'],
+            'imap_folder' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'vollna_sender_filter' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'imap_poll_enabled' => ['sometimes', 'boolean'],
+
             // AI engine (OpenClaw)
             'openclaw_url' => ['sometimes', 'nullable', 'string', 'max:500'],
             'openclaw_token' => ['sometimes', 'nullable', 'string', 'max:500'],

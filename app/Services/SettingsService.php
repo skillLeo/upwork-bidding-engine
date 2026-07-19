@@ -52,6 +52,26 @@ class SettingsService
         // alive. Read only by vollna:check-silence.
         'vollna_last_webhook_at' => ['group' => 'vollna', 'secret' => false, 'default' => null],
 
+        // Vollna email intake — Vollna moved webhooks to their Agency
+        // plan, but email notifications stay free on Freelancer, so the
+        // mailbox becomes the live intake door. Same downstream pipeline:
+        // the poller hands parsed jobs to VollnaProjectImporter, exactly
+        // like the webhook and the API backfill do.
+        'gmail_address' => ['group' => 'vollna', 'secret' => false, 'default' => 'skillleopvt@gmail.com'],
+        // Gmail rejects the account password over IMAP — this must be a
+        // 16-character App Password (Google Account → Security → 2-Step
+        // Verification → App passwords).
+        'gmail_app_password' => ['group' => 'vollna', 'secret' => true, 'default' => ''],
+        'imap_host' => ['group' => 'vollna', 'secret' => false, 'default' => 'imap.gmail.com'],
+        'imap_port' => ['group' => 'vollna', 'secret' => false, 'default' => 993],
+        'imap_folder' => ['group' => 'vollna', 'secret' => false, 'default' => 'INBOX'],
+        // Confirmed against real messages before the parser trusts it.
+        'vollna_sender_filter' => ['group' => 'vollna', 'secret' => false, 'default' => 'vollna.com'],
+        'imap_poll_enabled' => ['group' => 'vollna', 'secret' => false, 'default' => true],
+        // Stamped by ANY successful intake (webhook or email) — the
+        // dead-man's switch watches this instead of the webhook-only stamp.
+        'vollna_last_intake_at' => ['group' => 'vollna', 'secret' => false, 'default' => null],
+
         // AI engine — OpenClaw, on its own Claude Code CLI subscription auth.
         // No Anthropic API key/model here: OpenClaw is already authenticated,
         // and the CLI picks its own model.
@@ -337,6 +357,22 @@ class SettingsService
     public function vollnaFilterId(): ?string
     {
         return $this->get('vollna_filter_id') ?: null;
+    }
+
+    /**
+     * @return array{host: string, port: int, folder: string, address: string, password: string, sender: string, enabled: bool}
+     */
+    public function imapConfig(): array
+    {
+        return [
+            'host' => (string) $this->get('imap_host'),
+            'port' => (int) $this->get('imap_port'),
+            'folder' => (string) $this->get('imap_folder'),
+            'address' => (string) $this->get('gmail_address'),
+            'password' => (string) $this->get('gmail_app_password'),
+            'sender' => (string) $this->get('vollna_sender_filter'),
+            'enabled' => (bool) $this->get('imap_poll_enabled', true),
+        ];
     }
 
     public function openClawUrl(): ?string

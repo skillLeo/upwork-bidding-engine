@@ -18,7 +18,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Bound to the interface so tests (and any host without the imap
+        // extension) can swap in a fake without touching the poller.
+        $this->app->bind(
+            \App\Services\Mail\Mailbox::class,
+            \App\Services\Mail\ImapMailbox::class,
+        );
     }
 
     /**

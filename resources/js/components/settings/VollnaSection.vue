@@ -27,6 +27,16 @@ const silenceAlertHours = ref(props.settings.vollna_silence_alert_hours ?? 6);
 const saving = ref(false);
 const syncing = ref(false);
 
+// Email intake — Vollna put webhooks behind their Agency plan, so the
+// free email notifications become the live door.
+const gmailAddress = ref(props.settings.gmail_address ?? "");
+const gmailAppPassword = ref("");
+const imapHost = ref(props.settings.imap_host ?? "imap.gmail.com");
+const imapPort = ref(props.settings.imap_port ?? 993);
+const imapFolder = ref(props.settings.imap_folder ?? "INBOX");
+const senderFilter = ref(props.settings.vollna_sender_filter ?? "");
+const pollEnabled = ref(props.settings.imap_poll_enabled ?? true);
+
 async function handleSave() {
   saving.value = true;
   try {
@@ -35,9 +45,17 @@ async function handleSave() {
       vollna_api_token: apiToken.value,
       vollna_filter_id: filterId.value,
       vollna_silence_alert_hours: Number(silenceAlertHours.value) || 6,
+      gmail_address: gmailAddress.value,
+      gmail_app_password: gmailAppPassword.value,
+      imap_host: imapHost.value,
+      imap_port: Number(imapPort.value) || 993,
+      imap_folder: imapFolder.value,
+      vollna_sender_filter: senderFilter.value,
+      imap_poll_enabled: pollEnabled.value,
     });
     secret.value = "";
     apiToken.value = "";
+    gmailAppPassword.value = "";
     toast.success("Vollna settings saved.");
     emit("saved");
   } catch (error) {
@@ -126,6 +144,61 @@ const webhookUrl = `${apiBase}/vollna-hook`;
           <Button variant="secondary" @click="handleSync" :loading="syncing">
             <RefreshCw class="h-4 w-4" /> Sync now
           </Button>
+        </div>
+      </div>
+
+      <div class="space-y-4 rounded-md border border-border bg-neutral-bg/50 p-4">
+        <div>
+          <p class="text-sm font-semibold text-text-primary">Vollna email intake (IMAP)</p>
+          <CardDescription class="mt-1">
+            Vollna moved webhooks to their Agency plan, but email notifications stay free. This
+            reads those emails and feeds them into the same pipeline the webhook used, so
+            scoring, proposals, and WhatsApp alerts are unchanged.
+          </CardDescription>
+        </div>
+
+        <label class="flex items-center gap-2 text-sm text-text-secondary select-none">
+          <input
+            type="checkbox"
+            v-model="pollEnabled"
+            class="h-4 w-4 rounded border-border-strong text-primary focus:ring-primary/20"
+          />
+          Email intake enabled
+        </label>
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div>
+            <Label>Gmail address</Label>
+            <Input v-model="gmailAddress" placeholder="skillleopvt@gmail.com" />
+          </div>
+          <div>
+            <Label>Vollna sender filter</Label>
+            <Input v-model="senderFilter" placeholder="vollna.com" />
+            <FieldHint>Only mail from this sender is read.</FieldHint>
+          </div>
+        </div>
+
+        <SecretField
+          label="Gmail App Password"
+          :is-set="settings.gmail_app_password?.is_set ?? false"
+          :masked="settings.gmail_app_password?.masked ?? ''"
+          v-model="gmailAppPassword"
+          hint="16-character App Password, NOT your Gmail password. Google Account → Security → 2-Step Verification → App passwords."
+        />
+
+        <div class="grid gap-4 sm:grid-cols-3">
+          <div>
+            <Label>IMAP host</Label>
+            <Input v-model="imapHost" placeholder="imap.gmail.com" />
+          </div>
+          <div>
+            <Label>Port</Label>
+            <Input v-model="imapPort" type="number" />
+          </div>
+          <div>
+            <Label>Folder</Label>
+            <Input v-model="imapFolder" placeholder="INBOX" />
+          </div>
         </div>
       </div>
     </CardContent>
