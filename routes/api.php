@@ -27,6 +27,18 @@ Route::post('/vollna-hook', VollnaWebhookController::class)
 Route::post('/agent/score', AgentScoreController::class)
     ->middleware('throttle:webhooks');
 
+// The Agent API — OpenClaw's ONLY door into the app's data, guarded by
+// its own bearer token (agent_api_token). Read leads/clients/summary
+// plus one status POST; deliberately nothing else (no settings, no
+// keys, no deletes). Every call is logged by the middleware.
+Route::prefix('agent')->middleware(['agent', 'throttle:60,1'])->group(function () {
+    Route::get('/leads', [\App\Http\Controllers\AgentApiController::class, 'leads']);
+    Route::get('/leads/{lead}', [\App\Http\Controllers\AgentApiController::class, 'lead']);
+    Route::get('/summary', [\App\Http\Controllers\AgentApiController::class, 'summary']);
+    Route::get('/clients/{client}', [\App\Http\Controllers\AgentApiController::class, 'client']);
+    Route::post('/leads/{lead}/status', [\App\Http\Controllers\AgentApiController::class, 'updateStatus']);
+});
+
 // Product name + logo — the sign-in screen needs these before anyone has
 // a token, so this stays outside auth:sanctum entirely.
 Route::get('/branding', [SettingsController::class, 'branding']);
@@ -114,6 +126,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:admin')->group(function () {
         Route::get('/settings', [SettingsController::class, 'index']);
         Route::post('/settings', [SettingsController::class, 'store']);
+        Route::get('/settings/agent-token', [SettingsController::class, 'revealAgentToken']);
+        Route::post('/settings/agent-token/regenerate', [SettingsController::class, 'regenerateAgentToken']);
         Route::post('/settings/test/{service}', [SettingsController::class, 'testConnection']);
         Route::post('/settings/logo', [SettingsController::class, 'uploadLogo']);
         Route::delete('/settings/logo', [SettingsController::class, 'removeLogo']);

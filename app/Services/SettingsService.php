@@ -57,6 +57,11 @@ class SettingsService
         // and the CLI picks its own model.
         'openclaw_url' => ['group' => 'openclaw', 'secret' => true, 'default' => ''],
         'openclaw_token' => ['group' => 'openclaw', 'secret' => true, 'default' => ''],
+        // The Agent API's own bearer token — deliberately SEPARATE from
+        // everything else: it can read leads/clients and post one status
+        // change, never touch settings or keys. Worst case if it leaks:
+        // someone reads lead titles.
+        'agent_api_token' => ['group' => 'openclaw', 'secret' => true, 'default' => ''],
         'ai_engine_enabled' => ['group' => 'openclaw', 'secret' => false, 'default' => true],
 
         // WhatsApp — sent via OpenClaw (already QR-linked to WhatsApp), not
@@ -342,6 +347,11 @@ class SettingsService
     public function openClawToken(): ?string
     {
         return $this->get('openclaw_token') ?: null;
+    }
+
+    public function agentApiToken(): ?string
+    {
+        return $this->get('agent_api_token') ?: null;
     }
 
     /**

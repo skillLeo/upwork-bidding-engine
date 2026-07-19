@@ -126,7 +126,9 @@ class VollnaWebhookTest extends TestCase
             'description' => 'Build an API.',
             'budget_type' => 'fixed',
             'budget' => '500 USD',
-            'published' => '2026-07-12T10:00:00+00:00',
+            // Dynamic: a hardcoded date silently aged past the 7-day
+            // staleness filter and started archiving this fixture.
+            'published' => now()->subDay()->toIso8601String(),
             'client_details' => [
                 'country' => ['name' => 'United States', 'iso_code2' => 'US'],
                 'total_spent' => 12500,

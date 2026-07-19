@@ -12,12 +12,55 @@ import TestConnectionButton from "@/components/settings/TestConnectionButton.vue
 import { saveSettings } from "@/composables/useSettings";
 import { apiErrorMessage } from "@/lib/api-client";
 
+import { apiClient } from "@/lib/api-client";
+
 const props = defineProps({ settings: { type: Object, required: true } });
 const emit = defineEmits(["saved"]);
 
 const url = ref("");
 const token = ref("");
 const aiEngineEnabled = ref(props.settings.ai_engine_enabled);
+
+const agentToken = ref(null);
+const agentTokenBusy = ref(false);
+
+async function revealAgentToken() {
+  agentTokenBusy.value = true;
+  try {
+    const res = await apiClient.get("/settings/agent-token");
+    agentToken.value = res.data.data.token || "(not generated yet — click Regenerate)";
+  } catch (error) {
+    toast.error(apiErrorMessage(error, "Could not reveal the token."));
+  } finally {
+    agentTokenBusy.value = false;
+  }
+}
+
+async function regenerateAgentToken() {
+  if (
+    props.settings.agent_api_token?.is_set &&
+    !window.confirm("Regenerate? The current token stops working immediately.")
+  ) {
+    return;
+  }
+  agentTokenBusy.value = true;
+  try {
+    const res = await apiClient.post("/settings/agent-token/regenerate");
+    agentToken.value = res.data.data.token;
+    toast.success("New Agent API token generated.");
+    emit("saved");
+  } catch (error) {
+    toast.error(apiErrorMessage(error, "Could not regenerate the token."));
+  } finally {
+    agentTokenBusy.value = false;
+  }
+}
+
+async function copyAgentToken() {
+  if (!agentToken.value) return;
+  await navigator.clipboard.writeText(agentToken.value);
+  toast.success("Token copied.");
+}
 const saving = ref(false);
 
 // Re-sync whenever the settings prop changes (after a save/refetch), same
@@ -74,6 +117,35 @@ async function handleSave() {
         v-model="token"
         hint="Sent as a Bearer token on every scoring/drafting request."
       />
+      <div class="rounded-md border border-border bg-neutral-bg/50 p-4">
+        <p class="text-sm font-semibold text-text-primary">Agent API token</p>
+        <p class="mt-1 text-xs text-text-tertiary">
+          OpenClaw's only key into this app — it can read leads/clients and mark statuses,
+          never touch settings, API keys, or delete anything.
+          {{ settings.agent_api_token?.is_set ? "" : "Not generated yet." }}
+        </p>
+        <p
+          v-if="agentToken"
+          class="mt-2 rounded-md bg-white px-3 py-2 font-mono text-xs break-all text-text-primary"
+        >
+          {{ agentToken }}
+        </p>
+        <div class="mt-2 flex gap-2">
+          <Button variant="secondary" size="sm" :loading="agentTokenBusy" @click="revealAgentToken">
+            Reveal
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            :loading="agentTokenBusy"
+            @click="regenerateAgentToken"
+          >
+            Regenerate
+          </Button>
+          <Button v-if="agentToken" variant="ghost" size="sm" @click="copyAgentToken">Copy</Button>
+        </div>
+      </div>
+
       <label class="flex items-center gap-2 text-sm text-text-secondary">
         <input
           type="checkbox"

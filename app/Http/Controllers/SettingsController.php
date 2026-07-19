@@ -68,6 +68,34 @@ class SettingsController extends Controller
         ]]);
     }
 
+    /**
+     * Reveal the Agent API token so the operator can paste it into the
+     * OpenClaw skill config. Admin-gated by the route group; the reveal
+     * itself is logged.
+     */
+    public function revealAgentToken(): JsonResponse
+    {
+        ActivityLog::record('agent_token_revealed');
+
+        return response()->json(['data' => [
+            'token' => $this->settings->agentApiToken(),
+        ]]);
+    }
+
+    /**
+     * Mint a fresh Agent API token (invalidating the old one instantly)
+     * and return it once for copying.
+     */
+    public function regenerateAgentToken(): JsonResponse
+    {
+        $token = \Illuminate\Support\Str::random(48);
+        $this->settings->set('agent_api_token', $token);
+
+        ActivityLog::record('agent_token_regenerated');
+
+        return response()->json(['data' => ['token' => $token]]);
+    }
+
     public function uploadLogo(Request $request): JsonResponse
     {
         $request->validate([

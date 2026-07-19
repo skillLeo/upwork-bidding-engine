@@ -18,6 +18,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'role' => EnsureRole::class,
+            'agent' => \App\Http\Middleware\AuthenticateAgent::class,
         ]);
 
         // Pure JSON API, no Blade login page — never redirect an
