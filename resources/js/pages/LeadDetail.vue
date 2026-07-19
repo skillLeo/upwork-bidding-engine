@@ -177,7 +177,7 @@ async function handleRegenerateProposal() {
     </EmptyState>
   </PageContainer>
 
-  <PageContainer v-else class="max-w-[760px]">
+  <PageContainer v-else class="max-w-[1400px]">
     <router-link
       to="/leads"
       class="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-text-secondary hover:text-primary"
@@ -185,230 +185,243 @@ async function handleRegenerateProposal() {
       <ArrowLeft class="h-4 w-4" /> Back to leads
     </router-link>
 
-    <Card class="p-6">
-      <div class="flex flex-wrap items-start justify-between gap-3">
-        <div class="min-w-0">
-          <h1 class="text-xl font-semibold text-text-primary">{{ lead.title }}</h1>
-          <p class="mt-1 text-xs text-text-tertiary">
-            Posted {{ relativeTime(lead.posted_at) }} · External ID {{ lead.external_id }}
-          </p>
-        </div>
-        <div class="flex shrink-0 items-center gap-2">
-          <StatusPill :status="lead.status" />
-          <ScoreBadge :score="lead.score" />
-        </div>
-      </div>
-
-      <a
-        v-if="lead.url"
-        :href="lead.url"
-        target="_blank"
-        rel="noreferrer"
-        class="mt-3 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-      >
-        View on Upwork <ExternalLink class="h-3.5 w-3.5" />
-      </a>
-
-      <div
-        v-if="lead.matches_filter === false && lead.filter_fail_reasons"
-        class="mt-4 rounded-md border border-danger-border bg-danger-bg px-4 py-3"
-      >
-        <p class="flex items-center gap-1.5 text-sm font-semibold text-danger">
-          <AlertTriangle class="h-4 w-4" /> Why this job isn't in your filter
-        </p>
-        <ul class="mt-2 space-y-1">
-          <li
-            v-for="reason in lead.filter_fail_reasons"
-            :key="reason"
-            class="flex gap-1.5 text-sm text-danger/90"
-          >
-            <span aria-hidden="true">•</span>
-            {{ reason }}
-          </li>
-        </ul>
-      </div>
-
-      <div class="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <div v-for="block in statBlocks" :key="block.label" class="rounded-md bg-neutral-bg p-3">
-          <div class="flex items-center gap-1.5 text-xs font-medium text-text-tertiary">
-            <component
-              :is="block.icon"
-              :class="block.tone === 'success' ? 'h-3.5 w-3.5 text-success' : 'h-3.5 w-3.5'"
-            />
-            {{ block.label }}
+    <div class="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px] lg:items-start">
+      <!-- Main: what a bidder actually reads, top to bottom -->
+      <div class="min-w-0 space-y-4">
+        <Card class="p-6">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div class="min-w-0">
+              <h1 class="text-xl font-semibold text-text-primary">{{ lead.title }}</h1>
+              <p class="mt-1 text-xs text-text-tertiary">
+                Posted {{ relativeTime(lead.posted_at) }} · External ID {{ lead.external_id }}
+              </p>
+            </div>
+            <div class="flex shrink-0 items-center gap-2">
+              <StatusPill :status="lead.status" />
+              <ScoreBadge :score="lead.score" />
+            </div>
           </div>
-          <p class="mt-1 text-sm font-medium text-text-primary">{{ block.value }}</p>
-        </div>
-      </div>
 
-      <div class="mt-5 border-t border-border pt-5">
-        <p class="text-sm font-semibold text-text-primary">Full brief</p>
-        <p class="mt-2 text-sm whitespace-pre-wrap text-text-secondary">{{ lead.full_brief }}</p>
-      </div>
-    </Card>
-
-    <Card class="mt-4 p-6">
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <div class="flex items-center gap-2">
-          <span
-            v-if="regenLoading === 'score'"
-            class="inline-flex items-center gap-1.5 rounded-pill bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary"
+          <a
+            v-if="lead.url"
+            :href="lead.url"
+            target="_blank"
+            rel="noreferrer"
+            class="mt-3 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
           >
-            <RefreshCw class="h-3.5 w-3.5 animate-spin" /> Scoring…
-          </span>
-          <ScoreBadge v-else-if="lead.score !== null" :score="lead.score" />
-          <p class="text-sm font-semibold text-text-primary">
-            {{ lead.score !== null ? "Why this score" : "Not scored yet" }}
-          </p>
-          <span
-            v-if="lead.boost"
-            class="rounded-pill border border-success/30 bg-success/10 px-2 py-0.5 text-xs font-semibold text-success"
-          >
-            BOOST
-          </span>
-        </div>
-        <Button
-          variant="secondary"
-          size="sm"
-          :disabled="regenLoading !== null"
-          title="Score this lead under your current rubric"
-          @click="handleRegenerateScore"
-        >
-          <RefreshCw :class="['h-3.5 w-3.5', regenLoading === 'score' && 'animate-spin']" />
-          {{
-            regenLoading === "score" ? "Scoring…" : lead.score !== null ? "Re-score" : "Score now"
-          }}
-        </Button>
-      </div>
-      <p
-        v-if="lead.score_reason"
-        :class="[
-          'mt-2 text-sm text-text-secondary transition-opacity',
-          regenLoading === 'score' && 'animate-pulse opacity-50',
-        ]"
-      >
-        {{ lead.score_reason }}
-      </p>
-      <p v-else-if="lead.score === null && regenLoading !== 'score'" class="mt-2 text-sm text-text-tertiary">
-        Run the rubric to get the score, verdict, and the five-pillar breakdown.
-      </p>
+            View on Upwork <ExternalLink class="h-3.5 w-3.5" />
+          </a>
 
-      <div
-        v-if="subScoreBlocks.length"
-        class="mt-4 grid grid-cols-2 gap-3 border-t border-border pt-4 sm:grid-cols-5"
-      >
-        <div v-for="block in subScoreBlocks" :key="block.key">
-          <div class="flex items-baseline justify-between gap-1">
-            <p class="truncate text-xs font-medium text-text-tertiary" :title="block.label">
-              {{ block.label }}
+          <div
+            v-if="lead.matches_filter === false && lead.filter_fail_reasons"
+            class="mt-4 rounded-md border border-danger-border bg-danger-bg px-4 py-3"
+          >
+            <p class="flex items-center gap-1.5 text-sm font-semibold text-danger">
+              <AlertTriangle class="h-4 w-4" /> Why this job isn't in your filter
             </p>
-            <span class="text-[10px] text-text-tertiary/70">{{ block.weight }}</span>
+            <ul class="mt-2 space-y-1">
+              <li
+                v-for="reason in lead.filter_fail_reasons"
+                :key="reason"
+                class="flex gap-1.5 text-sm text-danger/90"
+              >
+                <span aria-hidden="true">•</span>
+                {{ reason }}
+              </li>
+            </ul>
           </div>
-          <p class="mt-0.5 text-sm font-semibold text-text-primary">{{ block.value }}/10</p>
-          <div class="mt-1 h-1.5 overflow-hidden rounded-pill bg-neutral-bg">
-            <div
-              :class="[
-                'h-full rounded-pill transition-all',
-                block.value >= 7 ? 'bg-success' : block.value >= 5 ? 'bg-warning' : 'bg-danger',
-              ]"
-              :style="{ width: `${block.value * 10}%` }"
-            />
-          </div>
-        </div>
-      </div>
-    </Card>
 
-    <Card v-if="lead.proposal_text || lead.score !== null" class="mt-4 p-6">
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <div class="flex items-center gap-2">
-          <p class="text-sm font-semibold text-text-primary">Proposal</p>
-          <span
+          <div class="mt-5 border-t border-border pt-5">
+            <p class="text-sm font-semibold text-text-primary">Full brief</p>
+            <p class="mt-2 text-sm whitespace-pre-wrap text-text-secondary">{{ lead.full_brief }}</p>
+          </div>
+        </Card>
+
+        <Card class="p-6">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <span
+                v-if="regenLoading === 'score'"
+                class="inline-flex items-center gap-1.5 rounded-pill bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary"
+              >
+                <RefreshCw class="h-3.5 w-3.5 animate-spin" /> Scoring…
+              </span>
+              <ScoreBadge v-else-if="lead.score !== null" :score="lead.score" />
+              <p class="text-sm font-semibold text-text-primary">
+                {{ lead.score !== null ? "Why this score" : "Not scored yet" }}
+              </p>
+              <span
+                v-if="lead.boost"
+                class="rounded-pill border border-success/30 bg-success/10 px-2 py-0.5 text-xs font-semibold text-success"
+              >
+                BOOST
+              </span>
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              :disabled="regenLoading !== null"
+              title="Score this lead under your current rubric"
+              @click="handleRegenerateScore"
+            >
+              <RefreshCw :class="['h-3.5 w-3.5', regenLoading === 'score' && 'animate-spin']" />
+              {{
+                regenLoading === "score" ? "Scoring…" : lead.score !== null ? "Re-score" : "Score now"
+              }}
+            </Button>
+          </div>
+          <p
+            v-if="lead.score_reason"
+            :class="[
+              'mt-2 text-sm text-text-secondary transition-opacity',
+              regenLoading === 'score' && 'animate-pulse opacity-50',
+            ]"
+          >
+            {{ lead.score_reason }}
+          </p>
+          <p v-else-if="lead.score === null && regenLoading !== 'score'" class="mt-2 text-sm text-text-tertiary">
+            Run the rubric to get the score, verdict, and the five-pillar breakdown.
+          </p>
+
+          <div
+            v-if="subScoreBlocks.length"
+            class="mt-4 grid grid-cols-2 gap-3 border-t border-border pt-4 sm:grid-cols-5"
+          >
+            <div v-for="block in subScoreBlocks" :key="block.key">
+              <div class="flex items-baseline justify-between gap-1">
+                <p class="truncate text-xs font-medium text-text-tertiary" :title="block.label">
+                  {{ block.label }}
+                </p>
+                <span class="text-[10px] text-text-tertiary/70">{{ block.weight }}</span>
+              </div>
+              <p class="mt-0.5 text-sm font-semibold text-text-primary">{{ block.value }}/10</p>
+              <div class="mt-1 h-1.5 overflow-hidden rounded-pill bg-neutral-bg">
+                <div
+                  :class="[
+                    'h-full rounded-pill transition-all',
+                    block.value >= 7 ? 'bg-success' : block.value >= 5 ? 'bg-warning' : 'bg-danger',
+                  ]"
+                  :style="{ width: `${block.value * 10}%` }"
+                />
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        <Card v-if="lead.proposal_text || lead.score !== null" class="p-6">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <p class="text-sm font-semibold text-text-primary">Proposal</p>
+              <span
+                v-if="lead.proposal_warnings?.length"
+                class="inline-flex items-center gap-1 rounded-pill border border-danger/40 bg-danger-bg px-2 py-0.5 text-xs font-semibold text-danger"
+              >
+                <AlertTriangle class="h-3 w-3" />
+                {{ lead.proposal_warnings.length }} rule
+                {{ lead.proposal_warnings.length === 1 ? "violation" : "violations" }}
+              </span>
+            </div>
+            <div class="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                :disabled="regenLoading !== null"
+                title="Write a fresh proposal under your rules"
+                @click="handleRegenerateProposal"
+              >
+                <RefreshCw v-if="regenLoading === 'proposal'" class="h-3.5 w-3.5 animate-spin" />
+                <Sparkles v-else class="h-3.5 w-3.5" />
+                {{
+                  regenLoading === "proposal"
+                    ? "Writing…"
+                    : lead.proposal_text
+                      ? "Rewrite"
+                      : "Write proposal"
+                }}
+              </Button>
+              <Button v-if="lead.proposal_text" variant="secondary" size="sm" @click="handleCopy">
+                <Copy class="h-3.5 w-3.5" /> Copy
+              </Button>
+            </div>
+          </div>
+          <div
             v-if="lead.proposal_warnings?.length"
-            class="inline-flex items-center gap-1 rounded-pill border border-danger/40 bg-danger-bg px-2 py-0.5 text-xs font-semibold text-danger"
+            class="mt-3 rounded-md border border-danger-border bg-danger-bg px-4 py-3"
           >
-            <AlertTriangle class="h-3 w-3" />
-            {{ lead.proposal_warnings.length }} rule
-            {{ lead.proposal_warnings.length === 1 ? "violation" : "violations" }}
-          </span>
-        </div>
-        <div class="flex items-center gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            :disabled="regenLoading !== null"
-            title="Write a fresh proposal under your rules"
-            @click="handleRegenerateProposal"
+            <p class="text-xs font-semibold text-danger">
+              This proposal did not pass every rule — fix by hand or hit Rewrite:
+            </p>
+            <ul class="mt-1.5 space-y-1">
+              <li
+                v-for="warning in lead.proposal_warnings"
+                :key="warning"
+                class="flex gap-1.5 text-xs text-danger/90"
+              >
+                <span aria-hidden="true">•</span>
+                {{ warning }}
+              </li>
+            </ul>
+          </div>
+          <p
+            v-if="lead.proposal_text"
+            :class="[
+              'mt-3 rounded-md bg-neutral-bg p-4 text-sm whitespace-pre-wrap text-text-primary transition-opacity',
+              regenLoading === 'proposal' && 'animate-pulse opacity-50',
+            ]"
           >
-            <RefreshCw v-if="regenLoading === 'proposal'" class="h-3.5 w-3.5 animate-spin" />
-            <Sparkles v-else class="h-3.5 w-3.5" />
-            {{
-              regenLoading === "proposal"
-                ? "Writing…"
-                : lead.proposal_text
-                  ? "Rewrite"
-                  : "Write proposal"
-            }}
-          </Button>
-          <Button v-if="lead.proposal_text" variant="secondary" size="sm" @click="handleCopy">
-            <Copy class="h-3.5 w-3.5" /> Copy
-          </Button>
-        </div>
-      </div>
-      <div
-        v-if="lead.proposal_warnings?.length"
-        class="mt-3 rounded-md border border-danger-border bg-danger-bg px-4 py-3"
-      >
-        <p class="text-xs font-semibold text-danger">
-          This proposal did not pass every rule — fix by hand or hit Rewrite:
-        </p>
-        <ul class="mt-1.5 space-y-1">
-          <li
-            v-for="warning in lead.proposal_warnings"
-            :key="warning"
-            class="flex gap-1.5 text-xs text-danger/90"
-          >
-            <span aria-hidden="true">•</span>
-            {{ warning }}
-          </li>
-        </ul>
-      </div>
-      <p
-        v-if="lead.proposal_text"
-        :class="[
-          'mt-3 rounded-md bg-neutral-bg p-4 text-sm whitespace-pre-wrap text-text-primary transition-opacity',
-          regenLoading === 'proposal' && 'animate-pulse opacity-50',
-        ]"
-      >
-        {{ lead.proposal_text }}
-      </p>
-      <p v-else class="mt-3 rounded-md bg-neutral-bg p-4 text-sm text-text-tertiary">
-        No proposal yet — click "Write proposal" to draft one under your rules.
-      </p>
-    </Card>
-
-    <Card class="mt-4 p-6">
-      <p class="mb-3 text-sm font-semibold text-text-primary">Actions</p>
-      <div class="flex flex-wrap gap-2">
-        <Button
-          v-for="action in statusActions"
-          :key="action.status"
-          :variant="lead.status === action.status ? 'primary' : 'secondary'"
-          size="sm"
-          :disabled="lead.status === action.status || actionLoading !== null"
-          :loading="actionLoading === action.status"
-          @click="handleStatus(action.status)"
-        >
-          {{ action.label }}
-        </Button>
+            {{ lead.proposal_text }}
+          </p>
+          <p v-else class="mt-3 rounded-md bg-neutral-bg p-4 text-sm text-text-tertiary">
+            No proposal yet — click "Write proposal" to draft one under your rules.
+          </p>
+        </Card>
       </div>
 
-      <router-link
-        v-if="lead.client_id"
-        :to="`/clients/${lead.client_id}`"
-        class="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-      >
-        <MessageSquare class="h-4 w-4" /> Open client memory
-      </router-link>
-    </Card>
+      <!-- Sticky rail: reference info + actions stay reachable without
+           scrolling back up past a long brief/proposal. -->
+      <div class="space-y-4 lg:sticky lg:top-20">
+        <Card class="p-5">
+          <p class="mb-3 text-sm font-semibold text-text-primary">Details</p>
+          <dl class="space-y-2.5">
+            <div v-for="block in statBlocks" :key="block.label" class="flex items-start justify-between gap-3 text-sm">
+              <dt class="flex shrink-0 items-center gap-1.5 text-text-tertiary">
+                <component
+                  :is="block.icon"
+                  :class="block.tone === 'success' ? 'h-3.5 w-3.5 text-success' : 'h-3.5 w-3.5'"
+                />
+                {{ block.label }}
+              </dt>
+              <dd class="min-w-0 truncate text-right font-medium text-text-primary">{{ block.value }}</dd>
+            </div>
+          </dl>
+        </Card>
+
+        <Card class="p-5">
+          <p class="mb-3 text-sm font-semibold text-text-primary">Actions</p>
+          <div class="flex flex-col gap-2">
+            <Button
+              v-for="action in statusActions"
+              :key="action.status"
+              :variant="lead.status === action.status ? 'primary' : 'secondary'"
+              size="sm"
+              class="justify-center"
+              :disabled="lead.status === action.status || actionLoading !== null"
+              :loading="actionLoading === action.status"
+              @click="handleStatus(action.status)"
+            >
+              {{ action.label }}
+            </Button>
+          </div>
+
+          <router-link
+            v-if="lead.client_id"
+            :to="`/clients/${lead.client_id}`"
+            class="mt-4 flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+          >
+            <MessageSquare class="h-4 w-4" /> Open client memory
+          </router-link>
+        </Card>
+      </div>
+    </div>
   </PageContainer>
 </template>
