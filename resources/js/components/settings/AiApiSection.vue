@@ -59,6 +59,39 @@ const modelOptions = computed(() =>
   form.ai_provider === "openai" ? openaiModels : anthropicModels,
 );
 
+// The server's actual live values — deliberately read straight from the
+// prop, never from `form`, so this can never drift even if the reactive
+// form object is mutated. This is what genuinely runs right now, as
+// opposed to whatever is sitting unsaved in the dropdowns below.
+const liveProviderLabel = computed(() =>
+  props.settings.ai_provider === "openai" ? "OpenAI" : "Anthropic (Claude)",
+);
+
+const allModels = computed(() => [...anthropicModels, ...openaiModels]);
+const modelLabel = (id) => allModels.value.find((m) => m.id === id)?.label ?? id;
+
+// Named so a switch that never reaches Save (Test Connection succeeding
+// felt like confirmation enough, then the page was closed) is impossible
+// to miss — this is exactly the bug that shipped once already: the
+// dropdown showed OpenAI while the database still said Anthropic, silently,
+// for hours.
+const unsavedChanges = computed(() => {
+  const changes = [];
+  if (form.ai_provider !== (props.settings.ai_provider ?? "anthropic")) {
+    changes.push(`Provider → ${form.ai_provider === "openai" ? "OpenAI" : "Anthropic"}`);
+  }
+  if (form.scoring_model !== props.settings.scoring_model) {
+    changes.push(`Scoring model → ${modelLabel(form.scoring_model)}`);
+  }
+  if (form.proposal_model !== props.settings.proposal_model) {
+    changes.push(`Proposal model → ${modelLabel(form.proposal_model)}`);
+  }
+  if (form.review_model !== props.settings.review_model) {
+    changes.push(`Review model → ${modelLabel(form.review_model)}`);
+  }
+  return changes;
+});
+
 // Switching provider swaps the model lists — snap any model that belongs
 // to the other provider onto this provider's equivalent tier, so what you
 // see is exactly what the backend will run.
@@ -109,9 +142,24 @@ async function handleSave() {
         rules below are the entire brain — edit them here any time, no deploy needed.
       </CardDescription>
 
+      <div
+        v-if="unsavedChanges.length"
+        class="flex flex-wrap items-center gap-2 rounded-md border border-warning-border bg-warning-bg px-3 py-2 text-xs font-medium text-warning"
+      >
+        <span>Not yet live — nothing below has taken effect until you click Save:</span>
+        <span v-for="change in unsavedChanges" :key="change" class="rounded-pill bg-white/60 px-2 py-0.5">
+          {{ change }}
+        </span>
+      </div>
+
       <div class="grid gap-4 sm:grid-cols-2">
         <div>
-          <Label>Provider</Label>
+          <div class="flex items-center justify-between gap-2">
+            <Label>Provider</Label>
+            <span class="text-xs text-text-tertiary">
+              Currently running: <span class="font-semibold text-text-secondary">{{ liveProviderLabel }}</span>
+            </span>
+          </div>
           <select
             v-model="form.ai_provider"
             class="h-10 w-full rounded-md border border-border-strong bg-white px-3 text-sm text-text-secondary focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none"
@@ -120,6 +168,8 @@ async function handleSave() {
             <option value="openai">OpenAI</option>
           </select>
           <FieldHint>
+            Changing this does nothing until you click "Save AI settings" below — testing a key's
+            connection is a separate action and does not switch the live provider.
             If the primary fails 3 times in a row, calls fail over to the other provider for 15
             minutes automatically (needs its key set).
           </FieldHint>
@@ -186,6 +236,12 @@ async function handleSave() {
           />
           <TestConnectionButton service="openai" />
         </div>
+      </div>
+
+      <div class="flex justify-end border-b border-border pb-4">
+        <Button @click="handleSave" :loading="saving" variant="secondary">
+          Save provider &amp; models
+        </Button>
       </div>
 
       <div>
