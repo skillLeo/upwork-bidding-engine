@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch, watchEffect } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { format, subDays } from "date-fns";
 import {
   Inbox,
   Search,
@@ -92,8 +93,15 @@ const router = useRouter();
 
 const status = ref(route.query.status ?? "all");
 const scoreMin = ref(route.query.score_min ? Number(route.query.score_min) : undefined);
-const postedFrom = ref(null);
-const postedTo = ref(null);
+
+// Matches DateRangeFilter's own "3d" default (see its DEFAULT_PRESET) - set
+// here too so the very first /api/leads call already carries the filter,
+// instead of firing once unfiltered and firing again a tick later once the
+// child's onMounted applies its default. That double fetch was real: it
+// doubled cold-load latency and, worse, had no ordering guard, so a slower
+// first (unfiltered) response could occasionally overwrite the correct one.
+const postedFrom = ref(format(subDays(new Date(), 3), "yyyy-MM-dd HH:mm:ss"));
+const postedTo = ref(format(new Date(), "yyyy-MM-dd HH:mm:ss"));
 const searchInput = ref(route.query.search ?? "");
 const search = ref(route.query.search ?? "");
 let searchDebounce;

@@ -71,9 +71,12 @@ const triggerLabel = computed(() => {
 });
 
 onMounted(() => {
-  // Fire the default range immediately so the parent's query includes it on
-  // first load, instead of the page briefly showing an unfiltered "all
-  // time" list before a preset is picked.
+  // Only a safety net for a caller that hasn't already set a default -
+  // Leads.vue sets its own matching default synchronously on init so the
+  // very first fetch is already filtered. Applying the preset again here
+  // unconditionally used to force a second, redundant /api/leads request
+  // on every load.
+  if (props.from || props.to) return;
   const defaultPreset = presets.find((p) => p.id === DEFAULT_PRESET);
   applyPreset(defaultPreset);
 });
