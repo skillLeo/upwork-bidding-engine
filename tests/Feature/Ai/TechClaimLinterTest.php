@@ -106,6 +106,43 @@ class TechClaimLinterTest extends TestCase
         $this->assertStringContainsString('Magento', $joined);
     }
 
+    public function test_a_tech_term_is_attributed_to_the_nearest_preceding_project_not_any_project_in_the_paragraph(): void
+    {
+        // Real false positive caught live: one paragraph names TWO
+        // projects. "Vue" describes the first (an unnamed "guard-management
+        // SaaS" - PatrolTick's own description), then "SkillLeo Financial"
+        // is named later in the same paragraph describing something else.
+        // The old paragraph-wide check attributed Vue to SkillLeo Financial
+        // just because they co-occurred, even though Vue was never
+        // describing that project.
+        $text = "I've successfully led development of a guard-management SaaS with Laravel and Vue, implementing role-based views. Moreover, in projects like SkillLeo Financial, I've focused on designing schemas for multi-tenant systems.\n\n"
+            ."Plan: scope it, build it, ship it. Done = a working demo you can click through.\n\nSound good?\n\nHassam";
+
+        $violations = $this->linter()->check($text);
+        $joined = implode(' | ', $violations);
+
+        $this->assertStringNotContainsString('Project-stack mismatch', $joined, $joined);
+    }
+
+    public function test_the_same_paragraph_still_catches_tech_attributed_to_the_project_named_right_before_it(): void
+    {
+        // The nearest-preceding-project fix must not lose detection just
+        // because a second project is also named later in the paragraph.
+        // Vue is real - via PatrolTick - so this isolates the per-project
+        // logic specifically (the global check alone would pass Vue).
+        // "Vue" sits between WorkDo (named first, doesn't have Vue) and
+        // PatrolTick (named second, does have Vue) - nearest-preceding
+        // must attribute it to WorkDo, the one actually being described.
+        $text = "WorkDo is the closest match. I used Vue for the dashboards there, and I've also worked on PatrolTick for guard tracking context.\n\n"
+            ."Plan: scope it, build it, ship it. Done = a working demo you can click through.\n\nSound good?\n\nHassam";
+
+        $violations = $this->linter()->check($text);
+        $joined = implode(' | ', $violations);
+
+        $this->assertStringContainsString('Project-stack mismatch', $joined);
+        $this->assertStringContainsString('"Vue" is attributed to WorkDo', $joined, $joined);
+    }
+
     public function test_no_project_facts_configured_never_blocks_the_pipeline(): void
     {
         app(SettingsService::class)->set('project_facts', '');

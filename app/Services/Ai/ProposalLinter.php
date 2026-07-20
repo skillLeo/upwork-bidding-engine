@@ -230,20 +230,65 @@ class ProposalLinter
 
         $projects = $this->parseProjectFacts($projectFacts);
 
+        // Real false positive caught live: "...a guard-management SaaS with
+        // Laravel and Vue... Moreover, in projects like SkillLeo Financial,
+        // I've focused on..." - one paragraph naming two projects. Checking
+        // "does any tech term anywhere in this paragraph belong to any
+        // project named anywhere in this paragraph" attributed Vue (which
+        // describes the FIRST, unnamed project) to SkillLeo Financial
+        // (named later, describing something else entirely). A tech
+        // mention is now attributed to the NEAREST PRECEDING project name
+        // in reading order - the project actually being described when the
+        // technology is mentioned - not every project the paragraph
+        // happens to also name.
         foreach (preg_split('/\n\s*\n/u', trim($letter)) ?: [] as $paragraph) {
+            $projectOccurrences = [];
+
             foreach ($projects as $name => $stackLine) {
-                if (mb_stripos($paragraph, $name) === false) {
+                $pos = mb_stripos($paragraph, $name);
+
+                if ($pos !== false) {
+                    $projectOccurrences[] = ['pos' => $pos, 'name' => $name, 'stack' => $stackLine];
+                }
+            }
+
+            if ($projectOccurrences === []) {
+                continue;
+            }
+
+            usort($projectOccurrences, fn (array $a, array $b) => $a['pos'] <=> $b['pos']);
+            $alreadyFlagged = [];
+
+            foreach (self::TECH_VOCABULARY as $tech => $pattern) {
+                if (isset($flagged[$tech]) || preg_match_all($pattern, $paragraph, $matches, PREG_OFFSET_CAPTURE) < 1) {
                     continue;
                 }
 
-                foreach (self::TECH_VOCABULARY as $tech => $pattern) {
-                    if (isset($flagged[$tech]) || preg_match($pattern, $paragraph) !== 1) {
+                foreach ($matches[0] as [, $techPos]) {
+                    $nearest = null;
+
+                    foreach ($projectOccurrences as $occurrence) {
+                        if ($occurrence['pos'] > $techPos) {
+                            break;
+                        }
+
+                        $nearest = $occurrence;
+                    }
+
+                    // No project named yet at this point in the paragraph -
+                    // a general skills claim, not an attribution to flag.
+                    if ($nearest === null) {
                         continue;
                     }
 
-                    if (preg_match($pattern, $stackLine) !== 1) {
-                        $violations[] = "Project-stack mismatch: \"{$tech}\" is attributed to {$name}, but {$name}'s real stack per project_facts does not include it. Never attribute technology to a named project it wasn't built with, even if that technology is genuine elsewhere in your history.";
+                    $key = $tech.'|'.$nearest['name'];
+
+                    if (isset($alreadyFlagged[$key]) || preg_match($pattern, $nearest['stack']) === 1) {
+                        continue;
                     }
+
+                    $violations[] = "Project-stack mismatch: \"{$tech}\" is attributed to {$nearest['name']}, but {$nearest['name']}'s real stack per project_facts does not include it. Never attribute technology to a named project it wasn't built with, even if that technology is genuine elsewhere in your history.";
+                    $alreadyFlagged[$key] = true;
                 }
             }
         }
