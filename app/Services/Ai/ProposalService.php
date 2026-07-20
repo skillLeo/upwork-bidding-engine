@@ -353,11 +353,13 @@ class ProposalService
      * the operator can print/verify precisely what the model sees (and
      * confirm the teaching document is NOT in it).
      *
-     * The word count target is rendered here from live settings rather
-     * than hardcoded in SKILL.md - seen live: the skill doc said "90-150
-     * words" while proposal_min_words had been raised to 170, so the
+     * The word count target and signature are rendered here from live
+     * settings rather than hardcoded in SKILL.md - seen live twice now:
+     * the skill doc said "90-150 words" while proposal_min_words had been
+     * raised to 170, and separately said `end with "Hassam"` while
+     * proposal_signature had been changed to "Hassam M" - both times the
      * model was following its own written instructions straight into a
-     * guaranteed lint failure. One number, one source, never two documents
+     * guaranteed lint failure. One value, one source, never two documents
      * disagreeing again.
      */
     public function systemPrompt(): string
@@ -370,7 +372,7 @@ class ProposalService
             );
         }
 
-        $skill = $this->wordCountTarget().$skill;
+        $skill = $this->wordCountTarget().$this->signatureTarget().$skill;
 
         return $skill
             ."\n\n## PROJECT FACTS (the ONLY source of truth about Hassam's track record. Never claim anything not derivable from this sheet.)\n"
@@ -391,6 +393,21 @@ class ProposalService
         }
 
         return "## WORD COUNT TARGET\nCover letter body: {$gate['min_words']} to {$gate['max_words']} words. Hit this range, never pad to reach it and never land short. This is the only word count that matters - if any other number appears anywhere else in these instructions, this one wins.\n\n";
+    }
+
+    /**
+     * Rendered from proposal_signature, never hardcoded in SKILL.md - see
+     * systemPrompt() for the live failure this replaced.
+     */
+    protected function signatureTarget(): string
+    {
+        $signature = $this->settings->proposalGate()['signature'];
+
+        if ($signature === '') {
+            return '';
+        }
+
+        return "## SIGNATURE\nEnd the letter with exactly \"{$signature}\" alone on the last line. No signature block, no title, nothing after it. This is the only signature that matters - if any other name appears anywhere else in these instructions, this one wins.\n\n";
     }
 
     /**

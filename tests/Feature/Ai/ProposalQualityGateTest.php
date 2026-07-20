@@ -522,6 +522,27 @@ class ProposalQualityGateTest extends TestCase
         $this->assertStringContainsString('90 to 350 words', app(ProposalService::class)->systemPrompt());
     }
 
+    public function test_signature_is_rendered_from_live_settings_not_hardcoded(): void
+    {
+        // Real failure this closes: SKILL.md said `end with "Hassam"` in
+        // three places while proposal_signature had been changed to
+        // "Hassam M" - every generated proposal shipped signed "Hassam"
+        // and failed the signature lint every time.
+        $this->settings->setMany([
+            'proposal_skill' => 'SKILL RULES v2 MARKER',
+            'proposal_signature' => 'Hassam M',
+        ]);
+
+        $system = app(ProposalService::class)->systemPrompt();
+
+        $this->assertStringContainsString('SIGNATURE', $system);
+        $this->assertStringContainsString('"Hassam M"', $system);
+        $this->assertStringNotContainsString('"Hassam"', $system);
+
+        $this->settings->set('proposal_signature', 'Hassam Mehmood');
+        $this->assertStringContainsString('"Hassam Mehmood"', app(ProposalService::class)->systemPrompt());
+    }
+
     public function test_system_prompt_is_skill_plus_facts_plus_format_spec_and_never_the_reference(): void
     {
         $this->settings->set('proposal_skill', 'SKILL RULES v2 MARKER');

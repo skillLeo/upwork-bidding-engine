@@ -78,7 +78,7 @@ Firebase.
   the cover letter. These load before the letter and are scored by Upwork's Uma.
   Never answer a screening question with just "Yes" or "N/A" — one concrete,
   specific sentence per question, minimum.
-- End with Hassam's first name only ("Hassam"). No signature block, no title.
+- End with exactly the SIGNATURE stated above. No signature block, no title.
 - Plain text. Short paragraphs or single lines. No headers, no bullet spam in the
   letter body itself.
 
@@ -129,7 +129,7 @@ LINE 3 - THE MINI-PLAN / METHOD:
 
 LINE 4 - THE CLOSING QUESTION (the final open loop):
   ONE specific, low-friction question tied to a real fork in the work, answerable
-  inside Upwork. It must open a loop only a reply can close. Then "Hassam".
+  inside Upwork. It must open a loop only a reply can close. Then the SIGNATURE.
 
 ## STEP 3 - SELF-EDIT PASSES (run all, in order)
 A. "SO WHAT?" PASS: after every sentence, ask "so what, from the client's chair?"
@@ -237,5 +237,5 @@ request, cannot be resubmitted at all.
 [ ] Varied sentence length; reads human and fluent.
 [ ] At most one mild human touch, only after competence is shown.
 [ ] Every sentence passes "so what?"; every sentence opens or resolves a loop.
-[ ] Ends with first name "Hassam" only.
+[ ] Ends with exactly the SIGNATURE stated above, alone on the last line.
 [ ] A human will review and manually submit (never auto-submit).
