@@ -89,6 +89,18 @@ class VollnaProjectImporter
             return ['status' => 'skipped', 'reason' => "posted more than {$maxAgeDays} days ago — not imported"];
         }
 
+        // Checked before the live-row lookup: a permanently deleted lead
+        // has no live row to match against, but must still never come
+        // back. See deleted_lead_external_ids migration for the incident
+        // this closes (a mirror sync resurrected 515 deleted leads).
+        if (\App\Models\DeletedLeadExternalId::where('external_id', $mapped['external_id'])->exists()) {
+            ActivityLog::record(ActivityType::LeadResurrectionBlocked, meta: [
+                'external_id' => $mapped['external_id'],
+            ]);
+
+            return ['status' => 'deleted_permanently'];
+        }
+
         $existing = Lead::query()->where('external_id', $mapped['external_id'])->first();
 
         if ($existing) {

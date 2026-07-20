@@ -3,6 +3,7 @@
 namespace Tests\Feature\Vollna;
 
 use App\Console\Commands\VollnaPollApiCommand;
+use App\Models\DeletedLeadExternalId;
 use App\Models\Lead;
 use App\Services\SettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -133,6 +134,27 @@ class PollApiTest extends TestCase
 
         $this->assertSame(1, Lead::where('external_id', 'vollna_pid_333')->count());
         $this->assertSame($aiCallsAfterFirst, \App\Models\AiCall::count(), 'A duplicate must never pay for a second scoring call.');
+    }
+
+    public function test_a_permanently_deleted_lead_is_never_resurrected_by_a_later_poll(): void
+    {
+        // Real incident this closes: leads:prune (or any hard delete)
+        // removes the only record of an external_id, so without a
+        // tombstone a later poll that sees the same job again would
+        // recreate it from scratch.
+        \Illuminate\Support\Facades\Bus::fake([\App\Jobs\ScoreLeadJob::class]);
+        DeletedLeadExternalId::create(['external_id' => 'vollna_pid_555']);
+
+        Http::fake([
+            'api.vollna.com/*' => Http::response($this->apiResponse([
+                $this->project('555', 'Previously deleted job'),
+            ])),
+        ]);
+
+        $this->artisan('vollna:poll-api')->assertSuccessful();
+
+        $this->assertDatabaseMissing('leads', ['external_id' => 'vollna_pid_555']);
+        \Illuminate\Support\Facades\Bus::assertNotDispatched(\App\Jobs\ScoreLeadJob::class);
     }
 
     public function test_poll_queues_scoring_instead_of_running_it_inline(): void

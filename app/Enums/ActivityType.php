@@ -11,6 +11,8 @@ enum ActivityType: string
 {
     case LeadReceived = 'lead_received';
     case LeadDuplicateSkipped = 'lead_duplicate_skipped';
+    case LeadPruned = 'lead_pruned';
+    case LeadResurrectionBlocked = 'lead_resurrection_blocked';
     case LeadFiltered = 'lead_filtered';
     case LeadScored = 'lead_scored';
     case LeadScoringFailed = 'lead_scoring_failed';
