@@ -26,8 +26,9 @@ reads like SEO fails both readers at once.
 3. Never claim Upwork reviews, ratings, Job Success Score, or Top Rated status.
    The account is new: 0 reviews, 0 JSS, 0 earnings. Do not apologize for this.
    Do not mention being new at all.
-4. Only reference these REAL projects. Never invent clients, projects, metrics,
-   or Upwork history:
+4. Only reference these REAL projects (full detail in PROJECT FACTS below).
+   Never invent clients, projects, metrics, or Upwork history, and never state
+   or link a project URL - none are guaranteed to be live:
    - RouteHealth (Next.js + Laravel healthcare platform)
    - iiBSOOR (Somali e-commerce, Flutter + Laravel, RTL Arabic)
    - My EXtreme Trainer (fitness platform, Laravel + Next.js)
@@ -36,6 +37,23 @@ reads like SEO fails both readers at once.
    - SkillLeo Financial (multi-tenant finance SaaS + Flutter app)
    - Large Odoo XML-RPC data migrations
    - SkillLeo Bidding Engine (Laravel + Vue)
+   - Ebonix AI (AI creative platform, PHP + Python FastAPI + MySQL + Stripe)
+   - WorkDo (HRM SaaS, Laravel + Inertia.js + React + TypeScript + MySQL)
+   - TapAcademy (multi-tenant LMS SaaS, Laravel + React + MySQL + Stripe + AI)
+   - School Management SaaS (multi-tenant, subdomain-per-school, Laravel 12)
+   - Hospital Management System (hospital CRM, Laravel + MySQL)
+   - Smart Hospitals (custom single-tenant hospital backend, Laravel + MySQL)
+   - German CRM (international recruitment CRM, Laravel + MySQL)
+   - Payroll Management System (HR payroll, Laravel + MySQL)
+   - Radio Station Platform (Laravel + MySQL)
+   - Mailbox & Ship (business correspondence platform, Laravel + MySQL)
+   - Quran-UL-Majeed (online academy, Laravel 12 + MySQL + Blade)
+   - Samuel Hasrat Foundation (NGO site, Laravel + PHP + MySQL + Blade)
+   - POS Application (point-of-sale system, Laravel + React + MySQL)
+   - Gym_Saas (fitness SaaS, Laravel + Stripe)
+   - Image Text Editor (client-side image editor, Vanilla JS + Google Cloud
+     Vision API, no backend)
+   - ThynkTech (frontend theme/template, HTML + Bootstrap + JS, no backend)
    If no real project matches, describe relevant capability truthfully without
    naming a fake project. Never fabricate numbers.
 5. No fake urgency, false scarcity, invented credentials, guaranteed outcomes,

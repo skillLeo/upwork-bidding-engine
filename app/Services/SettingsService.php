@@ -154,8 +154,24 @@ class SettingsService
             ."\nMy EXtreme Trainer: fitness platform. Laravel + Next.js."
             ."\nOdoo migrations: large Odoo-to-Odoo data migrations over XML-RPC. Batched record transfer, custom field mapping, attachment migration, resume after interruption. This was DATA MIGRATION, not an inventory sync system. Never describe it as anything else."
             ."\nSkillLeo Bidding Engine: this system. Laravel + Vue."
+            ."\nEbonix AI: representation-first AI creative platform. PHP + Python FastAPI + MySQL + Stripe. Multi-provider AI image/video generation (FLUX, Seedream, Imagen-4, Veo-3, Kling, Luma), an AI Twin portrait system with an identity-preservation engine, Stripe coin-economy billing with subscriptions and a full ledger."
+            ."\nWorkDo: HRM SaaS platform. Laravel + Inertia.js + React + TypeScript + MySQL + Spatie. Payroll compliance with automated tax calculations, full employee lifecycle, recruitment and contract modules, biometric attendance, granular role-based permissions."
+            ."\nTapAcademy: multi-tenant LMS SaaS. Laravel + React + MySQL + Stripe + AI integrations. AI-powered course and quiz generation, assignment management, progress tracking, certification workflows, instructor dashboards."
+            ."\nSchool Management SaaS: multi-tenant school platform, one subdomain per school. Laravel 12 + MySQL. Subdomain-based tenant isolation, granular per-role per-module permissions, full student/teacher/staff lifecycle, academic records and result publishing, 60+ relational tables."
+            ."\nHospital Management System: hospital CRM. Laravel + MySQL. Patient scheduling, medical record workflows, staff attendance and roles, operational reporting dashboards."
+            ."\nSmart Hospitals: custom single-tenant hospital backend (non-SaaS). Laravel + MySQL. OPD/IPD patient journey (register, admit, discharge), biometric-ready attendance and fingerprint enrollment, ward/bed occupancy management, pharmacy issue-medicine workflow, statistical reporting."
+            ."\nGerman CRM: international recruitment CRM. Laravel + MySQL. Role-based spaces for agent/employer/employee, interview scheduling, candidate tracking, skills-profile matching."
+            ."\nPayroll Management System: HR payroll platform. Laravel + MySQL. Employee positions and schedules, overtime and attendance tracking, deductions and salary advances, payroll generation."
+            ."\nRadio Station Platform: personal radio station platform. Laravel + MySQL. Station creation, custom stream integration, user playlist management."
+            ."\nMailbox & Ship: business correspondence platform. Laravel + MySQL. Secure handling of sensitive messages and transactions, organized workflows."
+            ."\nQuran-UL-Majeed: online academy. Laravel 12 + MySQL + Blade. Live 1-to-1/group class scheduling across multiple tracks, subscriptions and donations, teacher/student portals with video-call links, progress tracking."
+            ."\nSamuel Hasrat Foundation: NGO site. Laravel + PHP + MySQL + Blade. Donation-ready content site for a non-profit\'s children/youth/family programs."
+            ."\nPOS Application: point-of-sale system. Laravel + React + MySQL. Inventory management, multi-role support, real-time stock tracking, sales reporting."
+            ."\nGym_Saas: fitness SaaS platform. Laravel + Stripe. AI coaching, nutrition tracking, workout logging, social community features, recipe management, subscription billing."
+            ."\nImage Text Editor: client-side image editing tool, no backend. Vanilla JS + Google Cloud Vision API + HTML5 Canvas. Upload, style, reposition, resize text on images with professional rendering."
+            ."\nThynkTech: frontend theme/template, no backend. HTML + Bootstrap + CSS + JavaScript. Landing and inner pages (pricing, shop, product, blog, portfolio), static site."
             ."\nStack: PHP, Laravel, Python, Django, FastAPI, Odoo, React, Next.js, Vue, Node, Express, MERN, TypeScript, Flutter, React Native, Dart, MySQL, PostgreSQL, Firebase."
-            ."\nAnything not on this sheet is NOT in the track record and must never be claimed. Magento is not on this sheet."],
+            ."\nAnything not on this sheet is NOT in the track record and must never be claimed. Magento is not on this sheet. Never state or link a project URL - none are guaranteed to be live."],
 
         // Proposal quality gate — every generated proposal is mechanically
         // linted (banned phrases, word count, signature, required phrases)
