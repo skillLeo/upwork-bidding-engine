@@ -23,6 +23,72 @@ use App\Services\SettingsService;
  */
 class ProposalLinter
 {
+    /**
+     * Canonical technology names this check recognizes, each a
+     * case-insensitive word-boundary pattern (case-sensitive only where
+     * the bare word is also common English, e.g. "React" vs. "react to
+     * feedback"). Covers Hassam's real stack (so legitimate mentions are
+     * correctly recognized as allowed) plus technologies he has never
+     * worked in that models commonly invent for stack-adjacent jobs.
+     * Extend this list, not the AI reviewer's prompt, if a new real
+     * project introduces a genuinely new technology.
+     *
+     * @var array<string, string>
+     */
+    protected const TECH_VOCABULARY = [
+        // Hassam's real stack.
+        'Laravel' => '/\blaravel\b/i',
+        'Vue' => '/\bvue(?:\.js)?\b/i',
+        'Flutter' => '/\bflutter\b/i',
+        'PostgreSQL' => '/\bpostgres(?:ql)?\b/i',
+        'MySQL' => '/\bmysql\b/i',
+        'Next.js' => '/\bnext\.?js\b/i',
+        'React Native' => '/\breact\s*native\b/i',
+        'React' => '/\bReact\b/',
+        'Node.js' => '/\bnode(?:\.js)?\b/i',
+        'Express' => '/\bexpress(?:\.js)?\b/i',
+        'Python' => '/\bpython\b/i',
+        'FastAPI' => '/\bfastapi\b/i',
+        'Django' => '/\bdjango\b/i',
+        'PHP' => '/\bphp\b/i',
+        'Odoo' => '/\bodoo\b/i',
+        'Stripe' => '/\bstripe\b/i',
+        'TypeScript' => '/\btypescript\b/i',
+        'Firebase' => '/\bfirebase\b/i',
+        'Dart' => '/\bdart\b/i',
+        'Inertia.js' => '/\binertia(?:\.js)?\b/i',
+        'Spatie' => '/\bspatie\b/i',
+        'Blade' => '/\bblade\b/i',
+        'Livewire' => '/\blivewire\b/i',
+        'Tailwind CSS' => '/\btailwind(?:\s*css)?\b/i',
+        // Commonly hallucinated - never part of Hassam's real stack.
+        'MongoDB' => '/\bmongo(?:db)?\b/i',
+        'Ruby on Rails' => '/\brails\b/i',
+        'Ruby' => '/\bruby\b/i',
+        'Golang' => '/\bgolang\b/i',
+        'Rust' => '/\brust\b/i',
+        'Angular' => '/\bangular\b/i',
+        'jQuery' => '/\bjquery\b/i',
+        'Bootstrap' => '/\bbootstrap\b/i',
+        'GraphQL' => '/\bgraphql\b/i',
+        'Redis' => '/\bredis\b/i',
+        'Kubernetes' => '/\bkubernetes\b|\bk8s\b/i',
+        'Docker' => '/\bdocker\b/i',
+        'AWS Lambda' => '/\baws\s+lambda\b/i',
+        '.NET' => '/\bdotnet\b|\bASP\.NET\b/i',
+        'Java' => '/\bjava\b/i',
+        'Spring Boot' => '/\bspring\s*boot\b/i',
+        'Symfony' => '/\bsymfony\b/i',
+        'WordPress' => '/\bwordpress\b/i',
+        'Magento' => '/\bmagento\b/i',
+        'Shopify' => '/\bshopify\b/i',
+        'Wix' => '/\bwix\b/i',
+        'Redux' => '/\bredux\b/i',
+        'Vuex' => '/\bvuex\b/i',
+        'Nuxt' => '/\bnuxt\b/i',
+        'Svelte' => '/\bsvelte\b/i',
+    ];
+
     public function __construct(protected SettingsService $settings) {}
 
     /**
@@ -98,7 +164,106 @@ class ProposalLinter
             $violations[] = $violation;
         }
 
+        foreach ($this->techClaimViolations($letter) as $violation) {
+            $violations[] = $violation;
+        }
+
         return $violations;
+    }
+
+    /**
+     * Real incident this closes: a proposal cited "MongoDB schemas,
+     * Node.js, Express" as part of PatrolTick, whose real stack per
+     * project_facts is Laravel + Vue + Flutter + PostgreSQL. Neither the
+     * mechanical checks above nor the AI reviewer's prompt ever compared
+     * proposal text against the fact sheet - this does, deterministically,
+     * word-list against word-list, no AI judgment involved.
+     *
+     * Two passes: (1) a technology named anywhere that never appears
+     * anywhere in project_facts at all is an outright fabrication; (2) a
+     * technology attributed to a SPECIFIC named project, in the same
+     * paragraph as that project's name, that isn't part of THAT project's
+     * own listed stack - even if the technology is real elsewhere in
+     * Hassam's history (e.g. Node/Express are genuine general skills per
+     * the sheet's aggregate Stack line, but PatrolTick specifically never
+     * used them).
+     *
+     * @return array<int, string>
+     */
+    protected function techClaimViolations(string $letter): array
+    {
+        if (trim($letter) === '') {
+            return [];
+        }
+
+        $projectFacts = (string) $this->settings->get('project_facts', '');
+
+        if (trim($projectFacts) === '') {
+            return [];
+        }
+
+        $violations = [];
+        $flagged = [];
+
+        foreach (self::TECH_VOCABULARY as $tech => $pattern) {
+            if (preg_match($pattern, $letter) !== 1) {
+                continue;
+            }
+
+            if (preg_match($pattern, $projectFacts) !== 1) {
+                $violations[] = "Fabricated tech claim: \"{$tech}\" does not appear anywhere in your project facts and must never be claimed. Name only technology that is actually on the fact sheet, or drop the claim.";
+                $flagged[$tech] = true;
+            }
+        }
+
+        $projects = $this->parseProjectFacts($projectFacts);
+
+        foreach (preg_split('/\n\s*\n/u', trim($letter)) ?: [] as $paragraph) {
+            foreach ($projects as $name => $stackLine) {
+                if (mb_stripos($paragraph, $name) === false) {
+                    continue;
+                }
+
+                foreach (self::TECH_VOCABULARY as $tech => $pattern) {
+                    if (isset($flagged[$tech]) || preg_match($pattern, $paragraph) !== 1) {
+                        continue;
+                    }
+
+                    if (preg_match($pattern, $stackLine) !== 1) {
+                        $violations[] = "Project-stack mismatch: \"{$tech}\" is attributed to {$name}, but {$name}'s real stack per project_facts does not include it. Never attribute technology to a named project it wasn't built with, even if that technology is genuine elsewhere in your history.";
+                    }
+                }
+            }
+        }
+
+        return $violations;
+    }
+
+    /**
+     * @return array<string, string> project name => its own fact-sheet line
+     */
+    protected function parseProjectFacts(string $projectFacts): array
+    {
+        $projects = [];
+
+        foreach (preg_split('/\R/u', $projectFacts) ?: [] as $line) {
+            if (preg_match('/^([A-Za-z][\w &.\/\-]{1,40}):\s/u', trim($line), $m) !== 1) {
+                continue;
+            }
+
+            $name = trim($m[1]);
+
+            // The aggregate skills line and any prose disclaimer aren't
+            // named projects - only lines that open with a real project
+            // name are checked for project-specific stack attribution.
+            if ($name === 'Stack' || str_starts_with($name, 'Technologies NOT')) {
+                continue;
+            }
+
+            $projects[$name] = $line;
+        }
+
+        return $projects;
     }
 
     /**

@@ -171,7 +171,8 @@ class SettingsService
             ."\nImage Text Editor: client-side image editing tool, no backend. Vanilla JS + Google Cloud Vision API + HTML5 Canvas. Upload, style, reposition, resize text on images with professional rendering."
             ."\nThynkTech: frontend theme/template, no backend. HTML + Bootstrap + CSS + JavaScript. Landing and inner pages (pricing, shop, product, blog, portfolio), static site."
             ."\nStack: PHP, Laravel, Python, Django, FastAPI, Odoo, React, Next.js, Vue, Node, Express, MERN, TypeScript, Flutter, React Native, Dart, MySQL, PostgreSQL, Firebase."
-            ."\nAnything not on this sheet is NOT in the track record and must never be claimed. Magento is not on this sheet. Never state or link a project URL - none are guaranteed to be live."],
+            ."\nAnything not on this sheet is NOT in the track record and must never be claimed. Magento is not on this sheet. Never state or link a project URL - none are guaranteed to be live."
+            ."\nTechnologies NOT in Hassam's stack, never claim: MongoDB, Ruby, Ruby on Rails, Golang, Rust, Angular, jQuery, GraphQL, Redis, Kubernetes, Docker, AWS Lambda, .NET, Java, Spring Boot, Symfony, WordPress, Shopify, Wix, Redux, Vuex, Nuxt, Svelte. If a job requires any of these, name only the closest real match honestly, and never attribute a technology to a named project that project's own line above doesn't list - even if that technology is real elsewhere in this sheet."],
 
         // Proposal quality gate — every generated proposal is mechanically
         // linted (banned phrases, word count, signature, required phrases)
