@@ -13,6 +13,7 @@ import EmptyState from "@/components/ui/EmptyState.vue";
 import TrendChart from "@/components/analytics/TrendChart.vue";
 import BestJobTypesChart from "@/components/analytics/BestJobTypesChart.vue";
 import BestHoursChart from "@/components/analytics/BestHoursChart.vue";
+import ScoreCalibrationChart from "@/components/analytics/ScoreCalibrationChart.vue";
 import { relativeTime } from "@/lib/utils";
 
 const { analytics, isLoading } = useAnalytics();
@@ -22,6 +23,49 @@ const trend = computed(() => analytics.value?.trend ?? []);
 const bestJobTypes = computed(() => analytics.value?.best_job_types ?? []);
 const bestHours = computed(() => analytics.value?.best_hours ?? []);
 const recentActivity = computed(() => analytics.value?.recent_activity ?? []);
+
+const calibrationRows = computed(() => analytics.value?.score_calibration?.rows ?? []);
+const calibrationThreshold = computed(() => analytics.value?.score_calibration?.low_confidence_threshold ?? 5);
+
+// Aggregates two score tiers (9-10 vs 7-8) into one plain-English sentence.
+// This is a readability layer only - the chart itself stays per-score, per
+// the spec: bucketing the chart would hide whether the rubric's granularity
+// is doing real work.
+const calibrationTakeaway = computed(() => {
+  const rows = calibrationRows.value;
+  const threshold = calibrationThreshold.value;
+
+  const aggregate = (scores) => {
+    const matched = rows.filter((r) => scores.includes(r.score));
+    const sentCount = matched.reduce((sum, r) => sum + r.sent_count, 0);
+    const replyCount = matched.reduce((sum, r) => sum + r.reply_count, 0);
+    return { sentCount, rate: sentCount > 0 ? (replyCount / sentCount) * 100 : 0 };
+  };
+
+  const high = aggregate([9, 10]);
+  const mid = aggregate([7, 8]);
+
+  if (high.sentCount < threshold || mid.sentCount < threshold) {
+    return "Not enough bids yet to compare tiers.";
+  }
+
+  if (high.rate === 0 && mid.rate === 0) {
+    return "Scores 9–10 and 7–8 haven't landed a reply yet — too early to tell them apart.";
+  }
+
+  if (mid.rate === 0) {
+    return `Scores 9–10 are converting at ${high.rate.toFixed(0)}% — scores 7–8 haven't landed a reply yet.`;
+  }
+
+  const multiplier = high.rate / mid.rate;
+  if (Math.abs(multiplier - 1) < 0.15) {
+    return "Scores 9–10 and 7–8 are converting at about the same rate.";
+  }
+
+  return multiplier > 1
+    ? `Scores 9–10 are converting at ${multiplier.toFixed(1)}× the rate of 7–8.`
+    : `Scores 7–8 are converting at ${(1 / multiplier).toFixed(1)}× the rate of 9–10.`;
+});
 </script>
 
 <template>
@@ -62,6 +106,16 @@ const recentActivity = computed(() => analytics.value?.recent_activity ?? []);
         hint="~4 per proposal, estimated"
       />
     </div>
+
+    <Card>
+      <CardHeader>
+        <CardTitle>Score calibration</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p class="mb-3 text-sm text-text-secondary">{{ calibrationTakeaway }}</p>
+        <ScoreCalibrationChart :rows="calibrationRows" :low-confidence-threshold="calibrationThreshold" />
+      </CardContent>
+    </Card>
 
     <Card>
       <CardHeader>

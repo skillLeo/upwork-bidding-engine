@@ -9,6 +9,9 @@ use Illuminate\Support\Facades\DB;
 
 class AnalyticsService
 {
+    // Below this many sent leads at a given score, the rate is noise, not signal.
+    public const LOW_CONFIDENCE_THRESHOLD = 5;
+
     public function __construct(protected SettingsService $settings) {}
 
     /**
@@ -133,11 +136,12 @@ class AnalyticsService
      */
     public function bestHours(): array
     {
+        // Counted in PHP rather than SQL HOUR() - that function is
+        // MySQL-only and isn't portable to the sqlite test database.
         $rows = Lead::query()
             ->whereNotNull('posted_at')
-            ->selectRaw('HOUR(posted_at) as hour, count(*) as total')
-            ->groupBy('hour')
-            ->pluck('total', 'hour');
+            ->pluck('posted_at')
+            ->countBy(fn ($postedAt) => $postedAt->hour);
 
         $out = [];
         for ($hour = 0; $hour < 24; $hour++) {
@@ -145,6 +149,52 @@ class AnalyticsService
         }
 
         return $out;
+    }
+
+    /**
+     * Reply/win rate segmented by score, so the rubric's own 1-10 granularity
+     * can be checked against real outcomes instead of assumed to be signal.
+     *
+     * @return array{low_confidence_threshold: int, rows: array<int, array{score: int, sent_count: int, reply_count: int, win_count: int, reply_rate: float, win_rate: float}>}
+     */
+    public function scoreCalibration(): array
+    {
+        $sentStatuses = [LeadStatus::Sent->value, LeadStatus::Replied->value, LeadStatus::Won->value];
+        $repliedStatuses = [LeadStatus::Replied->value, LeadStatus::Won->value];
+
+        $rows = Lead::query()
+            ->whereNotNull('score')
+            ->whereIn('status', $sentStatuses)
+            ->selectRaw(
+                'score, count(*) as sent_count,'
+                .' sum(case when status in (?, ?) then 1 else 0 end) as reply_count,'
+                .' sum(case when status = ? then 1 else 0 end) as win_count',
+                [...$repliedStatuses, LeadStatus::Won->value]
+            )
+            ->groupBy('score')
+            ->orderBy('score')
+            ->get()
+            ->map(function ($row) {
+                $sentCount = (int) $row->sent_count;
+                $replyCount = (int) $row->reply_count;
+                $winCount = (int) $row->win_count;
+
+                return [
+                    'score' => (int) $row->score,
+                    'sent_count' => $sentCount,
+                    'reply_count' => $replyCount,
+                    'win_count' => $winCount,
+                    'reply_rate' => $sentCount > 0 ? round(($replyCount / $sentCount) * 100, 1) : 0.0,
+                    'win_rate' => $sentCount > 0 ? round(($winCount / $sentCount) * 100, 1) : 0.0,
+                ];
+            })
+            ->values()
+            ->all();
+
+        return [
+            'low_confidence_threshold' => self::LOW_CONFIDENCE_THRESHOLD,
+            'rows' => $rows,
+        ];
     }
 
     /**
