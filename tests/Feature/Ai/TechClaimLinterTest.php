@@ -86,6 +86,26 @@ class TechClaimLinterTest extends TestCase
         $this->assertStringNotContainsString('Project-stack mismatch', $joined);
     }
 
+    public function test_naming_a_technology_in_the_deny_list_line_does_not_make_it_look_allowed(): void
+    {
+        // Caught live: adding "Technologies NOT in stack: MongoDB, ..."
+        // made a naive presence scan think MongoDB was IN the sheet,
+        // because the word appears there - just in a forbidding sentence.
+        app(SettingsService::class)->set(
+            'project_facts',
+            self::PROJECT_FACTS."\nTechnologies NOT in Hassam's stack, never claim: MongoDB, Ruby, Angular.\nAnything not on this sheet is NOT in the track record and must never be claimed. Magento is not on this sheet.",
+        );
+
+        $text = "PatrolTick is the closest match. Built with MongoDB and Magento integrations.\n\n"
+            ."Plan: scope it, build it, ship it. Done = a working demo you can click through.\n\nSound good?\n\nHassam";
+
+        $violations = app(ProposalLinter::class)->check($text);
+        $joined = implode(' | ', $violations);
+
+        $this->assertStringContainsString('MongoDB', $joined);
+        $this->assertStringContainsString('Magento', $joined);
+    }
+
     public function test_no_project_facts_configured_never_blocks_the_pipeline(): void
     {
         app(SettingsService::class)->set('project_facts', '');

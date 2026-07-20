@@ -202,6 +202,18 @@ class ProposalLinter
             return [];
         }
 
+        // The "presence" text a tech term is checked against must exclude
+        // any deny-list/disclaimer line - naming a technology to forbid it
+        // ("Technologies NOT in stack: MongoDB...") makes a naive substring
+        // scan of the raw sheet think that technology is present. Caught
+        // live: adding the deny-list line broke the exact check it was
+        // meant to support. Same reasoning applies to the pre-existing
+        // "Magento is not on this sheet" disclaimer sentence.
+        $allowedText = implode("\n", array_filter(
+            preg_split('/\R/u', $projectFacts) ?: [],
+            fn (string $line) => ! preg_match('/^(Technologies NOT|Anything not on this sheet)/iu', trim($line)),
+        ));
+
         $violations = [];
         $flagged = [];
 
@@ -210,7 +222,7 @@ class ProposalLinter
                 continue;
             }
 
-            if (preg_match($pattern, $projectFacts) !== 1) {
+            if (preg_match($pattern, $allowedText) !== 1) {
                 $violations[] = "Fabricated tech claim: \"{$tech}\" does not appear anywhere in your project facts and must never be claimed. Name only technology that is actually on the fact sheet, or drop the claim.";
                 $flagged[$tech] = true;
             }
