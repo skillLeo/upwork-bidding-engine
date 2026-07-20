@@ -45,7 +45,15 @@ class ProposalService
 
     public const REVIEW_MAX_TOKENS = 4000;
 
-    public const MAX_REVISIONS = 2;
+    // Was 2. Raised after a real failure: on lead #2071, both revisions
+    // were spent getting the draft lint-clean (draft and revision 1 both
+    // had mechanical violations) - the AI reviewer only ran ONCE, on the
+    // final revision, right before the budget ran out. Its violations
+    // (envelope line specificity, proof-project relevance, "Done ="
+    // quality) never got a single revision attempt aimed at them. A
+    // shared budget that lint issues can fully consume before review
+    // ever gets a turn defeats the point of having a reviewer at all.
+    public const MAX_REVISIONS = 4;
 
     /**
      * The output contract — plumbing, not bidding rules, so it lives in

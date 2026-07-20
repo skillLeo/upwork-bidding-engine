@@ -109,18 +109,20 @@ class ProposalQualityGateTest extends TestCase
     {
         // THE bug this ladder replaces: revision 1 was lint-clean, revision
         // 2 was lint-dirty, and the old loop shipped revision 2. Here the
-        // draft is clean but review-rejected, and both revisions come back
+        // draft is clean but review-rejected, and every revision comes back
         // dirty — the CLEAN draft must ship, with the review violations on
         // the badge, never the dirty newest text.
         $this->configureLint();
 
-        Http::fake([
-            'api.anthropic.com/*' => Http::sequence()
-                ->push($this->anthropicResponse(self::CLEAN_TEXT))
-                ->push($this->anthropicResponse('{"pass": false, "violations": [{"rule": "TRICOLON", "quote": "audit, fix, test", "reason": "Three parallel items — a banned rhythm."}]}'))
-                ->push($this->anthropicResponse('Dirty rewrite — with a dash.'))
-                ->push($this->anthropicResponse('Still dirty — again.')),
-        ]);
+        $sequence = Http::sequence()
+            ->push($this->anthropicResponse(self::CLEAN_TEXT))
+            ->push($this->anthropicResponse('{"pass": false, "violations": [{"rule": "TRICOLON", "quote": "audit, fix, test", "reason": "Three parallel items — a banned rhythm."}]}'));
+
+        for ($i = 0; $i < ProposalService::MAX_REVISIONS; $i++) {
+            $sequence->push($this->anthropicResponse("Still dirty — attempt {$i}."));
+        }
+
+        Http::fake(['api.anthropic.com/*' => $sequence]);
 
         $result = $this->write(Lead::factory()->create());
 
@@ -134,8 +136,9 @@ class ProposalQualityGateTest extends TestCase
         // badge — the em dash in the reason must not survive.
         $this->assertStringNotContainsString('—', implode(' ', $result['warnings']));
 
-        // Dirty versions never earn a review call: draft, review, 2 revisions.
-        Http::assertSentCount(4);
+        // Dirty versions never earn a review call: draft, review, then one
+        // revision attempt per point of MAX_REVISIONS.
+        Http::assertSentCount(2 + ProposalService::MAX_REVISIONS);
         $this->assertDatabaseHas('activity_logs', ['type' => 'proposal_quality_warning']);
     }
 
@@ -145,20 +148,22 @@ class ProposalQualityGateTest extends TestCase
 
         // Every generation is lint-dirty, so after the revision budget the
         // ladder runs ONE surgical fix — which succeeds and ships.
-        Http::fake([
-            'api.anthropic.com/*' => Http::sequence()
-                ->push($this->anthropicResponse('Bad — one.'))
-                ->push($this->anthropicResponse('Bad — two.'))
-                ->push($this->anthropicResponse('Bad — three.'))
-                ->push($this->anthropicResponse(self::CLEAN_TEXT)),
-        ]);
+        $sequence = Http::sequence();
+        for ($i = 0; $i <= ProposalService::MAX_REVISIONS; $i++) {
+            $sequence->push($this->anthropicResponse("Bad — attempt {$i}."));
+        }
+        $sequence->push($this->anthropicResponse(self::CLEAN_TEXT));
+
+        Http::fake(['api.anthropic.com/*' => $sequence]);
 
         $result = $this->write(Lead::factory()->create());
 
         $this->assertSame(self::CLEAN_TEXT, $result['text']);
         $this->assertSame('c', $result['shipped_rule']);
         $this->assertSame([], $result['warnings']);
-        Http::assertSentCount(4);
+        // draft + MAX_REVISIONS revisions (all lint-dirty, never earning a
+        // review call) + one surgical fix.
+        Http::assertSentCount(ProposalService::MAX_REVISIONS + 2);
         $this->assertSame(1, AiCall::where('purpose', 'proposal_surgical_fix')->count());
     }
 
