@@ -46,7 +46,14 @@ class OpenAiProvider implements AiProvider
         $response = Http::withToken((string) $this->settings->get('openai_api_key'))
             ->acceptJson()
             ->timeout(120)
-            ->retry([2000], 0, fn ($e) => $e instanceof \Illuminate\Http\Client\ConnectionException)
+            // Live tokens-per-minute limits (verified: this org's gpt-4o tier
+            // caps at 30k TPM) throw a 429 mid-burst — the same request
+            // usually succeeds a few seconds later once the window rolls, so
+            // this is worth three attempts before surfacing as a failure. A
+            // 429 must never count toward AiManager's 3-strike failover on
+            // its own; every other 4xx still fails on the first attempt.
+            ->retry([3000, 8000, 20000], 0, fn ($e) => $e instanceof \Illuminate\Http\Client\ConnectionException
+                || ($e instanceof \Illuminate\Http\Client\RequestException && $e->response->status() === 429))
             ->post('https://api.openai.com/v1/chat/completions', [
                 'model' => $model,
                 'max_completion_tokens' => $maxTokens,

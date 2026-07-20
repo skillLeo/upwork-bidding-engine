@@ -61,7 +61,11 @@ class AnthropicProvider implements AiProvider
         ])
             ->acceptJson()
             ->timeout(120)
-            ->retry([2000], 0, fn ($e) => $e instanceof \Illuminate\Http\Client\ConnectionException)
+            // Same reasoning as OpenAiProvider: a 429 is usually a
+            // self-clearing token-bucket limit, worth retrying before it
+            // counts as a real failure toward AiManager's failover.
+            ->retry([3000, 8000, 20000], 0, fn ($e) => $e instanceof \Illuminate\Http\Client\ConnectionException
+                || ($e instanceof \Illuminate\Http\Client\RequestException && $e->response->status() === 429))
             ->post('https://api.anthropic.com/v1/messages', [
                 'model' => $model,
                 'max_tokens' => $maxTokens,

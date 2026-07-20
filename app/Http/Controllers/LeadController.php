@@ -501,6 +501,8 @@ class LeadController extends Controller
             $refresh->rescore($lead, 'dashboard');
         } catch (\App\Services\LeadRunInProgressException $e) {
             return response()->json(['message' => $e->getMessage()], 409);
+        } catch (\Throwable $e) {
+            return $this->aiFailureResponse($e);
         }
 
         return response()->json(['data' => new LeadResource($lead->fresh())]);
@@ -519,9 +521,32 @@ class LeadController extends Controller
             return response()->json(['message' => $e->getMessage()], 409);
         } catch (\App\Services\Ai\ProposalWritingPausedException $e) {
             return response()->json(['message' => $e->getMessage()], 409);
+        } catch (\Throwable $e) {
+            return $this->aiFailureResponse($e);
         }
 
         return response()->json(['data' => new LeadResource($lead->fresh())]);
+    }
+
+    /**
+     * Providers now retry a 429 internally (see OpenAiProvider/
+     * AnthropicProvider) — this only fires once those retries are
+     * genuinely exhausted, so it tells the operator something actionable
+     * instead of a bare "Server Error".
+     */
+    protected function aiFailureResponse(\Throwable $e): JsonResponse
+    {
+        report($e);
+
+        if ($e instanceof \Illuminate\Http\Client\RequestException && $e->response->status() === 429) {
+            return response()->json([
+                'message' => 'The AI provider is rate-limited right now. Wait a minute and try again.',
+            ], 503);
+        }
+
+        return response()->json([
+            'message' => 'The run failed or timed out — check the dashboard for the current state.',
+        ], 500);
     }
 
     public function rescore(Lead $lead): JsonResponse

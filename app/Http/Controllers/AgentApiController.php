@@ -123,11 +123,7 @@ class AgentApiController extends Controller
         } catch (\App\Services\LeadRunInProgressException $e) {
             return response()->json(['message' => 'Already in progress — a rescore or rewrite is running for this lead.'], 409);
         } catch (\Throwable $e) {
-            report($e);
-
-            return response()->json([
-                'message' => 'The run failed or timed out — check the dashboard at upwork.skillleo.com for the current state.',
-            ], 500);
+            return $this->aiFailureResponse($e);
         }
     }
 
@@ -144,12 +140,29 @@ class AgentApiController extends Controller
         } catch (\App\Services\Ai\ProposalWritingPausedException $e) {
             return response()->json(['message' => $e->getMessage()], 409);
         } catch (\Throwable $e) {
-            report($e);
-
-            return response()->json([
-                'message' => 'The run failed or timed out — check the dashboard at upwork.skillleo.com for the current state.',
-            ], 500);
+            return $this->aiFailureResponse($e);
         }
+    }
+
+    /**
+     * Providers now retry a 429 internally (see OpenAiProvider/
+     * AnthropicProvider) — this only fires once those retries are
+     * genuinely exhausted, so it tells the bidder something actionable
+     * instead of a bare failure.
+     */
+    protected function aiFailureResponse(\Throwable $e): JsonResponse
+    {
+        report($e);
+
+        if ($e instanceof \Illuminate\Http\Client\RequestException && $e->response->status() === 429) {
+            return response()->json([
+                'message' => 'The AI provider is rate-limited right now. Wait a minute and try again.',
+            ], 503);
+        }
+
+        return response()->json([
+            'message' => 'The run failed or timed out — check the dashboard at upwork.skillleo.com for the current state.',
+        ], 500);
     }
 
     /**
