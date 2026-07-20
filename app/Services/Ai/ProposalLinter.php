@@ -323,6 +323,28 @@ class ProposalLinter
      */
     protected function trapInstructionViolation(string $text, string $jobBrief): ?string
     {
+        $required = self::requiredOpeningWord($jobBrief);
+
+        if ($required === null) {
+            return null;
+        }
+
+        $actualStart = mb_substr(ltrim($text), 0, mb_strlen($required));
+
+        if (strcasecmp($actualStart, $required) === 0) {
+            return null;
+        }
+
+        return 'Must start with "'.$required.'" exactly. The job post gives this as a literal instruction to prove the post was read; ignoring it risks the whole application being discarded.';
+    }
+
+    /**
+     * Public and static so ProposalService can use the exact same detection
+     * to mechanically prepend the word when a revision still misses it,
+     * rather than duplicating this regex and risking the two drifting apart.
+     */
+    public static function requiredOpeningWord(string $jobBrief): ?string
+    {
         if (preg_match(
             '/\b(?:start|begin)(?:ing)?\s+(?:your\s+|the\s+)?(?:reply|response|proposal|application|message|bid|cover\s*letter)?\s*(?:with|by\s+(?:writing|typing|saying))\s+(?:the\s+word\s+)?["\x{201C}\x{2018}]?([A-Za-z][A-Za-z0-9\-]{1,30})["\x{201D}\x{2019}]?/iu',
             $jobBrief,
@@ -331,13 +353,6 @@ class ProposalLinter
             return null;
         }
 
-        $required = $matches[1];
-        $actualStart = mb_substr(ltrim($text), 0, mb_strlen($required));
-
-        if (strcasecmp($actualStart, $required) === 0) {
-            return null;
-        }
-
-        return 'Must start with "'.$required.'" exactly. The job post gives this as a literal instruction to prove the post was read; ignoring it risks the whole application being discarded.';
+        return $matches[1];
     }
 }

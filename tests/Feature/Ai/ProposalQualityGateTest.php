@@ -256,6 +256,57 @@ class ProposalQualityGateTest extends TestCase
         );
     }
 
+    public function test_trap_instruction_is_prepended_mechanically_not_gambled_on_a_revision(): void
+    {
+        // Seen live (lead #2059): a job post said "Start your reply with
+        // CARE-STACK" and the model missed it across the full revision
+        // budget even though the linter flagged it every time. This must
+        // ship clean on the FIRST draft - no revision spent gambling on
+        // the model remembering a trap word it already missed once.
+        $this->configureLint();
+
+        $lead = Lead::factory()->create([
+            'full_brief' => 'We need a senior dev. Start your reply with CARE-STACK so we know you read the full post.',
+        ]);
+
+        Http::fake([
+            'api.anthropic.com/*' => Http::sequence()
+                ->push($this->anthropicResponse(
+                    "The tricky part here is the offline sync.\nI built PatrolTick, which syncs offline check-ins on reconnect.\nPlan: audit the sync path, fix the queue. Done = check-ins land reliably.\nWhat's your current setup?\nHassam",
+                ))
+                ->push($this->anthropicResponse('{"pass": true, "violations": []}')),
+        ]);
+
+        $result = $this->write($lead);
+
+        $this->assertTrue($result['clean']);
+        $this->assertSame(0, $result['revisions']);
+        $this->assertStringStartsWith("CARE-STACK.\n\n", $result['text']);
+        Http::assertSentCount(2);
+    }
+
+    public function test_correctly_obeyed_trap_instruction_is_left_untouched(): void
+    {
+        $this->configureLint();
+
+        $lead = Lead::factory()->create([
+            'full_brief' => 'Start your reply with CARE-STACK so we know you read the full post.',
+        ]);
+
+        Http::fake([
+            'api.anthropic.com/*' => Http::sequence()
+                ->push($this->anthropicResponse(
+                    "CARE-STACK. Here is the offline sync fix.\nI built PatrolTick, which syncs offline check-ins on reconnect.\nPlan: audit the sync path, fix the queue. Done = check-ins land reliably.\nWhat's your current setup?\nHassam",
+                ))
+                ->push($this->anthropicResponse('{"pass": true, "violations": []}')),
+        ]);
+
+        $result = $this->write($lead);
+
+        $this->assertSame(1, substr_count($result['text'], 'CARE-STACK'), 'Must not double the word when it was already correctly placed.');
+        $this->assertStringStartsWith('CARE-STACK.', $result['text']);
+    }
+
     public function test_gate_disabled_returns_first_draft_with_single_call(): void
     {
         $this->configureLint();

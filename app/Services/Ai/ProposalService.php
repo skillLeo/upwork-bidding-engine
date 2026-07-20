@@ -98,7 +98,7 @@ class ProposalService
             $lead->id,
         );
 
-        $text = $this->cleanText($response->text);
+        $text = $this->cleanText($response->text, $lead->full_brief);
 
         if (! $gate['enabled']) {
             return [
@@ -131,7 +131,7 @@ class ProposalService
                 $lead->id,
             );
 
-            $versions[] = $this->evaluate($this->cleanText($response->text), "revision {$revisions}", $system, $jobBlock, $reviewModel, $lead, $response);
+            $versions[] = $this->evaluate($this->cleanText($response->text, $lead->full_brief), "revision {$revisions}", $system, $jobBlock, $reviewModel, $lead, $response);
         }
 
         return $this->ship($versions, $revisions, $system, $writerModel, $lead);
@@ -186,7 +186,7 @@ class ProposalService
                 $lead->id,
             );
 
-            $fixed = $this->cleanText($response->text);
+            $fixed = $this->cleanText($response->text, $lead->full_brief);
             $versions[] = [
                 'source' => 'surgical fix',
                 'text' => $fixed,
@@ -442,7 +442,7 @@ class ProposalService
         return trim(preg_replace('/\s*,(\s*,)+\s*/', ', ', preg_replace('/\s{2,}/', ' ', $clean) ?? '') ?? '');
     }
 
-    protected function cleanText(string $raw): string
+    protected function cleanText(string $raw, ?string $jobBrief = null): string
     {
         $text = trim(preg_replace('/^```\w*\s*|```\s*$/', '', trim($raw)) ?? '');
 
@@ -450,7 +450,35 @@ class ProposalService
             throw new \RuntimeException('Proposal generation returned empty text.');
         }
 
-        return $this->normalizeSignatureLine($text);
+        $text = $this->normalizeSignatureLine($text);
+
+        return $jobBrief === null ? $text : $this->normalizeTrapInstruction($text, $jobBrief);
+    }
+
+    /**
+     * Seen live: a job post said "Start your reply with CARE-STACK" and the
+     * model missed it across the full revision budget even though the
+     * linter (ProposalLinter::requiredOpeningWord, same detection) flagged
+     * it every time. A missed client trap risks the whole application
+     * being discarded, and the required word is extractable from the brief
+     * with certainty, so this fixes it directly instead of spending more
+     * revisions gambling on the model remembering.
+     */
+    protected function normalizeTrapInstruction(string $text, string $jobBrief): string
+    {
+        $required = ProposalLinter::requiredOpeningWord($jobBrief);
+
+        if ($required === null) {
+            return $text;
+        }
+
+        $actualStart = mb_substr(ltrim($text), 0, mb_strlen($required));
+
+        if (strcasecmp($actualStart, $required) === 0) {
+            return $text;
+        }
+
+        return $required.".\n\n".ltrim($text);
     }
 
     /**
