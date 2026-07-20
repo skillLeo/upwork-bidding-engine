@@ -61,14 +61,16 @@ class ProposalLinter
         'Blade' => '/\bblade\b/i',
         'Livewire' => '/\blivewire\b/i',
         'Tailwind CSS' => '/\btailwind(?:\s*css)?\b/i',
-        // Commonly hallucinated - never part of Hassam's real stack.
         'MongoDB' => '/\bmongo(?:db)?\b/i',
+        'jQuery' => '/\bjquery\b/i',
+        'Kotlin' => '/\bkotlin\b/i',
+        'Flask' => '/\bflask\b/i',
+        // Commonly hallucinated - never part of Hassam's real stack.
         'Ruby on Rails' => '/\brails\b/i',
         'Ruby' => '/\bruby\b/i',
         'Golang' => '/\bgolang\b/i',
         'Rust' => '/\brust\b/i',
         'Angular' => '/\bangular\b/i',
-        'jQuery' => '/\bjquery\b/i',
         'Bootstrap' => '/\bbootstrap\b/i',
         'GraphQL' => '/\bgraphql\b/i',
         'Redis' => '/\bredis\b/i',

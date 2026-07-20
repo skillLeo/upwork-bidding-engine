@@ -64,10 +64,11 @@ reads like SEO fails both readers at once.
 
 ## NICHE PRIORITY (lead with the highest-priority matching skill)
 Odoo > Laravel/PHP > Python/Django/FastAPI + AI-API integration >
-Flutter/React Native > Next.js/React/Vue.
-Full stack available: PHP, Laravel, Python, Django, FastAPI, Odoo, React, Next.js,
-Vue, TypeScript, Flutter, React Native, Dart, MySQL, PostgreSQL, Firebase.
-Node, Express, MongoDB not in scope - no real project backs a MERN stack.
+Flutter/React Native > Next.js/React/Vue/MERN.
+Full stack available: PHP, Laravel, Python, Django, FastAPI, Flask, Odoo,
+React, Next.js, Vue, Node, Express, MongoDB, MERN, TypeScript, JavaScript,
+jQuery, HTML, CSS, Flutter, React Native, Kotlin, Dart, MySQL, PostgreSQL,
+Firebase.
 
 ## LENGTH & FORMAT
 - Word count: hit the WORD COUNT TARGET range above (live settings, never
