@@ -80,11 +80,21 @@ const activeLabel = computed(() => sections.find((s) => s.id === activeSection.v
     </div>
 
     <div class="grid grid-cols-1 gap-6 lg:grid-cols-[240px_1fr] lg:items-start">
-      <nav
-        class="sticky top-16 z-10 -mx-4 overflow-x-auto bg-bg/95 px-4 py-2 backdrop-blur lg:top-20 lg:mx-0 lg:overflow-visible lg:bg-transparent lg:px-0 lg:py-0"
-      >
+      <nav class="sticky top-16 z-10 -mx-4 bg-bg/95 px-4 py-2 backdrop-blur lg:top-20 lg:mx-0 lg:bg-transparent lg:px-0 lg:py-0">
+        <!-- Phone/tablet: a real dropdown, not a horizontal tab strip that
+             cuts off mid-word with no hint there's more to scroll to. -->
+        <select
+          :value="activeSection"
+          @change="selectSection($event.target.value)"
+          class="h-11 w-full rounded-md border border-border-strong bg-white px-3 text-sm font-medium text-text-primary lg:hidden"
+        >
+          <option v-for="section in sections" :key="section.id" :value="section.id">
+            {{ section.label }}
+          </option>
+        </select>
+
         <div
-          class="flex gap-1 border-b border-border pb-2 lg:flex-col lg:gap-0.5 lg:overflow-hidden lg:rounded-card lg:border lg:bg-surface lg:p-2 lg:pb-2 lg:shadow-card"
+          class="hidden gap-0.5 lg:flex lg:flex-col lg:overflow-hidden lg:rounded-card lg:border lg:border-border lg:bg-surface lg:p-2 lg:pb-2 lg:shadow-card"
         >
           <button
             v-for="section in sections"

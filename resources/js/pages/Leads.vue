@@ -23,6 +23,7 @@ import { bulkToggleLeadFavorite, bulkUpdateLeadStatus } from "@/composables/useL
 import { apiClient, apiErrorMessage } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import LeadRow from "@/components/leads/LeadRow.vue";
+import LeadCard from "@/components/leads/LeadCard.vue";
 import LeadFiltersRail from "@/components/leads/LeadFiltersRail.vue";
 import SavedFiltersBar from "@/components/leads/SavedFiltersBar.vue";
 import DateRangeFilter from "@/components/leads/DateRangeFilter.vue";
@@ -473,74 +474,92 @@ async function handleSync() {
           </div>
         </div>
 
-        <div class="overflow-hidden rounded-md border border-border bg-surface">
-          <EmptyState
-            v-if="!isLoading && leads.length === 0"
-            :icon="Inbox"
-            title="No leads match these filters"
-            description="Try widening your status or score filter, or clear your search."
-          >
-            <template #action>
-              <Button variant="secondary" size="sm" @click="clearFilters">Clear filters</Button>
-            </template>
-          </EmptyState>
+        <EmptyState
+          v-if="!isLoading && leads.length === 0"
+          :icon="Inbox"
+          title="No leads match these filters"
+          description="Try widening your status or score filter, or clear your search."
+        >
+          <template #action>
+            <Button variant="secondary" size="sm" @click="clearFilters">Clear filters</Button>
+          </template>
+        </EmptyState>
 
-          <div v-else class="overflow-x-auto">
-            <div
-              class="leads-row-grid min-h-9 items-center border-b border-border bg-surface px-3 text-[11px] font-semibold tracking-wide text-text-tertiary uppercase"
-            >
-              <div class="flex h-full items-center justify-center">
-                <input
-                  ref="selectAllCheckbox"
-                  type="checkbox"
-                  :checked="allSelected"
-                  @change="toggleSelectAll"
-                  aria-label="Select all leads on this page"
-                  class="h-3.5 w-3.5 rounded border-border-strong text-primary focus:ring-2 focus:ring-primary/30"
-                />
-              </div>
-              <span aria-hidden="true" />
-              <button type="button" class="flex min-w-0 items-center gap-0.5 truncate text-left hover:text-text-primary" @click="toggleSort('score')">
-                <span class="truncate">Score</span>
-                <component :is="sortIcon('score')" class="h-3 w-3 shrink-0" :class="sortColumn === 'score' ? 'text-primary' : 'text-text-tertiary/60'" />
-              </button>
-              <span class="truncate">Title</span>
-              <button type="button" class="flex min-w-0 items-center justify-end gap-0.5 truncate hover:text-text-primary" @click="toggleSort('budget_max')">
-                <component :is="sortIcon('budget_max')" class="h-3 w-3 shrink-0" :class="sortColumn === 'budget_max' ? 'text-primary' : 'text-text-tertiary/60'" />
-                <span class="truncate">Budget</span>
-              </button>
-              <button type="button" class="flex min-w-0 items-center justify-end gap-0.5 truncate hover:text-text-primary" @click="toggleSort('proposal_count')">
-                <component :is="sortIcon('proposal_count')" class="h-3 w-3 shrink-0" :class="sortColumn === 'proposal_count' ? 'text-primary' : 'text-text-tertiary/60'" />
-                <span class="truncate">Proposals</span>
-              </button>
-              <button type="button" class="flex min-w-0 items-center justify-end gap-0.5 truncate hover:text-text-primary" title="Connects required" @click="toggleSort('connects_required')">
-                <component :is="sortIcon('connects_required')" class="h-3 w-3 shrink-0" :class="sortColumn === 'connects_required' ? 'text-primary' : 'text-text-tertiary/60'" />
-                <span class="truncate">Connects</span>
-              </button>
-              <button type="button" class="flex min-w-0 items-center gap-0.5 truncate text-left hover:text-text-primary" @click="toggleSort('posted_at')">
-                <span class="truncate">Age</span>
-                <component :is="sortIcon('posted_at')" class="h-3 w-3 shrink-0" :class="sortColumn === 'posted_at' ? 'text-primary' : 'text-text-tertiary/60'" />
-              </button>
-              <span class="truncate">Client</span>
-              <span class="truncate">Status</span>
-            </div>
-
+        <template v-else>
+          <!-- Phone width: card feed, one lead per card, two thumb-reachable actions -->
+          <div class="space-y-2.5 md:hidden">
             <template v-if="isLoading">
-              <LeadRowSkeleton v-for="i in 20" :key="i" />
+              <div v-for="i in 8" :key="i" class="h-[124px] animate-pulse rounded-lg bg-neutral-bg" />
             </template>
             <template v-else>
-              <LeadRow
+              <LeadCard
                 v-for="lead in leads"
                 :key="lead.id"
                 :lead="lead"
                 :active-filter-id="activeFilterId"
-                :match-keywords="activeFilter?.criteria.include_keywords ?? []"
-                :selected="selectedIds.has(lead.id)"
-                @toggle-select="toggleSelect"
               />
             </template>
           </div>
-        </div>
+
+          <!-- Tablet and up: dense table, unchanged -->
+          <div class="hidden overflow-hidden rounded-md border border-border bg-surface md:block">
+            <div class="overflow-x-auto">
+              <div
+                class="leads-row-grid min-h-9 items-center border-b border-border bg-surface px-3 text-[11px] font-semibold tracking-wide text-text-tertiary uppercase"
+              >
+                <div class="flex h-full items-center justify-center">
+                  <input
+                    ref="selectAllCheckbox"
+                    type="checkbox"
+                    :checked="allSelected"
+                    @change="toggleSelectAll"
+                    aria-label="Select all leads on this page"
+                    class="h-3.5 w-3.5 rounded border-border-strong text-primary focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+                <span aria-hidden="true" />
+                <button type="button" class="flex min-w-0 items-center gap-0.5 truncate text-left hover:text-text-primary" @click="toggleSort('score')">
+                  <span class="truncate">Score</span>
+                  <component :is="sortIcon('score')" class="h-3 w-3 shrink-0" :class="sortColumn === 'score' ? 'text-primary' : 'text-text-tertiary/60'" />
+                </button>
+                <span class="truncate">Title</span>
+                <button type="button" class="flex min-w-0 items-center justify-end gap-0.5 truncate hover:text-text-primary" @click="toggleSort('budget_max')">
+                  <component :is="sortIcon('budget_max')" class="h-3 w-3 shrink-0" :class="sortColumn === 'budget_max' ? 'text-primary' : 'text-text-tertiary/60'" />
+                  <span class="truncate">Budget</span>
+                </button>
+                <button type="button" class="flex min-w-0 items-center justify-end gap-0.5 truncate hover:text-text-primary" @click="toggleSort('proposal_count')">
+                  <component :is="sortIcon('proposal_count')" class="h-3 w-3 shrink-0" :class="sortColumn === 'proposal_count' ? 'text-primary' : 'text-text-tertiary/60'" />
+                  <span class="truncate">Proposals</span>
+                </button>
+                <button type="button" class="flex min-w-0 items-center justify-end gap-0.5 truncate hover:text-text-primary" title="Connects required" @click="toggleSort('connects_required')">
+                  <component :is="sortIcon('connects_required')" class="h-3 w-3 shrink-0" :class="sortColumn === 'connects_required' ? 'text-primary' : 'text-text-tertiary/60'" />
+                  <span class="truncate">Connects</span>
+                </button>
+                <button type="button" class="flex min-w-0 items-center gap-0.5 truncate text-left hover:text-text-primary" @click="toggleSort('posted_at')">
+                  <span class="truncate">Age</span>
+                  <component :is="sortIcon('posted_at')" class="h-3 w-3 shrink-0" :class="sortColumn === 'posted_at' ? 'text-primary' : 'text-text-tertiary/60'" />
+                </button>
+                <span class="truncate">Client</span>
+                <span class="truncate">Status</span>
+              </div>
+
+              <template v-if="isLoading">
+                <LeadRowSkeleton v-for="i in 20" :key="i" />
+              </template>
+              <template v-else>
+                <LeadRow
+                  v-for="lead in leads"
+                  :key="lead.id"
+                  :lead="lead"
+                  :active-filter-id="activeFilterId"
+                  :match-keywords="activeFilter?.criteria.include_keywords ?? []"
+                  :selected="selectedIds.has(lead.id)"
+                  @toggle-select="toggleSelect"
+                />
+              </template>
+            </div>
+          </div>
+        </template>
 
         <div v-if="meta" class="flex items-center justify-between pt-1">
           <label class="flex items-center gap-2 text-xs text-text-tertiary">

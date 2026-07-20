@@ -110,7 +110,7 @@ class SettingsController extends Controller
             Storage::disk('public')->delete($oldPath);
         }
 
-        $path = $request->file('logo')->store('branding', 'public');
+        $path = $this->storeOptimizedLogo($request->file('logo'));
         $this->settings->set('app_logo_path', $path);
 
         ActivityLog::record(
@@ -144,6 +144,72 @@ class SettingsController extends Controller
             'name' => $this->settings->appName(),
             'logo_url' => null,
         ]]);
+    }
+
+    /**
+     * The logo only ever renders at 32x32 in the nav bar, but uploads have
+     * arrived as full camera-resolution JPEGs (one was 4500x4500, 423KB) -
+     * loaded on every single page. Resized to fit 512x512 via GD (already
+     * present on this host, no new dependency) rather than trusting upload
+     * size to stay reasonable.
+     */
+    private function storeOptimizedLogo(\Illuminate\Http\UploadedFile $file): string
+    {
+        $maxDimension = 512;
+        $info = getimagesize($file->getRealPath());
+        [$width, $height] = $info;
+        $type = $info[2];
+        $extension = match ($type) {
+            IMAGETYPE_PNG => 'png',
+            IMAGETYPE_WEBP => 'webp',
+            default => 'jpg',
+        };
+        $filename = 'branding/'.\Illuminate\Support\Str::random(40).'.'.$extension;
+
+        if ($width <= $maxDimension && $height <= $maxDimension) {
+            Storage::disk('public')->put($filename, file_get_contents($file->getRealPath()));
+
+            return $filename;
+        }
+
+        $source = match ($type) {
+            IMAGETYPE_JPEG => imagecreatefromjpeg($file->getRealPath()),
+            IMAGETYPE_PNG => imagecreatefrompng($file->getRealPath()),
+            IMAGETYPE_WEBP => imagecreatefromwebp($file->getRealPath()),
+            default => null,
+        };
+
+        if (! $source) {
+            Storage::disk('public')->put($filename, file_get_contents($file->getRealPath()));
+
+            return $filename;
+        }
+
+        $scale = $maxDimension / max($width, $height);
+        $newWidth = (int) round($width * $scale);
+        $newHeight = (int) round($height * $scale);
+
+        $resized = imagecreatetruecolor($newWidth, $newHeight);
+        if ($type === IMAGETYPE_PNG || $type === IMAGETYPE_WEBP) {
+            imagealphablending($resized, false);
+            imagesavealpha($resized, true);
+        }
+        imagecopyresampled($resized, $source, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
+
+        ob_start();
+        match ($type) {
+            IMAGETYPE_PNG => imagepng($resized, null, 6),
+            IMAGETYPE_WEBP => imagewebp($resized, null, 85),
+            default => imagejpeg($resized, null, 85),
+        };
+        $contents = ob_get_clean();
+
+        imagedestroy($source);
+        imagedestroy($resized);
+
+        Storage::disk('public')->put($filename, $contents);
+
+        return $filename;
     }
 
     public function testConnection(
