@@ -10,6 +10,7 @@ import {
   RefreshCw,
   AlertTriangle,
   Info,
+  Zap,
 } from "@lucide/vue";
 import { toast } from "vue-sonner";
 import Card from "@/components/ui/Card.vue";
@@ -142,6 +143,18 @@ const purposeRows = computed(() => {
   }));
 });
 
+function hitRateLabel(window) {
+  const w = data.value?.cache_efficiency?.[window];
+  if (!w || w.hit_rate_pct === null) return "—";
+  return `${w.hit_rate_pct}%`;
+}
+
+function hitRateHint(window) {
+  const w = data.value?.cache_efficiency?.[window];
+  if (!w || w.total_input_tokens === 0) return "no calls in this window yet";
+  return `${w.cached_tokens.toLocaleString()} of ${w.total_input_tokens.toLocaleString()} input tokens`;
+}
+
 const providerRows = computed(() => {
   if (!data.value) return [];
   const max = Math.max(...data.value.by_provider.map((r) => r.cost), 0.0001);
@@ -273,6 +286,27 @@ const providerRows = computed(() => {
         </div>
       </div>
 
+      <!-- Cache efficiency: proof the prompt-caching in AnthropicProvider /
+           OpenAiProvider is actually engaging, in real measured numbers
+           rather than the code comment's word for it. -->
+      <div>
+        <div class="mb-2 flex items-center gap-1.5">
+          <p class="text-sm font-semibold text-text-primary">Prompt cache efficiency</p>
+        </div>
+        <div class="mb-3 flex items-start gap-1.5 rounded-md bg-neutral-bg/70 px-3 py-2 text-xs text-text-tertiary">
+          <Info class="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            Your rubric and writing rules are sent as a cached block on every call — repeat reads
+            of that block bill at a fraction of normal input price. This is the share of input
+            tokens actually served from that cache.
+          </span>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <StatCard label="Last 24h" :value="hitRateLabel('last_24h')" :icon="Zap" :hint="hitRateHint('last_24h')" />
+          <StatCard label="Last 30 days" :value="hitRateLabel('last_30d')" :icon="Zap" :hint="hitRateHint('last_30d')" />
+        </div>
+      </div>
+
       <!-- Spend stats, scoped to the provider filter above. -->
       <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatCard label="Total spent" :value="money(data.total_spend)" :icon="Wallet" />
@@ -337,6 +371,14 @@ const providerRows = computed(() => {
             <p v-if="!purposeRows.length" class="text-sm text-text-tertiary">No calls logged yet.</p>
           </div>
         </div>
+      </div>
+
+      <div class="flex items-start gap-1.5 rounded-md bg-neutral-bg/70 px-3 py-2 text-xs text-text-tertiary">
+        <Info class="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <span>
+          Client-reply drafts ("Draft reply" in Client Memory) run through OpenClaw's own Claude
+          subscription, not these API keys — that spend isn't included in any number on this page.
+        </span>
       </div>
     </CardContent>
   </Card>

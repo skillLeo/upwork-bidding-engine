@@ -9,11 +9,13 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
 
 /**
- * Every-5-minutes watchdog for the two services the pipeline can't work
- * without: OpenClaw (scoring + all WhatsApp sends) and the WhatsApp Web
- * session behind it. One alert per outage, cleared silently on recovery —
- * never a message every 5 minutes. Vollna silence has its own hourly
- * check (vollna:check-silence) with different timing semantics.
+ * Every-5-minutes watchdog for OpenClaw and the WhatsApp Web session behind
+ * it. Scoring and proposal writing call Anthropic/OpenAI directly and do
+ * NOT depend on OpenClaw — an outage here only stops WhatsApp sends and
+ * client-reply drafts (OpenClawService::draftReply). One alert per outage,
+ * cleared silently on recovery — never a message every 5 minutes. Vollna
+ * silence has its own hourly check (vollna:check-silence) with different
+ * timing semantics.
  *
  * When OpenClaw itself is down, the WhatsApp alert obviously can't route
  * through it — OpsAlertService falls back to admin email, which is the
@@ -42,7 +44,8 @@ class HealthCheckCommand extends Command
         if (! $reachable) {
             if (! Cache::has(self::OPENCLAW_DOWN_KEY) && $alerts->send(
                 "🔴 SkillLeo: OpenClaw is UNREACHABLE.\n\n"
-                .'New leads will queue instead of scoring in real time, and WhatsApp alerts are paused. '
+                .'WhatsApp alerts and client-reply drafts are paused. Scoring and proposal writing are '
+                .'unaffected — they call Anthropic/OpenAI directly and do not depend on OpenClaw. '
                 .'Check that the Mac is awake, the bridge is running, and the ngrok URL in Settings still matches the tunnel.'
             )) {
                 Cache::forever(self::OPENCLAW_DOWN_KEY, now()->toIso8601String());

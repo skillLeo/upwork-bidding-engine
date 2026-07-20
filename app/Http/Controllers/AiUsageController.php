@@ -68,7 +68,55 @@ class AiUsageController extends Controller
             'by_purpose' => $byPurpose,
             'daily' => $this->dailySpend($provider),
             'balances' => $this->balances($settings),
+            'cache_efficiency' => $this->cacheEfficiency($provider),
         ]]);
+    }
+
+    /**
+     * What fraction of input tokens were served from a prompt-cache hit,
+     * over the last 24h and last 30d. Proves the caching wired into
+     * AnthropicProvider/OpenAiProvider is actually engaging, in real
+     * numbers, instead of asking the operator to trust the code comment.
+     *
+     * The two providers report token fields with different meaning, so
+     * they can't be summed blindly: Anthropic's input_tokens is the FRESH
+     * (non-cached) portion only, with cached_tokens and cache_write_tokens
+     * as separate pools — the true total is all three added together.
+     * OpenAI's input_tokens is already the full prompt, with cached_tokens
+     * as a subset of it (cache_write_tokens is always 0) — the true total
+     * there is input_tokens alone. Each provider's true total is computed
+     * with its own formula before being summed into the blended figure.
+     *
+     * @return array<string, array{cached_tokens: int, total_input_tokens: int, hit_rate_pct: ?float}>
+     */
+    protected function cacheEfficiency(?string $provider): array
+    {
+        $windows = ['last_24h' => now()->subDay(), 'last_30d' => now()->subDays(30)];
+
+        return collect($windows)->map(function ($since) use ($provider) {
+            $rows = AiCall::where('created_at', '>=', $since)
+                ->where('success', true)
+                ->when($provider, fn ($q) => $q->where('provider', $provider))
+                ->selectRaw('provider, sum(input_tokens) as input_tokens, sum(cached_tokens) as cached_tokens, sum(cache_write_tokens) as cache_write_tokens')
+                ->groupBy('provider')
+                ->get();
+
+            $totalInput = 0;
+            $totalCached = 0;
+
+            foreach ($rows as $row) {
+                $totalInput += $row->provider === 'anthropic'
+                    ? $row->input_tokens + $row->cached_tokens + $row->cache_write_tokens
+                    : $row->input_tokens;
+                $totalCached += (int) $row->cached_tokens;
+            }
+
+            return [
+                'cached_tokens' => $totalCached,
+                'total_input_tokens' => $totalInput,
+                'hit_rate_pct' => $totalInput > 0 ? round($totalCached / $totalInput * 100, 1) : null,
+            ];
+        })->all();
     }
 
     /**
