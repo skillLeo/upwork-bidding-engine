@@ -44,6 +44,7 @@ class UpdateSettingsRequest extends FormRequest
             'openclaw_url' => ['sometimes', 'nullable', 'string', 'max:500'],
             'openclaw_token' => ['sometimes', 'nullable', 'string', 'max:500'],
             'ai_engine_enabled' => ['sometimes', 'boolean'],
+            'proposal_writing_enabled' => ['sometimes', 'boolean'],
 
             // Direct AI layer (Anthropic/OpenAI APIs)
             'ai_provider' => ['sometimes', 'string', 'in:anthropic,openai'],

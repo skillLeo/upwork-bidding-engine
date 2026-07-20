@@ -73,6 +73,12 @@ class ProposalService
      */
     public function write(Lead $lead, array $scoring): array
     {
+        if (! $this->settings->get('proposal_writing_enabled', true)) {
+            throw new ProposalWritingPausedException(
+                'Proposal writing is paused in Settings → AI models & prompts. Scoring still runs; no proposal is generated until this is turned back on.'
+            );
+        }
+
         // The full pipeline (draft + reviews + revisions + surgical fix)
         // can run 60s+ — never let a web-tier limit kill it mid-run.
         @set_time_limit(240);

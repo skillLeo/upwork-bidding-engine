@@ -506,6 +506,8 @@ class LeadController extends Controller
             $refresh->rewrite($lead, 'dashboard');
         } catch (\App\Services\LeadRunInProgressException $e) {
             return response()->json(['message' => $e->getMessage()], 409);
+        } catch (\App\Services\Ai\ProposalWritingPausedException $e) {
+            return response()->json(['message' => $e->getMessage()], 409);
         }
 
         return response()->json(['data' => new LeadResource($lead->fresh())]);

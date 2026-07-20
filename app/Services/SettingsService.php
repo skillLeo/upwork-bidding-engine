@@ -83,6 +83,12 @@ class SettingsService
         // someone reads lead titles.
         'agent_api_token' => ['group' => 'openclaw', 'secret' => true, 'default' => ''],
         'ai_engine_enabled' => ['group' => 'openclaw', 'secret' => false, 'default' => true],
+        // A narrower pause than ai_engine_enabled: scoring keeps running
+        // (leads still arrive, still get a bid/no-bid verdict, still show
+        // on the dashboard) but no proposal is written anywhere — the
+        // auto pipeline, the dashboard Rewrite button, and WhatsApp
+        // rewrite all read this same flag.
+        'proposal_writing_enabled' => ['group' => 'ai', 'secret' => false, 'default' => true],
 
         // WhatsApp — sent via OpenClaw (already QR-linked to WhatsApp), not
         // Meta's Cloud API, so the only thing this app needs to know is who

@@ -268,7 +268,9 @@ class OpenClawService
             "📊 Reason: {$lead->score_reason}",
             '',
             '📝 PROPOSAL:',
-            (string) $lead->proposal_text,
+            $lead->proposal_text !== null
+                ? (string) $lead->proposal_text
+                : '(none — proposal writing is paused in Settings; write one from the dashboard when ready)',
             '',
             "Open in dashboard: {$dashboardUrl}",
         ];

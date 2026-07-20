@@ -141,6 +141,8 @@ class AgentApiController extends Controller
             return response()->json(['data' => $refresh->rewrite($lead, 'agent_api')]);
         } catch (\App\Services\LeadRunInProgressException $e) {
             return response()->json(['message' => 'Already in progress — a rescore or rewrite is running for this lead.'], 409);
+        } catch (\App\Services\Ai\ProposalWritingPausedException $e) {
+            return response()->json(['message' => $e->getMessage()], 409);
         } catch (\Throwable $e) {
             report($e);
 

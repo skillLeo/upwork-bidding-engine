@@ -46,6 +46,7 @@ const form = reactive({
   proposal_skill: props.settings.proposal_skill ?? "",
   project_facts: props.settings.project_facts ?? "",
   proposal_reference: props.settings.proposal_reference ?? "",
+  proposal_writing_enabled: props.settings.proposal_writing_enabled ?? true,
   proposal_quality_gate: props.settings.proposal_quality_gate ?? true,
   proposal_min_words: props.settings.proposal_min_words ?? 110,
   proposal_max_words: props.settings.proposal_max_words ?? 180,
@@ -321,6 +322,32 @@ async function handleSave() {
         <FieldHint>
           Excluded on purpose: it's written in the exact analytical, em-dash-heavy style the rules
           ban, and models copy the style of their context more than they obey instructions in it.
+        </FieldHint>
+      </div>
+
+      <div
+        class="rounded-md border p-4"
+        :class="
+          form.proposal_writing_enabled
+            ? 'border-border bg-neutral-bg/50'
+            : 'border-warning-border bg-warning-bg'
+        "
+      >
+        <label class="flex items-center gap-2 text-sm font-semibold select-none">
+          <input
+            type="checkbox"
+            v-model="form.proposal_writing_enabled"
+            class="h-4 w-4 rounded border-border-strong text-primary focus:ring-primary/20"
+          />
+          <span :class="form.proposal_writing_enabled ? 'text-text-primary' : 'text-warning'">
+            Proposal writing enabled
+          </span>
+        </label>
+        <FieldHint>
+          Turn off to pause proposals everywhere — the auto pipeline, the dashboard Rewrite
+          button, and WhatsApp — while leaving scoring running. Leads still arrive, still get a
+          bid/no-bid verdict, and still show on the dashboard; they just ship without a written
+          proposal until this is back on. Use this to control spend without losing lead flow.
         </FieldHint>
       </div>
 

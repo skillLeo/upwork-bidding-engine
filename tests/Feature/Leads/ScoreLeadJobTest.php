@@ -156,6 +156,43 @@ class ScoreLeadJobTest extends TestCase
         });
     }
 
+    public function test_paused_proposal_writing_still_scores_and_notifies_without_a_proposal(): void
+    {
+        app(SettingsService::class)->set('proposal_writing_enabled', false);
+
+        Http::fake([
+            'api.anthropic.com/*' => Http::response($this->anthropic(
+                '{"score": 9, "bid": true, "boost": true, "reason": "Great fit"}',
+            )),
+            'openclaw.test/*' => Http::response(['success' => true]),
+        ]);
+
+        $lead = Lead::factory()->create(['proposal_count' => 2, 'budget' => '$500 fixed', 'status' => LeadStatus::New, 'posted_at' => now()]);
+
+        $this->runJob($lead);
+
+        $lead->refresh();
+        // Scored and marked Ready — the pause never touches the verdict.
+        $this->assertEquals(LeadStatus::Ready, $lead->status);
+        $this->assertEquals(9, $lead->score);
+        $this->assertNull($lead->proposal_text);
+
+        // Exactly one AI call (scoring) — no proposal call was attempted.
+        Http::assertSentCount(2);
+        Http::assertSent(fn ($request) => str_contains((string) $request->url(), 'api.anthropic.com'));
+
+        // The card still goes out, with a clear placeholder instead of a blank section.
+        Http::assertSent(function ($request) {
+            $data = $request->data();
+
+            return ($data['skill'] ?? null) === 'send_whatsapp_message'
+                && str_contains($data['message'], 'proposal writing is paused');
+        });
+
+        // A paused proposal is never treated as a scoring failure.
+        $this->assertDatabaseMissing('activity_logs', ['type' => 'lead_scoring_failed']);
+    }
+
     public function test_bid_no_archives_lead_with_no_proposal_call_and_no_whatsapp(): void
     {
         Http::fake([

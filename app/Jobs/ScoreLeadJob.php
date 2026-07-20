@@ -86,13 +86,24 @@ class ScoreLeadJob implements ShouldQueue
 
         $startedAt = microtime(true);
 
+        $proposalsPaused = false;
+
         try {
             // Direct API scoring under the operator's full rubric (Settings).
             // The rubric's own BID verdict decides ready-vs-archived — and
             // the proposal model only runs for BID-yes leads, so a rejected
             // lead never pays for (or shows) a proposal.
             $result = $aiScoring->score($lead);
-            $proposal = $result['bid'] ? $proposals->write($lead, $result) : null;
+
+            try {
+                $proposal = $result['bid'] ? $proposals->write($lead, $result) : null;
+            } catch (\App\Services\Ai\ProposalWritingPausedException) {
+                // Operator-controlled pause, not a failure: the lead still
+                // gets its real score and Ready/Archived status, it just
+                // ships without a proposal until writing is turned back on.
+                $proposal = null;
+                $proposalsPaused = true;
+            }
         } catch (\Throwable $e) {
             report($e);
 
@@ -121,6 +132,7 @@ class ScoreLeadJob implements ShouldQueue
         ActivityLog::record(ActivityType::LeadScored, subject: $lead, meta: [
             'score' => $result['score'],
             'ready' => $isReady,
+            'proposal_writing_paused' => $proposalsPaused,
             'boost' => $result['boost'],
             'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
         ]);
