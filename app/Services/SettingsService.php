@@ -141,8 +141,14 @@ class SettingsService
         // the operator can tune it in the browser like the prompts above.
         // Defaults seeded from SKILL.md v2 in docs/ai-rules.
         'proposal_quality_gate' => ['group' => 'ai', 'secret' => false, 'default' => true],
-        'proposal_min_words' => ['group' => 'ai', 'secret' => false, 'default' => 110],
-        'proposal_max_words' => ['group' => 'ai', 'secret' => false, 'default' => 180],
+        // v3 target range (down from 110-180): 2026 evidence shows the
+        // 100-149 word band underperforms on reply rate, and very short,
+        // sharp letters do better on small single-task jobs. Live values
+        // may have been hand-tuned in Settings and this default only
+        // applies to a fresh install — check the UI if you want the
+        // running value to match.
+        'proposal_min_words' => ['group' => 'ai', 'secret' => false, 'default' => 90],
+        'proposal_max_words' => ['group' => 'ai', 'secret' => false, 'default' => 150],
         'proposal_signature' => ['group' => 'ai', 'secret' => false, 'default' => 'Hassam'],
         'proposal_required_phrases' => ['group' => 'ai', 'secret' => false, 'default' => ['Done =']],
         'proposal_banned_phrases' => ['group' => 'ai', 'secret' => false, 'default' => [

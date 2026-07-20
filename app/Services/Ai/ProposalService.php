@@ -376,6 +376,8 @@ class ProposalService
                     ."\n1. Three-item parallel lists (tricolons) are banned in any form."
                     ."\n2. The \"Done =\" line must name an observable, testable outcome. It must never promise \"zero risk\" or any guaranteed result."
                     ."\n3. No dead-stop sentences that close neatly without opening a loop or adding information."
+                    ."\n4. Line 1 must quote or closely paraphrase at least one real, specific detail or named requirement from THIS job post. If it could be pasted unchanged into a different job's proposal, that is a violation."
+                    ."\n5. No implied discount, no \"I'm affordable\", no apology for being new, no urgency around price."
                     ."\nOutput JSON only: {\"pass\": true/false, \"violations\": [{\"rule\": \"short rule name\", \"quote\": \"the offending text\", \"reason\": \"one plain sentence\"}]}. If the draft follows every rule, output {\"pass\": true, \"violations\": []}. No other text.",
                 $reviewModel,
                 self::REVIEW_MAX_TOKENS,

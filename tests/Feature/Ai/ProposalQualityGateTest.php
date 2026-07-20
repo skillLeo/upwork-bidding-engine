@@ -221,7 +221,7 @@ class ProposalQualityGateTest extends TestCase
     public function test_default_lint_config_catches_ai_tells(): void
     {
         // No configureLint() here — this exercises the seeded production
-        // defaults (SKILL.md v2 lists, 110-180 words, "Done =", "Hassam").
+        // defaults (SKILL.md v3 lists, 90-150 words, "Done =", "Hassam").
         $violations = app(ProposalLinter::class)->check(
             'Kindly note I will leverage my robust skills — I am the best fit. Reach me at dev@example.com or on WhatsApp.'
         );
@@ -341,7 +341,7 @@ class ProposalQualityGateTest extends TestCase
 
         // The skill stays lean and operative; the teaching document lands
         // in the never-sent reference field, not the skill.
-        $this->assertStringContainsString('SKILL.md v2', $skill);
+        $this->assertStringContainsString('SKILL.md v3', $skill);
         $this->assertLessThan(15000, mb_strlen($skill));
         $this->assertGreaterThan(60000, mb_strlen($reference));
         $this->assertStringContainsString('Sugarman', $reference);
