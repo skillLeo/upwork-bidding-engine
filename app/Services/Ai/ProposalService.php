@@ -190,7 +190,7 @@ class ProposalService
             $versions[] = [
                 'source' => 'surgical fix',
                 'text' => $fixed,
-                'lint' => $this->linter->check($fixed),
+                'lint' => $this->linter->check($fixed, $lead->full_brief),
                 'review' => null,
                 'response' => $response,
                 'shipped' => false,
@@ -219,7 +219,7 @@ class ProposalService
      */
     protected function evaluate(string $text, string $source, string $system, string $jobBlock, string $reviewModel, Lead $lead, AiResponse $response): array
     {
-        $lint = $this->linter->check($text);
+        $lint = $this->linter->check($text, $lead->full_brief);
 
         return [
             'source' => $source,

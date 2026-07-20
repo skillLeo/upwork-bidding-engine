@@ -368,6 +368,48 @@ class ProposalQualityGateTest extends TestCase
         );
     }
 
+    public function test_missed_trap_instruction_is_caught_mechanically(): void
+    {
+        // Seen live: a job post said "Start your reply with CARE-STACK so
+        // we know you read the full post" and the shipped proposal ignored
+        // it entirely — missed by both the writer and the AI reviewer.
+        $jobBrief = 'We need a senior dev. Start your reply with CARE-STACK so we know you read the full post.';
+        $text = "This is a great opportunity for my skills.\nHassam";
+
+        $violations = app(ProposalLinter::class)->check($text, $jobBrief);
+
+        $this->assertTrue(
+            collect($violations)->contains(fn (string $v) => str_contains($v, 'CARE-STACK')),
+            'Expected a violation naming the missed trap word: '.implode(' | ', $violations),
+        );
+    }
+
+    public function test_trap_instruction_obeyed_is_not_flagged(): void
+    {
+        $jobBrief = 'Start your reply with CARE-STACK so we know you read the full post.';
+        $text = "CARE-STACK. This is a great opportunity for my skills.\nHassam";
+
+        $violations = app(ProposalLinter::class)->check($text, $jobBrief);
+
+        $this->assertFalse(
+            collect($violations)->contains(fn (string $v) => str_contains($v, 'CARE-STACK')),
+            'A correctly-obeyed trap word must not be flagged: '.implode(' | ', $violations),
+        );
+    }
+
+    public function test_job_brief_with_no_trap_instruction_is_never_flagged(): void
+    {
+        $jobBrief = 'We need a senior Laravel developer for an ongoing project. Please apply with your rate.';
+        $text = "This is a great opportunity for my skills.\nHassam";
+
+        $violations = app(ProposalLinter::class)->check($text, $jobBrief);
+
+        $this->assertFalse(
+            collect($violations)->contains(fn (string $v) => str_contains($v, 'Must start with')),
+            'No trap instruction exists in this brief, nothing should be flagged: '.implode(' | ', $violations),
+        );
+    }
+
     public function test_linter_messages_contain_no_dash_characters(): void
     {
         // Violation text is fed back to the writing model verbatim, and

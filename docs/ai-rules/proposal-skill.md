@@ -142,7 +142,8 @@ tapestry, testament, realm, landscape, unlock, unleash, harness, navigate,
 navigating, dive into, deep dive, game-changer, cutting-edge, state-of-the-art,
 synergy, synergize, streamline (as buzzword), empower, foster, bolster,
 in today's fast-paced world, ever-evolving, dynamic (as filler), holistic,
-efficient, efficiently (as filler - name the concrete outcome instead).
+efficient, efficiently (as filler - name the concrete outcome instead),
+flawless, flawlessly (implies guaranteed performance - never promise this).
 
 ## BANNED SENTENCE STARTS & STRUCTURES
 - No "Moreover,", "Furthermore,", "Additionally,", "In conclusion,".

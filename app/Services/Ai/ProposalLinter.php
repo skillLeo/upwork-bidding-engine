@@ -28,7 +28,7 @@ class ProposalLinter
     /**
      * @return array<int, string> Human-readable violations, empty = clean.
      */
-    public function check(string $text): array
+    public function check(string $text, ?string $jobBrief = null): array
     {
         $gate = $this->settings->proposalGate();
         [$answers, $letter] = $this->segments($text);
@@ -38,6 +38,10 @@ class ProposalLinter
             if ($this->containsPhrase($text, $phrase)) {
                 $violations[] = $this->bannedMessage($phrase);
             }
+        }
+
+        if ($jobBrief !== null && ($violation = $this->trapInstructionViolation($text, $jobBrief)) !== null) {
+            $violations[] = $violation;
         }
 
         foreach ($this->markdownArtifactViolations($text) as $violation) {
@@ -305,5 +309,35 @@ class ProposalLinter
         }
 
         return $violations;
+    }
+
+    /**
+     * Seen live: a job post said "Start your reply with CARE-STACK so we
+     * know you read the full post" and the shipped proposal ignored it
+     * entirely - missed by both the writer and the AI reviewer, even
+     * though the skill's own self-check checklist already says to obey
+     * trap instructions exactly. A client's literal opening-word trap is
+     * exactly as mechanically detectable and checkable as the signature
+     * line, so it belongs here rather than staying a hope that the model
+     * remembers on every draft.
+     */
+    protected function trapInstructionViolation(string $text, string $jobBrief): ?string
+    {
+        if (preg_match(
+            '/\b(?:start|begin)(?:ing)?\s+(?:your\s+|the\s+)?(?:reply|response|proposal|application|message|bid|cover\s*letter)?\s*(?:with|by\s+(?:writing|typing|saying))\s+(?:the\s+word\s+)?["\x{201C}\x{2018}]?([A-Za-z][A-Za-z0-9\-]{1,30})["\x{201D}\x{2019}]?/iu',
+            $jobBrief,
+            $matches,
+        ) !== 1) {
+            return null;
+        }
+
+        $required = $matches[1];
+        $actualStart = mb_substr(ltrim($text), 0, mb_strlen($required));
+
+        if (strcasecmp($actualStart, $required) === 0) {
+            return null;
+        }
+
+        return 'Must start with "'.$required.'" exactly. The job post gives this as a literal instruction to prove the post was read; ignoring it risks the whole application being discarded.';
     }
 }
