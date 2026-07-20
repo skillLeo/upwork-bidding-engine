@@ -177,18 +177,18 @@ class AgentApiTest extends TestCase
         $this->configureAi();
 
         \Illuminate\Support\Facades\Http::fake([
-            'api.anthropic.com/*' => \Illuminate\Support\Facades\Http::response($this->anthropic('Fresh proposal text. Hassam')),
+            'api.anthropic.com/*' => \Illuminate\Support\Facades\Http::response($this->anthropic("Fresh proposal text.\nHassam")),
         ]);
 
         $lead = Lead::factory()->create(['score' => 8]);
 
         $this->postJson("/api/agent/leads/{$lead->id}/rewrite", [], $this->auth())
             ->assertOk()
-            ->assertJsonPath('data.proposal_text', 'Fresh proposal text. Hassam')
+            ->assertJsonPath('data.proposal_text', "Fresh proposal text.\nHassam")
             ->assertJsonPath('data.quality_warnings', [])
             ->assertJsonPath('data.versions_tried', 1);
 
-        $this->assertSame('Fresh proposal text. Hassam', $lead->fresh()->proposal_text);
+        $this->assertSame("Fresh proposal text.\nHassam", $lead->fresh()->proposal_text);
     }
 
     public function test_concurrent_run_gets_409(): void

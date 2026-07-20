@@ -450,6 +450,44 @@ class ProposalService
             throw new \RuntimeException('Proposal generation returned empty text.');
         }
 
-        return $text;
+        return $this->normalizeSignatureLine($text);
+    }
+
+    /**
+     * Seen live: a weaker model reliably writes "...closing question?
+     * Hassam" on one line instead of a fresh line, then fails to fix it
+     * across the full revision budget — a formatting slip the linter
+     * catches perfectly but the model can't reliably repair by being
+     * asked nicely twice. This is mechanically fixable with certainty, so
+     * fix it directly instead of spending revisions gambling on it: if the
+     * text ends with the configured signature as its trailing word (with
+     * or without a line break), guarantee the line break in code.
+     */
+    protected function normalizeSignatureLine(string $text): string
+    {
+        $signature = $this->settings->proposalGate()['signature'];
+
+        if ($signature === '') {
+            return $text;
+        }
+
+        $lines = preg_split('/\R/u', rtrim($text)) ?: [];
+
+        if ($lines !== [] && strcasecmp(trim((string) end($lines)), $signature) === 0) {
+            return $text;
+        }
+
+        // Only whitespace separates the prior sentence from the signature —
+        // its own punctuation (the "?" in "...setup? Hassam") belongs to
+        // that sentence and must never be stripped with it.
+        $pattern = '/\s+'.preg_quote($signature, '/').'[.!?]?\s*$/iu';
+
+        if (preg_match($pattern, $text) !== 1) {
+            return $text;
+        }
+
+        $withoutSignature = rtrim(preg_replace($pattern, '', $text) ?? '');
+
+        return $withoutSignature === '' ? $text : $withoutSignature."\n".$signature;
     }
 }

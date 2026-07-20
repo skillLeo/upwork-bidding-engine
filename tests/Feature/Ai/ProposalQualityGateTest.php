@@ -203,6 +203,59 @@ class ProposalQualityGateTest extends TestCase
         $this->assertDatabaseHas('activity_logs', ['type' => 'proposal_review_unparseable']);
     }
 
+    public function test_signature_glued_to_the_closing_line_is_normalized_not_rerolled(): void
+    {
+        // Seen live: a weaker model reliably writes "...launch? Hassam" on
+        // one line instead of a fresh line, then fails to fix it across
+        // the whole revision budget. This must ship clean on the FIRST
+        // draft — no revision call spent gambling on the model fixing its
+        // own formatting.
+        $this->configureLint();
+
+        Http::fake([
+            'api.anthropic.com/*' => Http::sequence()
+                ->push($this->anthropicResponse(
+                    "The tricky part here is the offline sync.\nI built PatrolTick, which syncs offline check-ins on reconnect.\nPlan: audit the sync path, fix the queue. Done = check-ins land reliably.\nWhat's your current setup? Hassam",
+                ))
+                ->push($this->anthropicResponse('{"pass": true, "violations": []}')),
+        ]);
+
+        $result = $this->write(Lead::factory()->create());
+
+        $this->assertTrue($result['clean']);
+        $this->assertSame(0, $result['revisions']);
+        $this->assertStringEndsWith("setup?\nHassam", $result['text']);
+        Http::assertSentCount(2);
+    }
+
+    public function test_signature_with_trailing_punctuation_is_normalized(): void
+    {
+        $this->configureLint();
+
+        $service = app(\App\Services\Ai\ProposalService::class);
+        $method = new \ReflectionMethod($service, 'normalizeSignatureLine');
+        $method->setAccessible(true);
+
+        $this->assertSame(
+            "Some closing line.\nHassam",
+            $method->invoke($service, 'Some closing line. Hassam.'),
+        );
+
+        // Already correct: left untouched.
+        $this->assertSame(
+            "Some closing line.\nHassam",
+            $method->invoke($service, "Some closing line.\nHassam"),
+        );
+
+        // Doesn't actually end with the signature — never touched, no
+        // false-positive mangling of ordinary text that happens to
+        // mention the name mid-sentence.
+        $this->assertSame(
+            'Hassam built this for you, thanks!',
+            $method->invoke($service, 'Hassam built this for you, thanks!'),
+        );
+    }
+
     public function test_gate_disabled_returns_first_draft_with_single_call(): void
     {
         $this->configureLint();
