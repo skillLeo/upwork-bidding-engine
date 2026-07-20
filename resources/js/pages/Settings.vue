@@ -9,6 +9,7 @@ import {
   MessageCircle,
   Palette,
   SlidersHorizontal,
+  Wallet,
   Webhook,
 } from "@lucide/vue";
 import { useSettings } from "@/composables/useSettings";
@@ -19,6 +20,7 @@ import DiagnosticsSection from "@/components/settings/DiagnosticsSection.vue";
 import VollnaSection from "@/components/settings/VollnaSection.vue";
 import OpenClawSection from "@/components/settings/OpenClawSection.vue";
 import AiApiSection from "@/components/settings/AiApiSection.vue";
+import AiUsageSection from "@/components/settings/AiUsageSection.vue";
 import WhatsAppSection from "@/components/settings/WhatsAppSection.vue";
 import MailSection from "@/components/settings/MailSection.vue";
 import RulesSection from "@/components/settings/RulesSection.vue";
@@ -34,6 +36,7 @@ const sections = [
   { id: "vollna", label: "Vollna", icon: Webhook },
   { id: "openclaw", label: "AI Engine", icon: Bot },
   { id: "ai", label: "AI Models & Prompts", icon: Brain },
+  { id: "ai-usage", label: "AI Usage & Cost", icon: Wallet },
   { id: "whatsapp", label: "WhatsApp", icon: MessageCircle },
   { id: "mail", label: "Mail", icon: MailIcon },
   { id: "rules", label: "Bidding Rules", icon: SlidersHorizontal },
@@ -111,6 +114,7 @@ const activeLabel = computed(() => sections.find((s) => s.id === activeSection.v
             <VollnaSection v-else-if="activeSection === 'vollna'" :settings="settings.vollna" @saved="refetch" />
             <OpenClawSection v-else-if="activeSection === 'openclaw'" :settings="settings.openclaw" @saved="refetch" />
             <AiApiSection v-else-if="activeSection === 'ai'" :settings="settings.ai" @saved="refetch" />
+            <AiUsageSection v-else-if="activeSection === 'ai-usage'" />
             <WhatsAppSection v-else-if="activeSection === 'whatsapp'" :settings="settings.whatsapp" @saved="refetch" />
             <MailSection v-else-if="activeSection === 'mail'" :settings="settings.mail" @saved="refetch" />
             <RulesSection v-else-if="activeSection === 'rules'" :settings="settings.rules" @saved="refetch" />

@@ -7,6 +7,7 @@ export const CHART_COLORS = {
   sent: "#0A66C2",
   replied: "#eda100",
   won: "#057642",
+  cost: "#6D5BD0",
 };
 
 export const CHART_CHROME = {

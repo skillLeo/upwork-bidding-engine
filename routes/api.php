@@ -131,6 +131,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/settings/agent-token', [SettingsController::class, 'revealAgentToken']);
         Route::post('/settings/agent-token/regenerate', [SettingsController::class, 'regenerateAgentToken']);
         Route::post('/settings/test/{service}', [SettingsController::class, 'testConnection']);
+        Route::get('/ai-usage', \App\Http\Controllers\AiUsageController::class);
         Route::post('/settings/logo', [SettingsController::class, 'uploadLogo']);
         Route::delete('/settings/logo', [SettingsController::class, 'removeLogo']);
 
