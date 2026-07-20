@@ -3,6 +3,7 @@ import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   Activity,
+  Bell,
   Bot,
   Brain,
   Mail as MailIcon,
@@ -22,6 +23,7 @@ import OpenClawSection from "@/components/settings/OpenClawSection.vue";
 import AiApiSection from "@/components/settings/AiApiSection.vue";
 import AiUsageSection from "@/components/settings/AiUsageSection.vue";
 import WhatsAppSection from "@/components/settings/WhatsAppSection.vue";
+import BrowserAlertsSection from "@/components/settings/BrowserAlertsSection.vue";
 import MailSection from "@/components/settings/MailSection.vue";
 import RulesSection from "@/components/settings/RulesSection.vue";
 import { cn } from "@/lib/utils";
@@ -38,6 +40,7 @@ const sections = [
   { id: "ai", label: "AI Models & Prompts", icon: Brain },
   { id: "ai-usage", label: "AI Usage & Cost", icon: Wallet },
   { id: "whatsapp", label: "WhatsApp", icon: MessageCircle },
+  { id: "browser-alerts", label: "Browser Alerts", icon: Bell },
   { id: "mail", label: "Mail", icon: MailIcon },
   { id: "rules", label: "Bidding Rules", icon: SlidersHorizontal },
 ];
@@ -116,6 +119,7 @@ const activeLabel = computed(() => sections.find((s) => s.id === activeSection.v
             <AiApiSection v-else-if="activeSection === 'ai'" :settings="settings.ai" @saved="refetch" />
             <AiUsageSection v-else-if="activeSection === 'ai-usage'" />
             <WhatsAppSection v-else-if="activeSection === 'whatsapp'" :settings="settings.whatsapp" @saved="refetch" />
+            <BrowserAlertsSection v-else-if="activeSection === 'browser-alerts'" />
             <MailSection v-else-if="activeSection === 'mail'" :settings="settings.mail" @saved="refetch" />
             <RulesSection v-else-if="activeSection === 'rules'" :settings="settings.rules" @saved="refetch" />
           </div>

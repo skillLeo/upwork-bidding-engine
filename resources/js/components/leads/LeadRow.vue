@@ -7,7 +7,7 @@ import StatusPill from "@/components/ui/StatusPill.vue";
 import Button from "@/components/ui/Button.vue";
 import { toggleLeadFavorite, updateLeadStatus } from "@/composables/useLead";
 import { apiErrorMessage } from "@/lib/api-client";
-import { cn, scoreTier, compactAge } from "@/lib/utils";
+import { cn, scoreTier, compactAge, urgencyTier } from "@/lib/utils";
 
 const router = useRouter();
 
@@ -49,6 +49,27 @@ const ageClass = computed(() =>
     age.value.tier === "normal" && "text-text-secondary",
     age.value.tier === "stale" && "text-text-tertiary",
   ),
+);
+
+// Urgency badge: green/amber/red at 60/180 minutes, independent of the
+// plain age text above — this is the "act now" signal, not just an age
+// readout, so it gets its own tighter bands and its own color.
+const urgency = computed(() => urgencyTier(props.lead.posted_at));
+const urgencyBadgeClass = computed(
+  () =>
+    ({
+      green: "bg-success-bg text-success",
+      amber: "bg-warning-bg text-warning",
+      red: "bg-danger-bg text-danger",
+    })[urgency.value] ?? "text-text-tertiary",
+);
+
+// The pulse ring is the strongest visual affordance on the board, so it's
+// reserved for leads that are both worth acting on (score 8+) and still
+// actionable (ready, not yet bid or skipped) and still in the golden
+// window (under an hour old) — never a decoration on its own.
+const showPulse = computed(
+  () => props.lead.status === "ready" && (props.lead.score ?? 0) >= 8 && urgency.value === "green",
 );
 
 function isMatchedSkill(skill) {
@@ -128,6 +149,7 @@ function handleRowKeydown(event) {
         'leads-row-grid min-h-9 items-center border-b border-border px-3 text-sm text-text-primary',
         lead.matches_filter === false && 'opacity-60',
         expanded && 'bg-neutral-bg/40',
+        showPulse && 'lead-row-pulse',
       )
     "
   >
@@ -190,8 +212,15 @@ function handleRowKeydown(event) {
         {{ lead.connects_required ?? "—" }}<span class="sr-only"> connects required</span>
       </span>
 
-      <span class="font-mono text-xs" :class="ageClass" :title="age.title">
-        <span class="sr-only">Posted </span>{{ age.label }}
+      <span :title="age.title">
+        <span
+          v-if="urgency"
+          class="inline-flex rounded-pill px-1.5 py-0.5 font-mono text-[11px] font-semibold tabular-nums"
+          :class="urgencyBadgeClass"
+        >
+          <span class="sr-only">Posted </span>{{ age.label }}
+        </span>
+        <span v-else class="font-mono text-xs" :class="ageClass">{{ age.label }}</span>
       </span>
 
       <span class="flex min-w-0 items-center gap-1 truncate text-xs text-text-secondary">
@@ -306,3 +335,29 @@ function handleRowKeydown(event) {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* Reserved for score 8+, ready, under an hour old — the single strongest
+   visual affordance on the board, so it stays subtle (a soft ring, no
+   flashing) or it gets tuned out and ignored within a week. */
+.lead-row-pulse {
+  animation: lead-row-pulse-ring 2.5s ease-in-out infinite;
+}
+
+@keyframes lead-row-pulse-ring {
+  0%,
+  100% {
+    box-shadow: inset 3px 0 0 0 var(--color-success);
+  }
+  50% {
+    box-shadow: inset 3px 0 0 0 color-mix(in srgb, var(--color-success) 35%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lead-row-pulse {
+    animation: none;
+    box-shadow: inset 3px 0 0 0 var(--color-success);
+  }
+}
+</style>

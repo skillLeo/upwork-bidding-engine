@@ -35,6 +35,7 @@ import LeadRowSkeleton from "@/components/ui/LeadRowSkeleton.vue";
 
 const sortOptions = [
   { value: "-created_at", label: "Newest first" },
+  { value: "-attention", label: "Attention (ready, highest score, freshest)" },
   { value: "-score", label: "Highest score" },
   { value: "-budget_max", label: "Highest budget" },
   { value: "-proposal_count", label: "Most proposals" },

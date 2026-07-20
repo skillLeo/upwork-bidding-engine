@@ -70,6 +70,17 @@ export function compactAge(postedAt) {
   return { tier, label, title };
 }
 
+// A tighter urgency window than compactAge's fresh/stale (which spans
+// days): a fresh, unbid lead decays in minutes, so the "act now" signal
+// needs its own green/amber/red bands at 60 and 180 minutes.
+export function urgencyTier(postedAt) {
+  if (!postedAt) return null;
+  const minutes = differenceInMinutes(new Date(), new Date(postedAt));
+  if (minutes < 60) return "green";
+  if (minutes < 180) return "amber";
+  return "red";
+}
+
 export function initials(name) {
   const parts = (name || "").trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";

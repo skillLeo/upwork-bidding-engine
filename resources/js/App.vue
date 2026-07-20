@@ -5,11 +5,15 @@ import { Toaster } from "vue-sonner";
 import NavBar from "@/components/layout/NavBar.vue";
 import AiProgressToast from "@/components/ui/AiProgressToast.vue";
 import { useBrandingStore } from "@/stores/branding";
+import { initLeadAlerts } from "@/stores/leadAlerts";
 
 const route = useRoute();
 const showNav = computed(() => route.name !== "login");
 
-onMounted(() => useBrandingStore().fetch());
+onMounted(() => {
+  useBrandingStore().fetch();
+  initLeadAlerts();
+});
 </script>
 
 <template>

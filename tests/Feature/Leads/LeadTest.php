@@ -30,6 +30,45 @@ class LeadTest extends TestCase
         $this->assertEquals(3, $response->json('meta.total'));
     }
 
+    public function test_default_sort_is_newest_first(): void
+    {
+        $bidder = User::factory()->bidder()->create();
+
+        $older = Lead::factory()->create(['title' => 'older', 'created_at' => now()->subDay()]);
+        $newer = Lead::factory()->create(['title' => 'newer', 'created_at' => now()]);
+
+        // No sort param at all — this is what the dashboard sends by default.
+        $response = $this->actingAs($bidder, 'sanctum')->getJson('/api/leads')->assertOk();
+
+        $titles = collect($response->json('data'))->pluck('title')->all();
+
+        $this->assertSame([$newer->title, $older->title], $titles);
+    }
+
+    public function test_attention_sort_is_available_as_an_explicit_preset(): void
+    {
+        $bidder = User::factory()->bidder()->create();
+
+        // Deliberately out of every natural order (id, created_at, score,
+        // posted_at) so a pass here can only mean the compound ordering
+        // itself is right, not an accidental match on a simpler one.
+        $staleHighScore = Lead::factory()->create(['title' => 'stale high score', 'status' => LeadStatus::Ready, 'score' => 9, 'posted_at' => now()->subDays(3)]);
+        $freshLowScore = Lead::factory()->create(['title' => 'fresh low score', 'status' => LeadStatus::Ready, 'score' => 7, 'posted_at' => now()->subMinutes(10)]);
+        $freshHighScore = Lead::factory()->create(['title' => 'fresh high score', 'status' => LeadStatus::Ready, 'score' => 9, 'posted_at' => now()->subMinutes(5)]);
+        $archivedHighScore = Lead::factory()->create(['title' => 'archived high score', 'status' => LeadStatus::Archived, 'score' => 10, 'posted_at' => now()]);
+
+        $response = $this->actingAs($bidder, 'sanctum')->getJson('/api/leads?sort=-attention')->assertOk();
+
+        $titles = collect($response->json('data'))->pluck('title')->all();
+
+        $this->assertSame([
+            $freshHighScore->title,
+            $staleHighScore->title,
+            $freshLowScore->title,
+            $archivedHighScore->title,
+        ], $titles);
+    }
+
     public function test_search_matches_title(): void
     {
         $bidder = User::factory()->bidder()->create();

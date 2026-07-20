@@ -279,6 +279,30 @@ class OpenClawService
     }
 
     /**
+     * A short nudge for a lead that's still sitting unbid in the golden
+     * window — deliberately terse (unlike the full lead card) since the
+     * bidder already saw the full details once; this is a "did you see
+     * this?", not a re-explanation.
+     *
+     * @return array<string, mixed>
+     */
+    public function sendBidReminder(Lead $lead, string $dashboardUrl, int $reminderNumber): array
+    {
+        $minutesAgo = $lead->posted_at?->diffInMinutes(now()) ?? 0;
+
+        $text = sprintf(
+            "⏰ Still unbid: \"%s\" (%d/10, posted %d min ago). Reminder %d of 2.\n%s",
+            $lead->title,
+            $lead->score ?? 0,
+            $minutesAgo,
+            $reminderNumber,
+            $dashboardUrl,
+        );
+
+        return $this->sendWhatsAppMessage((string) $this->settings->bidderWhatsapp(), $text);
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function sendFollowUp(Lead $lead, string $dashboardUrl): array

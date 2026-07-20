@@ -71,14 +71,25 @@ class LeadController extends Controller
         }
 
         $sort = (string) $request->query('sort', '-created_at');
-        $direction = str_starts_with($sort, '-') ? 'desc' : 'asc';
-        $column = ltrim($sort, '-');
 
-        if (! in_array($column, ['created_at', 'score', 'posted_at', 'proposal_count', 'budget_max', 'connects_required'], true)) {
-            $column = 'created_at';
+        if (ltrim($sort, '-') === 'attention') {
+            // Default browse order: still-unbid ready leads surface first,
+            // highest score next, freshest last — matches actual bidding
+            // priority (a 9/10 posted 20 minutes ago beats a 7/10 from
+            // yesterday) instead of raw intake order.
+            $query->orderByRaw("status = 'ready' desc")
+                ->orderByDesc('score')
+                ->orderByDesc('posted_at');
+        } else {
+            $direction = str_starts_with($sort, '-') ? 'desc' : 'asc';
+            $column = ltrim($sort, '-');
+
+            if (! in_array($column, ['created_at', 'score', 'posted_at', 'proposal_count', 'budget_max', 'connects_required'], true)) {
+                $column = 'created_at';
+            }
+
+            $query->orderBy($column, $direction)->orderBy('id', 'desc');
         }
-
-        $query->orderBy($column, $direction)->orderBy('id', 'desc');
 
         $perPage = (int) $request->query('per_page', 20);
         $perPage = $perPage > 0 ? min($perPage, 100) : 20;

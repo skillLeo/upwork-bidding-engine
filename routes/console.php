@@ -55,6 +55,14 @@ Schedule::call(fn () => Artisan::call('health:check'))
     ->name('health-check')
     ->withoutOverlapping(10);
 
+// Golden-window safety net: up to two WhatsApp nudges (45min, 90min) for a
+// fresh 8+ lead still sitting unbid. Every 5 minutes keeps the drift off
+// those marks small without adding a third scheduler cadence to reason about.
+Schedule::call(fn () => Artisan::call('leads:send-reminders'))
+    ->everyFiveMinutes()
+    ->name('lead-reminders')
+    ->withoutOverlapping(10);
+
 // Drains the queue (scoring, proposals, notifications) with a hard time
 // box, then exits; the next minute's run continues where it left off.
 Schedule::call(fn () => Artisan::call('queue:work --stop-when-empty --max-time=45'))
