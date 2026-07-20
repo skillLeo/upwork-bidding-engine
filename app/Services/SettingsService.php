@@ -95,6 +95,14 @@ class SettingsService
         // to message. openclaw_url/openclaw_token above do the connecting.
         'bidder_whatsapp' => ['group' => 'whatsapp', 'secret' => true, 'default' => ''],
 
+        // Global control over automated WhatsApp sends — a dashboard toggle
+        // rather than a WhatsApp text command, since OpenClaw has no way to
+        // forward inbound replies to this app (confirmed against its own
+        // docs: it only supports Gmail Pub/Sub webhooks, not a generic
+        // incoming-message URL hook). 'paused' stops reminders/follow-ups
+        // only, fresh lead cards still arrive; 'muted' stops everything.
+        'whatsapp_alert_mode' => ['group' => 'whatsapp', 'secret' => false, 'default' => 'normal'],
+
         // Direct AI layer — scoring/proposals via the Anthropic (or OpenAI)
         // API from Laravel itself, no OpenClaw hop. The system prompts are
         // deliberately settings, not code: the operator pastes and tunes
@@ -432,6 +440,16 @@ class SettingsService
     public function bidderWhatsapp(): ?string
     {
         return $this->get('bidder_whatsapp') ?: null;
+    }
+
+    /**
+     * @return 'normal'|'paused'|'muted'
+     */
+    public function whatsappAlertMode(): string
+    {
+        $mode = (string) $this->get('whatsapp_alert_mode', 'normal');
+
+        return in_array($mode, ['normal', 'paused', 'muted'], true) ? $mode : 'normal';
     }
 
     public function appName(): string

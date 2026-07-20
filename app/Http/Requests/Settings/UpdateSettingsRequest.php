@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Settings;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 /**
  * Accepts a partial payload — only keys present are saved, so each Settings
@@ -79,6 +80,7 @@ class UpdateSettingsRequest extends FormRequest
 
             // WhatsApp — sent via OpenClaw, no Meta token/phone ID needed
             'bidder_whatsapp' => ['sometimes', 'nullable', 'string', 'max:30'],
+            'whatsapp_alert_mode' => ['sometimes', Rule::in(['normal', 'paused', 'muted'])],
 
             // Mail (SMTP)
             'mail_host' => ['sometimes', 'nullable', 'string', 'max:255'],

@@ -18,6 +18,14 @@ class FollowUpReminderCommand extends Command
 
     public function handle(SettingsService $settings, OpenClawService $openClaw): int
     {
+        // Follow-ups are "reminder"-shaped WhatsApp traffic too, so the
+        // same global pause/mute switch covers them.
+        if ($settings->whatsappAlertMode() !== 'normal') {
+            $this->info('WhatsApp alerts are paused or muted; skipping follow-up reminders.');
+
+            return self::SUCCESS;
+        }
+
         $days = (int) $settings->get('followup_days', 3);
         $cutoff = now()->subDays($days);
 

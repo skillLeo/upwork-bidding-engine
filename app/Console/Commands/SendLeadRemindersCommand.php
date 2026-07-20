@@ -40,6 +40,13 @@ class SendLeadRemindersCommand extends Command
             return self::SUCCESS;
         }
 
+        // 'paused' and 'muted' both stop reminders — they only differ on
+        // whether brand new lead cards still go out (that check lives in
+        // NotifyBidderJob, not here).
+        if ($settings->whatsappAlertMode() !== 'normal') {
+            return self::SUCCESS;
+        }
+
         // Pakistan-time quiet hours, independent of the app's storage
         // timezone (UTC) — a reminder buzzing the operator's phone at 2am
         // is worse than no reminder at all.

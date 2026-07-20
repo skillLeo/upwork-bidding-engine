@@ -71,6 +71,32 @@ class NotifyFreshnessTest extends TestCase
         $this->assertNull($lead->fresh()->notification_skipped_reason);
     }
 
+    public function test_muted_mode_blocks_even_a_brand_new_lead_card(): void
+    {
+        app(SettingsService::class)->set('whatsapp_alert_mode', 'muted');
+        Http::fake(['openclaw.test/*' => Http::response(['success' => true])]);
+
+        $lead = Lead::factory()->create(['status' => LeadStatus::Ready, 'score' => 9, 'posted_at' => now()->subHours(1)]);
+
+        NotifyBidderJob::dispatchSync($lead->id);
+
+        Http::assertNothingSent();
+        $this->assertDatabaseHas('activity_logs', ['type' => 'notification_skipped']);
+        $this->assertDatabaseMissing('activity_logs', ['type' => 'bidder_notified']);
+    }
+
+    public function test_paused_mode_still_sends_a_brand_new_lead_card(): void
+    {
+        app(SettingsService::class)->set('whatsapp_alert_mode', 'paused');
+        Http::fake(['openclaw.test/*' => Http::response(['success' => true])]);
+
+        $lead = Lead::factory()->create(['status' => LeadStatus::Ready, 'score' => 9, 'posted_at' => now()->subHours(1)]);
+
+        NotifyBidderJob::dispatchSync($lead->id);
+
+        $this->assertDatabaseHas('activity_logs', ['type' => 'bidder_notified']);
+    }
+
     public function test_exhausted_failure_sets_the_red_badge_on_the_lead(): void
     {
         Http::fake(['openclaw.test/*' => Http::response(['error' => 'tunnel dead'], 502)]);

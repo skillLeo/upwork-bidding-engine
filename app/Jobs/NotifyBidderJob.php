@@ -55,6 +55,19 @@ class NotifyBidderJob implements ShouldQueue
             return;
         }
 
+        // Global operator kill switch — 'muted' stops every automated
+        // WhatsApp send including brand new lead cards ('paused' only
+        // stops reminders/follow-ups and leaves this check unaffected).
+        if ($settings->whatsappAlertMode() === 'muted') {
+            $lead->update(['notification_skipped_reason' => 'WhatsApp alerts are muted in Settings']);
+
+            ActivityLog::record('notification_skipped', subject: $lead, meta: [
+                'reason' => 'whatsapp_muted',
+            ]);
+
+            return;
+        }
+
         // Freshness gate — separate from the rubric's 7-day auto-reject.
         // A stale lead is still scored, written, and visible on the
         // dashboard at its real score; it just never rings the phone,

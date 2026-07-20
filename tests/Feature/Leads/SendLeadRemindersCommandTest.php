@@ -152,6 +152,28 @@ class SendLeadRemindersCommandTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_paused_mode_suppresses_an_otherwise_due_reminder(): void
+    {
+        app(SettingsService::class)->set('whatsapp_alert_mode', 'paused');
+        $lead = $this->notifiedLead();
+        ActivityLog::where('subject_id', $lead->id)->update(['created_at' => now()->subMinutes(45)]);
+
+        $this->artisan('leads:send-reminders');
+
+        Http::assertNothingSent();
+    }
+
+    public function test_muted_mode_suppresses_an_otherwise_due_reminder(): void
+    {
+        app(SettingsService::class)->set('whatsapp_alert_mode', 'muted');
+        $lead = $this->notifiedLead();
+        ActivityLog::where('subject_id', $lead->id)->update(['created_at' => now()->subMinutes(45)]);
+
+        $this->artisan('leads:send-reminders');
+
+        Http::assertNothingSent();
+    }
+
     public function test_quiet_hours_suppress_an_otherwise_due_reminder(): void
     {
         $lead = $this->notifiedLead();
