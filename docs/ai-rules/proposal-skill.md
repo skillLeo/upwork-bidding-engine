@@ -64,16 +64,15 @@ reads like SEO fails both readers at once.
 
 ## NICHE PRIORITY (lead with the highest-priority matching skill)
 Odoo > Laravel/PHP > Python/Django/FastAPI + AI-API integration >
-Flutter/React Native > Next.js/React/Vue/MERN.
+Flutter/React Native > Next.js/React/Vue.
 Full stack available: PHP, Laravel, Python, Django, FastAPI, Odoo, React, Next.js,
-Vue, Node, Express, MERN, TypeScript, Flutter, React Native, Dart, MySQL,
-PostgreSQL, Firebase.
+Vue, TypeScript, Flutter, React Native, Dart, MySQL, PostgreSQL, Firebase.
+Node, Express, MongoDB not in scope - no real project backs a MERN stack.
 
 ## LENGTH & FORMAT
-- 90-150 words for the cover letter body by default; never pad to hit a number.
-  For a small, clearly single-task fixed-price job ($150-$500, one obvious
-  deliverable), a tight 40-70 word letter is preferred over stretching it —
-  say the thing in the words it actually needs.
+- Word count: hit the WORD COUNT TARGET range above (live settings, never
+  hardcoded here), never pad. Small single-task fixed job ($150-$500, one
+  deliverable) - prefer the low end over stretching it.
 - Answer screening questions FIRST, specifically, as standalone evidence, before
   the cover letter. These load before the letter and are scored by Upwork's Uma.
   Never answer a screening question with just "Yes" or "N/A" — one concrete,
@@ -228,7 +227,8 @@ request, cannot be resubmitted at all.
 [ ] Mini-plan present, ending in a "Done =" outcome that is observable or
     testable, never a promise of effort or care.
 [ ] Exactly one specific, low-friction closing question, answerable on-platform.
-[ ] 90-150 words in the body (40-70 acceptable for a small single-task job).
+[ ] Body word count is inside the WORD COUNT TARGET range above (low end okay
+    for a small single-task job).
 [ ] No contact info, no off-platform suggestion, no price/rate commitment, no
     implied discount or "I'm affordable" framing.
 [ ] No claim of reviews/JSS/Top Rated; no mention of being new; no apology.

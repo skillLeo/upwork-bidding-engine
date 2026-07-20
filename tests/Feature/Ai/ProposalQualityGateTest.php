@@ -499,6 +499,29 @@ class ProposalQualityGateTest extends TestCase
         $this->assertStringNotContainsString('Sugarman', $skill);
     }
 
+    public function test_word_count_target_is_rendered_from_live_settings_not_hardcoded(): void
+    {
+        // Real failure this closes: SKILL.md said "90-150 words" while
+        // proposal_min_words had been raised to 170 - the model was
+        // following its own written instructions into a guaranteed lint
+        // failure. Now there is exactly one number, sourced from Settings.
+        $this->settings->setMany([
+            'proposal_skill' => 'SKILL RULES v2 MARKER',
+            'proposal_min_words' => 170,
+            'proposal_max_words' => 350,
+        ]);
+
+        $system = app(ProposalService::class)->systemPrompt();
+
+        $this->assertStringContainsString('WORD COUNT TARGET', $system);
+        $this->assertStringContainsString('170 to 350 words', $system);
+        $this->assertStringNotContainsString('90-150', $system);
+
+        // Changing the setting changes the prompt - no cached/stale number.
+        $this->settings->set('proposal_min_words', 90);
+        $this->assertStringContainsString('90 to 350 words', app(ProposalService::class)->systemPrompt());
+    }
+
     public function test_system_prompt_is_skill_plus_facts_plus_format_spec_and_never_the_reference(): void
     {
         $this->settings->set('proposal_skill', 'SKILL RULES v2 MARKER');

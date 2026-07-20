@@ -345,11 +345,20 @@ class ProposalService
     }
 
     /**
-     * The exact static block every proposal call sends: SKILL.md v2, then
-     * the fact sheet, then the format spec — in that order, byte-identical
-     * between calls so Anthropic's cache_control on it actually hits.
-     * Public so the operator can print/verify precisely what the model
-     * sees (and confirm the teaching document is NOT in it).
+     * The exact static block every proposal call sends: the word count
+     * target, then SKILL.md v2, then the fact sheet, then the format spec —
+     * in that order, byte-identical between calls so Anthropic's
+     * cache_control on it actually hits (it only changes, and the cache
+     * only misses, when the operator actually edits a setting). Public so
+     * the operator can print/verify precisely what the model sees (and
+     * confirm the teaching document is NOT in it).
+     *
+     * The word count target is rendered here from live settings rather
+     * than hardcoded in SKILL.md - seen live: the skill doc said "90-150
+     * words" while proposal_min_words had been raised to 170, so the
+     * model was following its own written instructions straight into a
+     * guaranteed lint failure. One number, one source, never two documents
+     * disagreeing again.
      */
     public function systemPrompt(): string
     {
@@ -361,10 +370,27 @@ class ProposalService
             );
         }
 
+        $skill = $this->wordCountTarget().$skill;
+
         return $skill
             ."\n\n## PROJECT FACTS (the ONLY source of truth about Hassam's track record. Never claim anything not derivable from this sheet.)\n"
             .trim((string) $this->settings->get('project_facts'))
             ."\n\n".self::FORMAT_SPEC;
+    }
+
+    /**
+     * Rendered from proposal_min_words/max_words, never hardcoded in
+     * SKILL.md - see systemPrompt() for the live failure this replaced.
+     */
+    protected function wordCountTarget(): string
+    {
+        $gate = $this->settings->proposalGate();
+
+        if ($gate['min_words'] <= 0 && $gate['max_words'] <= 0) {
+            return '';
+        }
+
+        return "## WORD COUNT TARGET\nCover letter body: {$gate['min_words']} to {$gate['max_words']} words. Hit this range, never pad to reach it and never land short. This is the only word count that matters - if any other number appears anywhere else in these instructions, this one wins.\n\n";
     }
 
     /**
