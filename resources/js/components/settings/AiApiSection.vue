@@ -366,7 +366,7 @@ async function handleSave() {
           <FieldHint>
             Every proposal is mechanically checked (banned phrases, word count, signature,
             required elements, contact info) AND re-reviewed by the AI against your full rules,
-            then revised up to 2 times until it complies. Turn off to accept first drafts as-is.
+            then revised up to 4 times until it complies. Turn off to accept first drafts as-is.
           </FieldHint>
         </div>
 

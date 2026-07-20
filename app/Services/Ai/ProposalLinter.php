@@ -57,11 +57,21 @@ class ProposalLinter
         $words = $this->wordCount($letter);
 
         if ($gate['min_words'] > 0 && $words < $gate['min_words']) {
-            $violations[] = "Cover letter too short: {$words} words. It must be {$gate['min_words']} to {$gate['max_words']} words.";
+            // Seen live: told only "must be 130 to 250" (no shortfall
+            // number), a revision landed at 126, then 127 - repeatedly
+            // just under the line rather than clearing it. Models are
+            // unreliable at precisely counting their own output, so the
+            // instruction now does the arithmetic and asks for a safety
+            // margin past the minimum, not an exact hit on it.
+            $shortfall = $gate['min_words'] - $words;
+            $target = $gate['min_words'] + max(5, (int) ceil($shortfall * 0.5));
+            $violations[] = "Cover letter too short: {$words} words, {$shortfall} short of the {$gate['min_words']}-word minimum. Add real, relevant detail (never filler) until the letter is at least {$target} words - overshoot the minimum, don't land exactly on it. Recount before answering.";
         }
 
         if ($gate['max_words'] > 0 && $words > $gate['max_words']) {
-            $violations[] = "Cover letter too long: {$words} words. It must be {$gate['min_words']} to {$gate['max_words']} words. Cut every sentence that fails the \"so what?\" test.";
+            $overage = $words - $gate['max_words'];
+            $target = max($gate['min_words'], $gate['max_words'] - max(5, (int) ceil($overage * 0.5)));
+            $violations[] = "Cover letter too long: {$words} words, {$overage} over the {$gate['max_words']}-word maximum. Cut every sentence that fails the \"so what?\" test until the letter is at or under {$target} words - undershoot the maximum, don't land exactly on it. Recount before answering.";
         }
 
         foreach ($gate['required_phrases'] as $phrase) {
