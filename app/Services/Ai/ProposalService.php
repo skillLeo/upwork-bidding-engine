@@ -379,7 +379,7 @@ class ProposalService
                 $jobBlock
                     ."\n\nDRAFT PROPOSAL TO REVIEW:\n<<<DRAFT\n{$draft}\nDRAFT>>>\n\n"
                     .'You are now the REVIEWER, not the writer. Check the draft against EVERY rule in your instructions: hard rules, structure (envelope line, one real-project proof, mini-plan with "Done =", one closing question), banned vocabulary, banned openers, word count, voice, and the final self-check checklist. Also judge these as an editor:'
-                    ."\n1. Three-item parallel lists (tricolons) are banned in any form."
+                    ."\n1. Tricolons are banned: three parallel ITEMS or CLAUSES joined by commas/\"and\" (e.g. \"fast, reliable, and affordable\"). A range phrase (\"from start to finish\") or any sentence merely containing \"and\" is NOT a tricolon - do not flag those."
                     ."\n2. The \"Done =\" line must name an observable, testable outcome. It must never promise \"zero risk\" or any guaranteed result."
                     ."\n3. No dead-stop sentences that close neatly without opening a loop or adding information."
                     ."\n4. Line 1 must quote or closely paraphrase at least one real, specific detail or named requirement from THIS job post. If it could be pasted unchanged into a different job's proposal, that is a violation."

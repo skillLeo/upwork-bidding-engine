@@ -34,13 +34,13 @@ import EmptyState from "@/components/ui/EmptyState.vue";
 import LeadRowSkeleton from "@/components/ui/LeadRowSkeleton.vue";
 
 const sortOptions = [
-  { value: "-created_at", label: "Newest first" },
+  { value: "-posted_at", label: "Recently posted" },
   { value: "-attention", label: "Attention (ready, highest score, freshest)" },
+  { value: "-created_at", label: "Newest first" },
   { value: "-score", label: "Highest score" },
   { value: "-budget_max", label: "Highest budget" },
   { value: "-proposal_count", label: "Most proposals" },
   { value: "-connects_required", label: "Most connects required" },
-  { value: "-posted_at", label: "Recently posted" },
   { value: "posted_at", label: "Oldest posted" },
 ];
 
@@ -134,7 +134,7 @@ function removeSearchChip(chip) {
 const page = ref(route.query.page ? Number(route.query.page) : 1);
 const perPage = ref(route.query.per_page ? Number(route.query.per_page) : 50);
 const perPageOptions = [25, 50, 100];
-const sortParam = ref(route.query.sort ?? "-created_at");
+const sortParam = ref(route.query.sort ?? "-posted_at");
 const mobileFiltersOpen = ref(false);
 const mobileFilterCount = computed(
   () => (status.value !== "all" ? 1 : 0) + (scoreMin.value ? 1 : 0),
@@ -183,7 +183,7 @@ watch([status, scoreMin, search, sortParam, page, perPage, activeFilterId], () =
       ...(status.value !== "all" && { status: status.value }),
       ...(scoreMin.value && { score_min: scoreMin.value }),
       ...(search.value && { search: search.value }),
-      ...(sortParam.value !== "-created_at" && { sort: sortParam.value }),
+      ...(sortParam.value !== "-posted_at" && { sort: sortParam.value }),
       ...(page.value !== 1 && { page: page.value }),
       ...(perPage.value !== 50 && { per_page: perPage.value }),
       ...(activeFilterId.value != null && { filter: activeFilterId.value }),

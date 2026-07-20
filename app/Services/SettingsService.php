@@ -185,7 +185,7 @@ class SettingsService
             'dive into', 'deep dive', 'game-changer', 'cutting-edge',
             'state-of-the-art', 'synergy', 'synergize', 'streamline', 'empower',
             'foster', 'bolster', 'in today\'s fast-paced world', 'ever-evolving',
-            'holistic',
+            'holistic', 'efficiently', 'efficient',
             // Banned sentence starts.
             'Moreover,', 'Furthermore,', 'Additionally,', 'In conclusion,',
             // Banned clichés / openers.

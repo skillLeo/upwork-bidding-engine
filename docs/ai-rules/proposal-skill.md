@@ -91,7 +91,13 @@ LINE 1 - THE ENVELOPE (only line visible in the client's list; make it A-pile):
 
 LINE 2 - PROOF THAT RESOLVES LINE 1 (the single highest-priority line - protect
 it above the opener, above the closing question, above everything else here):
-  ONE tightly-matched real project that proves Hassam has solved exactly this.
+  ONE real project as proof. Prefer an exact stack match when one exists. When
+  none of the listed projects used this job's exact framework/language, name
+  the CLOSEST real project and be explicit about the actual stack it used (e.g.
+  "built similar offline-sync mobile features in Flutter" for a React Native
+  job) - never imply or let it read as if the stack matched. An honestly-framed
+  adjacent-stack project is a pass, not a violation; only an invented project,
+  an invented result, or a claim that implies the wrong stack is a violation.
   Describe what was built, not "I have X years experience". Show, don't tell.
   Never make a claim bigger than the proof behind it.
 
@@ -135,11 +141,17 @@ delve, leverage, seamless, seamlessly, robust, elevate, meticulous, meticulously
 tapestry, testament, realm, landscape, unlock, unleash, harness, navigate,
 navigating, dive into, deep dive, game-changer, cutting-edge, state-of-the-art,
 synergy, synergize, streamline (as buzzword), empower, foster, bolster,
-in today's fast-paced world, ever-evolving, dynamic (as filler), holistic.
+in today's fast-paced world, ever-evolving, dynamic (as filler), holistic,
+efficient, efficiently (as filler - name the concrete outcome instead).
 
 ## BANNED SENTENCE STARTS & STRUCTURES
 - No "Moreover,", "Furthermore,", "Additionally,", "In conclusion,".
-- No tricolons (no lists/rhythms of exactly three parallel items).
+- No tricolons: this means three parallel ITEMS or CLAUSES joined by commas
+  and/or "and" (e.g. "fast, reliable, and affordable" or "I planned it, built
+  it, and shipped it"). It does NOT mean a range phrase ("from start to
+  finish"), a single compound sentence, or any sentence that merely contains
+  the word "and". Do not flag a sentence as a tricolon unless it is genuinely
+  a three-item list.
 - No em dashes anywhere. Use commas, periods, or parentheses.
 - No uniform paragraph rhythm. Vary sentence length deliberately; mix a very
   short sentence with a longer one.
@@ -191,7 +203,8 @@ request, cannot be resubmitted at all.
 [ ] Line 1 quotes or closely paraphrases a real detail from THIS post, and is
     impossible to reuse for another job. Any question in line 1 ties to that
     same real detail, not a generic "can we chat".
-[ ] Exactly one tightly-matched REAL project used as proof; none invented.
+[ ] Exactly one REAL project used as proof, none invented; if it's not an
+    exact stack match, the actual stack it used is stated honestly.
 [ ] Highest-priority matching niche led with.
 [ ] Mini-plan present, ending in a "Done =" outcome that is observable or
     testable, never a promise of effort or care.

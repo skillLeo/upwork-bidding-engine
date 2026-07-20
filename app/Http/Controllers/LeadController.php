@@ -70,7 +70,7 @@ class LeadController extends Controller
             $this->applyCriteria($query, $criteria);
         }
 
-        $sort = (string) $request->query('sort', '-created_at');
+        $sort = (string) $request->query('sort', '-posted_at');
 
         if (ltrim($sort, '-') === 'attention') {
             // Default browse order: still-unbid ready leads surface first,

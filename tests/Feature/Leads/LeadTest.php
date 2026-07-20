@@ -30,19 +30,23 @@ class LeadTest extends TestCase
         $this->assertEquals(3, $response->json('meta.total'));
     }
 
-    public function test_default_sort_is_newest_first(): void
+    public function test_default_sort_is_recently_posted(): void
     {
         $bidder = User::factory()->bidder()->create();
 
-        $older = Lead::factory()->create(['title' => 'older', 'created_at' => now()->subDay()]);
-        $newer = Lead::factory()->create(['title' => 'newer', 'created_at' => now()]);
+        // created_at (import time) deliberately reversed from posted_at (the
+        // real Upwork post time) — a pass here can only mean the default is
+        // genuinely keyed off posted_at, not an accidental match via
+        // created_at or insertion order.
+        $olderPost = Lead::factory()->create(['title' => 'older post', 'posted_at' => now()->subDays(2), 'created_at' => now()]);
+        $newerPost = Lead::factory()->create(['title' => 'newer post', 'posted_at' => now()->subHours(1), 'created_at' => now()->subDay()]);
 
         // No sort param at all — this is what the dashboard sends by default.
         $response = $this->actingAs($bidder, 'sanctum')->getJson('/api/leads')->assertOk();
 
         $titles = collect($response->json('data'))->pluck('title')->all();
 
-        $this->assertSame([$newer->title, $older->title], $titles);
+        $this->assertSame([$newerPost->title, $olderPost->title], $titles);
     }
 
     public function test_attention_sort_is_available_as_an_explicit_preset(): void
