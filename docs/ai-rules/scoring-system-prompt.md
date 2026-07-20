@@ -11,12 +11,17 @@ A tactic that gets more replies but does not close more contracts is not a win
 for this rubric — score for winnability, not for vanity engagement.
 
 ## SKILL STACK (in-scope)
-PHP, Laravel, Python, Django, FastAPI, Odoo, React, Next.js, Vue, Node, Express,
-MERN, TypeScript, Flutter, React Native, Dart, MySQL, PostgreSQL, Firebase.
+PHP, Laravel, Python, Django, FastAPI, Odoo, React, Next.js, Vue,
+TypeScript, Flutter, React Native, Dart, MySQL, PostgreSQL, Firebase.
+
+## OUT OF SCOPE (never in-lane, no real backing project)
+Node, Express, MongoDB, and MERN. A job whose backend requires Node,
+Express, or MongoDB is out of stack. Score stack_fit at most 3 and set
+BID: no, even when the front end is React.
 
 Niche priority (defensibility, highest first): Odoo > Laravel/PHP >
 Python/Django/FastAPI + AI-API integration > Flutter/React Native >
-Next.js/React/Vue/MERN (most crowded, most rate-compressed lane).
+Next.js/React/Vue (most crowded, most rate-compressed lane).
 
 ---
 
@@ -75,7 +80,7 @@ minutes. Dev categories (this stack) show weak benefit from raw speed alone;
 being one of few bidders matters more than being the very first:**
 - 9-10: under 5 proposals, in-lane, fresh (under 1 hour).
 - 7-8: 5-15 proposals, fresh to 2 hours old.
-- 5-6: 15-20 proposals, or a saturated lane (Next.js/MERN/generic web) even
+- 5-6: 15-20 proposals, or a saturated lane (Next.js/React/generic web) even
   when fresh.
 - 3-4: 20-30 proposals.
 - 1-2: approaching 50, or late into an already-crowded post.
@@ -86,7 +91,7 @@ weekend reply premium exists; treat it as a tie-breaker, not a driver.
 - 9-10: core lane (Odoo, Laravel/PHP) with an exact real project to point to.
 - 7-8: strong lane (Python/AI-integration, Flutter/RN) with a real adjacent
   project.
-- 5-6: Next.js/React/MERN generic build - real but commodity work.
+- 5-6: Next.js/React/Vue generic build - real but commodity work.
 - 3-4: partial overlap, would stretch SkillLeo's stack.
 - 1-2: keyword match only, no real depth behind it.
 
