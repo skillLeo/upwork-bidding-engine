@@ -109,6 +109,15 @@ class SettingsService
         // its own homework is how the tricolon shipped. Defaults to the
         // strongest writing-tier model, independent of the writer.
         'review_model' => ['group' => 'ai', 'secret' => false, 'default' => 'claude-sonnet-5'],
+        // Neither provider exposes real-time remaining balance through a
+        // normal API key (confirmed live: OpenAI's usage API needs a
+        // separate Admin key with a scope regular keys don't have;
+        // Anthropic has no such endpoint at all on a messages key). So
+        // "remaining" is computed honestly instead: what you say you
+        // funded, minus what the ai_calls ledger proves you actually
+        // spent. Update these whenever you top up.
+        'anthropic_funded_total' => ['group' => 'ai', 'secret' => false, 'default' => 0],
+        'openai_funded_total' => ['group' => 'ai', 'secret' => false, 'default' => 0],
         'scoring_system_prompt' => ['group' => 'ai', 'secret' => false, 'default' => ''],
         // Account stage: the rubric's own Recommendations section defines a
         // two-phase plan (new account with tight floors and no boosting,

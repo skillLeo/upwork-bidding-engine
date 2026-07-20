@@ -53,6 +53,8 @@ class UpdateSettingsRequest extends FormRequest
             'scoring_model' => ['sometimes', 'string', 'max:100'],
             'proposal_model' => ['sometimes', 'string', 'max:100'],
             'review_model' => ['sometimes', 'string', 'max:100'],
+            'anthropic_funded_total' => ['sometimes', 'numeric', 'min:0', 'max:1000000'],
+            'openai_funded_total' => ['sometimes', 'numeric', 'min:0', 'max:1000000'],
             // The long, operator-pasted rule blocks — the whole point is
             // that these are editable text, so the ceilings are generous.
             'scoring_system_prompt' => ['sometimes', 'nullable', 'string', 'max:150000'],

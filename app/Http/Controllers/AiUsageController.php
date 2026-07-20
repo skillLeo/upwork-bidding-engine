@@ -3,12 +3,21 @@
 namespace App\Http\Controllers;
 
 use App\Models\AiCall;
+use App\Services\SettingsService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 /**
  * Real spend, computed from the same ai_calls ledger every call already
  * writes to — never estimated, never a provider dashboard scrape. Admin
  * only: this is financial data, unlike the ungated /diagnostics page.
+ *
+ * "Remaining balance" is deliberately NOT pulled live from either
+ * provider: confirmed live against both APIs that a normal key can't read
+ * it (OpenAI's usage endpoint needs a separate Admin key with a scope
+ * regular keys don't have; Anthropic has no such endpoint on a messages
+ * key at all). Instead the operator enters what they funded, and
+ * "remaining" is that minus the ledger's real, provable spend.
  */
 class AiUsageController extends Controller
 {
@@ -19,10 +28,15 @@ class AiUsageController extends Controller
      */
     protected const PROPOSAL_RUN_PURPOSES = ['proposal', 'proposal_review', 'proposal_revision', 'proposal_surgical_fix'];
 
-    public function __invoke(): JsonResponse
+    public function __invoke(Request $request, SettingsService $settings): JsonResponse
     {
-        $totalCalls = AiCall::count();
-        $successCalls = AiCall::where('success', true)->count();
+        $provider = $request->query('provider');
+        $provider = in_array($provider, ['anthropic', 'openai'], true) ? $provider : null;
+
+        $scoped = fn () => AiCall::query()->when($provider, fn ($q) => $q->where('provider', $provider));
+
+        $totalCalls = $scoped()->count();
+        $successCalls = $scoped()->where('success', true)->count();
 
         $byProvider = AiCall::selectRaw('provider, count(*) as calls, sum(cost_usd) as cost')
             ->groupBy('provider')
@@ -30,27 +44,30 @@ class AiUsageController extends Controller
             ->get()
             ->map(fn ($row) => ['provider' => $row->provider, 'calls' => (int) $row->calls, 'cost' => round((float) $row->cost, 4)]);
 
-        $byPurpose = AiCall::selectRaw('purpose, count(*) as calls, sum(cost_usd) as cost')
+        $byPurpose = $scoped()
+            ->selectRaw('purpose, count(*) as calls, sum(cost_usd) as cost')
             ->groupBy('purpose')
             ->orderByDesc('cost')
             ->get()
             ->map(fn ($row) => ['purpose' => $row->purpose, 'calls' => (int) $row->calls, 'cost' => round((float) $row->cost, 4)]);
 
-        $proposalRuns = AiCall::where('purpose', 'proposal')->count();
-        $proposalTotalCost = AiCall::whereIn('purpose', self::PROPOSAL_RUN_PURPOSES)->sum('cost_usd');
+        $proposalRuns = $scoped()->where('purpose', 'proposal')->count();
+        $proposalTotalCost = $scoped()->whereIn('purpose', self::PROPOSAL_RUN_PURPOSES)->sum('cost_usd');
 
         return response()->json(['data' => [
-            'total_spend' => round((float) AiCall::sum('cost_usd'), 4),
-            'spend_today' => round((float) AiCall::whereDate('created_at', today())->sum('cost_usd'), 4),
-            'spend_this_week' => round((float) AiCall::where('created_at', '>=', now()->startOfWeek())->sum('cost_usd'), 4),
-            'spend_this_month' => round((float) AiCall::where('created_at', '>=', now()->startOfMonth())->sum('cost_usd'), 4),
+            'provider_filter' => $provider,
+            'total_spend' => round((float) $scoped()->sum('cost_usd'), 4),
+            'spend_today' => round((float) $scoped()->whereDate('created_at', today())->sum('cost_usd'), 4),
+            'spend_this_week' => round((float) $scoped()->where('created_at', '>=', now()->startOfWeek())->sum('cost_usd'), 4),
+            'spend_this_month' => round((float) $scoped()->where('created_at', '>=', now()->startOfMonth())->sum('cost_usd'), 4),
             'total_calls' => $totalCalls,
             'success_rate' => $totalCalls > 0 ? round($successCalls / $totalCalls * 100, 1) : null,
-            'avg_cost_per_scored_lead' => round((float) (AiCall::where('purpose', 'scoring')->where('success', true)->avg('cost_usd') ?? 0), 4) ?: null,
+            'avg_cost_per_scored_lead' => round((float) ($scoped()->where('purpose', 'scoring')->where('success', true)->avg('cost_usd') ?? 0), 4) ?: null,
             'avg_cost_per_proposal' => $proposalRuns > 0 ? round((float) $proposalTotalCost / $proposalRuns, 4) : null,
             'by_provider' => $byProvider,
             'by_purpose' => $byPurpose,
-            'daily' => $this->dailySpend(),
+            'daily' => $this->dailySpend($provider),
+            'balances' => $this->balances($settings),
         ]]);
     }
 
@@ -60,11 +77,12 @@ class AiUsageController extends Controller
      *
      * @return array<int, array{date: string, cost: float}>
      */
-    protected function dailySpend(): array
+    protected function dailySpend(?string $provider): array
     {
         $start = now()->subDays(29)->startOfDay();
 
         $rows = AiCall::where('created_at', '>=', $start)
+            ->when($provider, fn ($q) => $q->where('provider', $provider))
             ->selectRaw('DATE(created_at) as date, sum(cost_usd) as cost')
             ->groupBy('date')
             ->pluck('cost', 'date');
@@ -77,5 +95,37 @@ class AiUsageController extends Controller
         }
 
         return $days;
+    }
+
+    /**
+     * Operator-entered funded amount minus real ledger spend, per
+     * provider, plus a burn rate (trailing 7-day average) so a shrinking
+     * balance turns into an actionable "you have about N days left"
+     * instead of just a shrinking number.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function balances(SettingsService $settings): array
+    {
+        $sevenDaysAgo = now()->subDays(7);
+
+        return collect(['anthropic', 'openai'])->map(function (string $provider) use ($settings, $sevenDaysAgo) {
+            $funded = (float) $settings->get("{$provider}_funded_total", 0);
+            $spent = round((float) AiCall::where('provider', $provider)->sum('cost_usd'), 4);
+            $remaining = round($funded - $spent, 4);
+
+            $recentSpend = (float) AiCall::where('provider', $provider)->where('created_at', '>=', $sevenDaysAgo)->sum('cost_usd');
+            $burnPerDay = round($recentSpend / 7, 4);
+
+            return [
+                'provider' => $provider,
+                'funded' => $funded,
+                'spent' => $spent,
+                'remaining' => $remaining,
+                'pct_remaining' => $funded > 0 ? max(0, min(100, round($remaining / $funded * 100, 1))) : null,
+                'burn_rate_per_day' => $burnPerDay,
+                'days_remaining' => $funded > 0 && $burnPerDay > 0 ? (int) floor(max(0, $remaining) / $burnPerDay) : null,
+            ];
+        })->all();
     }
 }
