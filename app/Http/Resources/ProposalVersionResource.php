@@ -26,6 +26,7 @@ class ProposalVersionResource extends JsonResource
             'linter_violations' => $this->linter_violations,
             'linter_rules_fixed' => $this->linter_rules_fixed,
             'model' => $this->model,
+            'edit_instruction' => $this->edit_instruction,
             'is_sent' => (bool) $this->is_sent,
             'sent_at' => $this->sent_at?->toIso8601String(),
             'created_at' => $this->created_at->toIso8601String(),

@@ -26,6 +26,9 @@ class ProposalVersionRecorder
      * linter against the job brief (so tech-claim and trap-instruction checks
      * run too, not just word count) and recording which rules this version
      * newly fixed versus the one before it.
+     *
+     * @param  array{instruction?: string|null, selection_start?: int|null, selection_end?: int|null}  $meta
+     *   AI-edit metadata, stored as-is; empty for pipeline writes and manual edits.
      */
     public function record(
         Lead $lead,
@@ -33,6 +36,7 @@ class ProposalVersionRecorder
         string $editType,
         ?string $model = null,
         ?int $userId = null,
+        array $meta = [],
     ): ProposalVersion {
         $violations = $this->linter->check($body, $lead->full_brief);
 
@@ -54,6 +58,9 @@ class ProposalVersionRecorder
             'linter_violations' => $violations !== [] ? array_values($violations) : null,
             'linter_rules_fixed' => $fixed !== [] ? $fixed : null,
             'model' => $model,
+            'edit_instruction' => $meta['instruction'] ?? null,
+            'selection_start' => $meta['selection_start'] ?? null,
+            'selection_end' => $meta['selection_end'] ?? null,
             'created_by' => $userId,
         ]);
     }

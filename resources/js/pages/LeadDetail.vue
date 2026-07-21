@@ -30,8 +30,12 @@ import {
   regenerateLeadProposal,
   saveLeadProposal,
   fetchProposalVersions,
+  aiEditProposal,
+  acceptAiEditProposal,
 } from "@/composables/useLead";
 import Textarea from "@/components/ui/Textarea.vue";
+import Input from "@/components/ui/Input.vue";
+import { Wand2, Check as CheckIcon } from "@lucide/vue";
 import { startAiTask, finishAiTask, failAiTask } from "@/stores/aiProgress";
 import { useSavedFilters } from "@/composables/useSavedFilters";
 import PageContainer from "@/components/layout/PageContainer.vue";
@@ -190,6 +194,123 @@ async function loadVersions() {
 async function toggleHistory() {
   showHistory.value = !showHistory.value;
   if (showHistory.value && versions.value.length === 0) await loadVersions();
+}
+
+// --- AI-assisted edit ---
+const proposalRef = ref(null);
+const instruction = ref("");
+const selection = ref(null); // { start, end, text }
+const aiEditLoading = ref(false);
+const aiPreview = ref(null); // { old_text, new_text, edit_type, linter_violations, model }
+
+const canAiEdit = computed(
+  () =>
+    !!lead.value?.proposal_text &&
+    !editing.value &&
+    !["sent", "replied", "won"].includes(lead.value?.status),
+);
+
+// Character offsets of the highlighted span within proposal_text, computed
+// robustly by measuring the text length before the selection start.
+function captureSelection() {
+  const el = proposalRef.value;
+  const sel = window.getSelection();
+  if (!el || !sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+  const range = sel.getRangeAt(0);
+  if (!el.contains(range.startContainer) || !el.contains(range.endContainer)) return;
+  const pre = document.createRange();
+  pre.selectNodeContents(el);
+  pre.setEnd(range.startContainer, range.startOffset);
+  const start = pre.toString().length;
+  const text = range.toString();
+  if (!text.trim()) return;
+  selection.value = { start, end: start + text.length, text };
+}
+
+function clearSelection() {
+  selection.value = null;
+  window.getSelection()?.removeAllRanges();
+}
+
+// Word-level diff (LCS) so the preview shows exactly what changed.
+function wordDiff(a, b) {
+  const A = a.split(/(\s+)/);
+  const B = b.split(/(\s+)/);
+  const n = A.length;
+  const m = B.length;
+  const dp = Array.from({ length: n + 1 }, () => new Int32Array(m + 1));
+  for (let i = n - 1; i >= 0; i--)
+    for (let j = m - 1; j >= 0; j--)
+      dp[i][j] = A[i] === B[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+  const out = [];
+  const push = (type, text) => {
+    const last = out[out.length - 1];
+    if (last && last.type === type) last.text += text;
+    else out.push({ type, text });
+  };
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (A[i] === B[j]) push("same", A[i++]), j++;
+    else if (dp[i + 1][j] >= dp[i][j + 1]) push("removed", A[i++]);
+    else push("added", B[j++]);
+  }
+  while (i < n) push("removed", A[i++]);
+  while (j < m) push("added", B[j++]);
+  return out;
+}
+
+const diffSegments = computed(() =>
+  aiPreview.value ? wordDiff(aiPreview.value.old_text, aiPreview.value.new_text) : [],
+);
+
+async function runAiEdit() {
+  if (!lead.value || aiEditLoading.value || !instruction.value.trim()) return;
+  aiEditLoading.value = true;
+  startAiTask("AI is editing your proposal…", 30000);
+  try {
+    const payload = { instruction: instruction.value };
+    if (selection.value) {
+      payload.selection_start = selection.value.start;
+      payload.selection_end = selection.value.end;
+    }
+    aiPreview.value = await aiEditProposal(lead.value.id, payload);
+    finishAiTask();
+  } catch (error) {
+    failAiTask();
+    toast.error(apiErrorMessage(error, "Could not run the AI edit."));
+  } finally {
+    aiEditLoading.value = false;
+  }
+}
+
+async function acceptAiEdit() {
+  if (!lead.value || !aiPreview.value || aiEditLoading.value) return;
+  aiEditLoading.value = true;
+  try {
+    const p = aiPreview.value;
+    lead.value = await acceptAiEditProposal(lead.value.id, {
+      proposal_text: p.new_text,
+      edit_type: p.edit_type,
+      instruction: instruction.value,
+      model: p.model,
+      selection_start: selection.value?.start ?? null,
+      selection_end: selection.value?.end ?? null,
+    });
+    aiPreview.value = null;
+    instruction.value = "";
+    clearSelection();
+    if (showHistory.value) await loadVersions();
+    toast.success("AI edit applied.");
+  } catch (error) {
+    toast.error(apiErrorMessage(error, "Could not apply the edit."));
+  } finally {
+    aiEditLoading.value = false;
+  }
+}
+
+function discardAiEdit() {
+  aiPreview.value = null;
 }
 
 const regenLoading = ref(null);
@@ -509,8 +630,11 @@ async function handleRegenerateProposal() {
 
           <p
             v-else-if="lead.proposal_text"
+            ref="proposalRef"
+            @mouseup="captureSelection"
+            @touchend="captureSelection"
             :class="[
-              'mt-3 rounded-md bg-neutral-bg p-4 text-sm whitespace-pre-wrap text-text-primary transition-opacity',
+              'mt-3 rounded-md bg-neutral-bg p-4 text-sm whitespace-pre-wrap text-text-primary transition-opacity selection:bg-primary/20',
               regenLoading === 'proposal' && 'animate-pulse opacity-50',
             ]"
           >
@@ -519,6 +643,93 @@ async function handleRegenerateProposal() {
           <p v-else class="mt-3 rounded-md bg-neutral-bg p-4 text-sm text-text-tertiary">
             No proposal yet — click "Write proposal" to draft one under your rules.
           </p>
+
+          <!-- AI-assisted edit: instruction -> preview (diff + linter) -> accept/discard. -->
+          <div v-if="canAiEdit" class="mt-3 rounded-md border border-primary/20 bg-primary/[0.03] p-3">
+            <template v-if="aiPreview">
+              <div class="flex items-center justify-between gap-2">
+                <p class="flex items-center gap-1.5 text-xs font-semibold text-primary">
+                  <Wand2 class="h-3.5 w-3.5" /> AI edit preview
+                </p>
+                <span v-if="aiPreview.model" class="text-[10px] text-text-tertiary">{{ aiPreview.model }}</span>
+              </div>
+              <p class="mt-2 rounded-md bg-white/70 p-3 text-sm leading-relaxed whitespace-pre-wrap">
+                <template v-for="(seg, i) in diffSegments" :key="i">
+                  <del
+                    v-if="seg.type === 'removed'"
+                    class="bg-danger-bg text-danger line-through decoration-danger/50"
+                    >{{ seg.text }}</del
+                  >
+                  <ins
+                    v-else-if="seg.type === 'added'"
+                    class="bg-success/15 text-success no-underline"
+                    >{{ seg.text }}</ins
+                  >
+                  <span v-else>{{ seg.text }}</span>
+                </template>
+              </p>
+              <div
+                v-if="aiPreview.linter_violations?.length"
+                class="mt-2 rounded-md border border-danger-border bg-danger-bg px-3 py-2"
+              >
+                <p class="text-[11px] font-semibold text-danger">
+                  This edit breaks {{ aiPreview.linter_violations.length }} rule{{
+                    aiPreview.linter_violations.length === 1 ? "" : "s"
+                  }}
+                  — you can still accept, but fixing first is safer:
+                </p>
+                <ul class="mt-1 space-y-0.5">
+                  <li
+                    v-for="w in aiPreview.linter_violations"
+                    :key="w"
+                    class="text-[11px] text-danger/90"
+                  >
+                    • {{ w }}
+                  </li>
+                </ul>
+              </div>
+              <div class="mt-2 flex items-center justify-end gap-2">
+                <Button variant="ghost" size="sm" :disabled="aiEditLoading" @click="discardAiEdit">
+                  <X class="h-3.5 w-3.5" /> Discard
+                </Button>
+                <Button size="sm" :loading="aiEditLoading" @click="acceptAiEdit">
+                  <CheckIcon class="h-3.5 w-3.5" /> Accept
+                </Button>
+              </div>
+            </template>
+
+            <template v-else>
+              <div
+                v-if="selection"
+                class="mb-2 flex items-center gap-1.5 rounded-pill border border-primary/30 bg-primary/10 px-2 py-1 text-[11px] text-primary"
+              >
+                <span class="truncate">Editing: "{{ selection.text.slice(0, 48) }}{{ selection.text.length > 48 ? "…" : "" }}"</span>
+                <button type="button" class="shrink-0 hover:text-primary-hover" @click="clearSelection">
+                  <X class="h-3 w-3" />
+                </button>
+              </div>
+              <p v-else class="mb-2 text-[11px] text-text-tertiary">
+                Highlight text in the proposal to edit just that part — or select nothing to revise
+                the whole thing.
+              </p>
+              <div class="flex items-center gap-2">
+                <Input
+                  v-model="instruction"
+                  placeholder="Tell AI what to change…"
+                  class="flex-1"
+                  @keyup.enter="runAiEdit"
+                />
+                <Button
+                  size="sm"
+                  :loading="aiEditLoading"
+                  :disabled="!instruction.trim() || aiEditLoading"
+                  @click="runAiEdit"
+                >
+                  <Wand2 class="h-3.5 w-3.5" /> Ask AI
+                </Button>
+              </div>
+            </template>
+          </div>
 
           <!-- Version history: append-only snapshots, newest first. -->
           <div v-if="lead.proposal_text && !editing" class="mt-4 border-t border-border pt-3">

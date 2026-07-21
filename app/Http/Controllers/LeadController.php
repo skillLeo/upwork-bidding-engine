@@ -575,6 +575,96 @@ class LeadController extends Controller
     }
 
     /**
+     * AI-assisted edit, PREVIEW only. With a selection range the model edits
+     * just that span; without one it revises the whole proposal. The result is
+     * linted and returned but NOT persisted - the operator sees the diff and
+     * linter delta, then explicitly accepts (acceptAiEditProposal) or discards.
+     */
+    public function aiEditProposal(Request $request, Lead $lead, \App\Services\Ai\ProposalEditor $editor): JsonResponse
+    {
+        $validated = $request->validate([
+            'instruction' => ['required', 'string', 'max:500'],
+            'selection_start' => ['nullable', 'integer', 'min:0', 'required_with:selection_end'],
+            'selection_end' => ['nullable', 'integer', 'min:1', 'gt:selection_start', 'required_with:selection_start'],
+        ]);
+
+        if ($this->proposalIsLocked($lead)) {
+            return response()->json(['message' => 'This proposal was marked sent and is locked. AI edits are disabled on a sent proposal.'], 422);
+        }
+
+        try {
+            $preview = $editor->preview(
+                $lead,
+                $validated['instruction'],
+                $validated['selection_start'] ?? null,
+                $validated['selection_end'] ?? null,
+            );
+        } catch (\App\Services\Ai\ProposalEditFailedException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        } catch (\Throwable $e) {
+            return $this->aiFailureResponse($e);
+        }
+
+        return response()->json(['data' => $preview]);
+    }
+
+    /**
+     * Persist a previewed AI edit as a new immutable version. The submitted
+     * text is re-linted by the recorder, so the stored warnings are always
+     * computed here and can't be spoofed by the client.
+     */
+    public function acceptAiEditProposal(Request $request, Lead $lead, \App\Services\ProposalVersionRecorder $versions): JsonResponse
+    {
+        $validated = $request->validate([
+            'proposal_text' => ['required', 'string', 'max:20000'],
+            'edit_type' => ['required', Rule::in(['ai_surgical_edit', 'ai_instructed_rewrite'])],
+            'instruction' => ['nullable', 'string', 'max:500'],
+            'model' => ['nullable', 'string', 'max:64'],
+            'selection_start' => ['nullable', 'integer', 'min:0'],
+            'selection_end' => ['nullable', 'integer', 'min:0'],
+        ]);
+
+        if ($this->proposalIsLocked($lead)) {
+            return response()->json(['message' => 'This proposal was marked sent and is locked. AI edits are disabled on a sent proposal.'], 422);
+        }
+
+        $version = $versions->record(
+            $lead,
+            $validated['proposal_text'],
+            $validated['edit_type'],
+            $validated['model'] ?? null,
+            $request->user()?->id,
+            [
+                'instruction' => $validated['instruction'] ?? null,
+                'selection_start' => $validated['selection_start'] ?? null,
+                'selection_end' => $validated['selection_end'] ?? null,
+            ],
+        );
+
+        $lead->update([
+            'proposal_text' => $validated['proposal_text'],
+            'proposal_warnings' => $version->linter_violations,
+        ]);
+
+        ActivityLog::record('proposal_ai_edited', subject: $lead, meta: [
+            'version' => $version->version_number,
+            'edit_type' => $version->edit_type,
+            'violations' => $version->linter_violation_count,
+        ], userId: $request->user()?->id);
+
+        return response()->json(['data' => new LeadResource($lead->fresh('client'))]);
+    }
+
+    /**
+     * A proposal is locked once a version has been frozen as sent - no AI edit
+     * may touch it after it has gone to the client.
+     */
+    protected function proposalIsLocked(Lead $lead): bool
+    {
+        return $lead->proposalVersions()->where('is_sent', true)->exists();
+    }
+
+    /**
      * Providers now retry a 429 internally (see OpenAiProvider/
      * AnthropicProvider) — this only fires once those retries are
      * genuinely exhausted, so it tells the operator something actionable

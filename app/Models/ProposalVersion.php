@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Model;
 #[Fillable([
     'lead_id', 'version_number', 'edit_type', 'body', 'word_count', 'char_count',
     'linter_violation_count', 'linter_violations', 'linter_rules_fixed', 'model',
+    'edit_instruction', 'selection_start', 'selection_end',
     'is_sent', 'sent_at', 'is_locked', 'created_by',
 ])]
 class ProposalVersion extends Model

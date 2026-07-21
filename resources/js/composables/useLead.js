@@ -67,6 +67,18 @@ export async function fetchProposalVersions(id) {
   return res.data.data;
 }
 
+// Preview-only: the server returns { old_text, new_text, edit_type,
+// linter_violations, model, cost } and persists nothing until accept.
+export async function aiEditProposal(id, payload) {
+  const res = await apiClient.post(`/leads/${id}/proposal/ai-edit`, payload, { timeout: 120000 });
+  return res.data.data;
+}
+
+export async function acceptAiEditProposal(id, payload) {
+  const res = await apiClient.post(`/leads/${id}/proposal/ai-edit/accept`, payload);
+  return res.data.data;
+}
+
 export async function bulkUpdateLeadStatus(ids, status) {
   const res = await apiClient.post("/leads/bulk-status", { ids, status });
   return res.data.data;
