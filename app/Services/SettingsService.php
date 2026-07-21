@@ -232,6 +232,12 @@ class SettingsService
         'mail_from_address' => ['group' => 'mail', 'secret' => false, 'default' => ''],
         'mail_from_name' => ['group' => 'mail', 'secret' => false, 'default' => 'SkillLeo'],
 
+        // Web Push (VAPID) identity - auto-generated once via
+        // `php artisan push:generate-vapid-keys`, then reused. The public key
+        // is handed to the browser to subscribe; the private key signs pushes.
+        'vapid_public_key' => ['group' => 'push', 'secret' => false, 'default' => ''],
+        'vapid_private_key' => ['group' => 'push', 'secret' => true, 'default' => ''],
+
         // Rules
         'min_budget' => ['group' => 'rules', 'secret' => false, 'default' => 150],
         'max_proposals' => ['group' => 'rules', 'secret' => false, 'default' => 25],

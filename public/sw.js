@@ -4,6 +4,27 @@
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
 
+// Incoming Web Push from the server — THIS is what displays a notification on
+// a locked / closed-browser phone. Payload is JSON: { title, body, url }.
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { title: "SkillLeo", body: event.data ? event.data.text() : "" };
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title || "SkillLeo", {
+      body: data.body || "",
+      icon: "/favicon.svg",
+      badge: "/favicon.svg",
+      tag: data.tag || "skillleo-push",
+      renotify: true,
+      data: { url: data.url || "/leads" },
+    }),
+  );
+});
+
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const url = (event.notification.data && event.notification.data.url) || "/leads";

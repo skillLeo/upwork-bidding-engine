@@ -17,7 +17,7 @@ class NotificationService
      */
     public function push(string $type, string $title, array $opts = []): AppNotification
     {
-        return AppNotification::create([
+        $notification = AppNotification::create([
             'type' => $type,
             'level' => $opts['level'] ?? 'info',
             'title' => $title,
@@ -25,6 +25,17 @@ class NotificationService
             'url' => $opts['url'] ?? null,
             'lead_id' => $opts['lead_id'] ?? null,
         ]);
+
+        // Fire a real Web Push too, so it lands on a locked / closed-browser
+        // phone - not just the in-app bell. Best-effort; a push failure never
+        // affects the notification row or the caller.
+        try {
+            app(WebPushService::class)->send($title, $opts['body'] ?? null, $opts['url'] ?? null);
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
+        return $notification;
     }
 
     /**

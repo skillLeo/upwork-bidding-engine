@@ -120,6 +120,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/notifications/read-all', [\App\Http\Controllers\NotificationController::class, 'markAllRead']);
     Route::post('/notifications/{notification}/read', [\App\Http\Controllers\NotificationController::class, 'markRead']);
 
+    // Web Push (lock-screen / closed-browser notifications).
+    Route::get('/push/vapid-key', [\App\Http\Controllers\PushController::class, 'vapidKey']);
+    Route::post('/push/subscribe', [\App\Http\Controllers\PushController::class, 'subscribe']);
+    Route::post('/push/unsubscribe', [\App\Http\Controllers\PushController::class, 'unsubscribe']);
+
     Route::get('/saved-filters', [SavedFilterController::class, 'index']);
     Route::post('/saved-filters', [SavedFilterController::class, 'store']);
     Route::put('/saved-filters/{savedFilter}', [SavedFilterController::class, 'update']);

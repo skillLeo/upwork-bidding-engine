@@ -55,8 +55,22 @@ export async function markAllRead() {
   }
 }
 
+let listenersBound = false;
+
 export function initNotifications() {
   clearInterval(timer);
   fetchNotifications();
   timer = setInterval(fetchNotifications, POLL_MS);
+
+  // Mobile browsers freeze setInterval in a backgrounded tab, so the poll
+  // alone can look stale after you switch away. Refetch the instant the tab is
+  // visible/focused again - that's what makes the bell update on return with
+  // no manual refresh.
+  if (!listenersBound) {
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") fetchNotifications();
+    });
+    window.addEventListener("focus", fetchNotifications);
+    listenersBound = true;
+  }
 }

@@ -82,11 +82,60 @@ async function show(title, { body, tag, url }) {
 }
 
 function fire(lead) {
+  // Once real Web Push is active, the SERVER pushes the OS notification (even
+  // with the browser closed), so the client poll must not also fire one -
+  // that would double-notify.
+  if (pushActive) return;
   show(`Fresh ${lead.score}/10 lead`, {
     body: lead.title,
     tag: `lead-${lead.id}`,
     url: `/leads/${lead.id}`,
   });
+}
+
+// --- Real Web Push subscription (reaches a locked / closed-browser phone) ---
+let pushActive = false;
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  const output = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) output[i] = raw.charCodeAt(i);
+  return output;
+}
+
+// Subscribe THIS device to server push. Idempotent - the server dedupes by
+// endpoint, and an existing browser subscription is reused. Requires the SW,
+// the Push API, granted permission, and a configured VAPID key server-side.
+export async function subscribeToPush() {
+  try {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return false;
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return false;
+
+    const key = await apiClient.get("/push/vapid-key");
+    if (!key.data.data.configured || !key.data.data.public_key) return false;
+
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(key.data.data.public_key),
+      });
+    }
+
+    const json = sub.toJSON();
+    await apiClient.post("/push/subscribe", {
+      endpoint: json.endpoint,
+      keys: json.keys,
+      content_encoding: "aes128gcm",
+    });
+    pushActive = true;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function enableLeadAlerts() {
@@ -99,6 +148,7 @@ export async function enableLeadAlerts() {
   leadAlerts.enabled = true;
   localStorage.setItem(STORAGE_KEY, "1");
   startPolling();
+  subscribeToPush(); // best-effort: also register for lock-screen pushes
   return true;
 }
 
@@ -121,6 +171,9 @@ export async function sendTestNotification() {
   if (permission !== "granted") {
     return { ok: false, reason: permission === "denied" ? "denied" : "dismissed" };
   }
+
+  // Tapping test is a good moment to also register for real (lock-screen) push.
+  subscribeToPush();
 
   const shown = await show("SkillLeo test alert ✅", {
     body: "If you can see this on your phone, real-time lead alerts work on this device.",
@@ -150,5 +203,6 @@ export function initLeadAlerts() {
   if (localStorage.getItem(STORAGE_KEY) === "1" && Notification.permission === "granted") {
     leadAlerts.enabled = true;
     startPolling();
+    subscribeToPush(); // keep this device's push subscription fresh
   }
 }
