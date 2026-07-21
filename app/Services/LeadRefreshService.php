@@ -9,6 +9,7 @@ use App\Models\AiCall;
 use App\Models\Lead;
 use App\Services\Ai\ProposalService;
 use App\Services\Ai\ScoringService;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 
 /**
@@ -31,6 +32,7 @@ class LeadRefreshService
     public function __construct(
         protected ScoringService $scoring,
         protected ProposalService $proposals,
+        protected ProposalVersionRecorder $versions,
     ) {}
 
     /**
@@ -99,10 +101,21 @@ class LeadRefreshService
                 'reason' => (string) $lead->score_reason,
             ]);
 
+            // Whether this is the lead's first-ever proposal or a rewrite is
+            // decided before the update, from whether any version already
+            // exists - proposal_text alone can't tell them apart.
+            $editType = $lead->proposalVersions()->exists() ? 'rewrite' : 'initial_draft';
+
             $lead->update([
                 'proposal_text' => $result['text'],
                 'proposal_warnings' => $result['warnings'] !== [] ? $result['warnings'] : null,
             ]);
+
+            // Append the immutable snapshot. The recorder re-runs the linter,
+            // so the version's stored violations are computed independently of
+            // the pipeline's shipped warnings - one source of truth for "what
+            // rules did this text break".
+            $this->versions->record($lead, $result['text'], $editType, $result['response']->model, Auth::id());
 
             ActivityLog::record('proposal_regenerated', subject: $lead, meta: [
                 'shipped_rule' => $result['shipped_rule'],

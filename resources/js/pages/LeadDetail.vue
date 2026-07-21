@@ -9,21 +9,29 @@ import {
   Copy,
   ExternalLink,
   Globe2,
+  History,
   MessageSquare,
+  Pencil,
   RefreshCw,
+  Save,
+  Send,
   Sparkles,
   ShieldCheck,
   ShieldOff,
   Star,
   Users,
   Wallet,
+  X,
 } from "@lucide/vue";
 import {
   useLead,
   updateLeadStatus,
   regenerateLeadScore,
   regenerateLeadProposal,
+  saveLeadProposal,
+  fetchProposalVersions,
 } from "@/composables/useLead";
+import Textarea from "@/components/ui/Textarea.vue";
 import { startAiTask, finishAiTask, failAiTask } from "@/stores/aiProgress";
 import { useSavedFilters } from "@/composables/useSavedFilters";
 import PageContainer from "@/components/layout/PageContainer.vue";
@@ -118,6 +126,72 @@ async function handleCopy() {
   toast.success("Proposal copied to clipboard.");
 }
 
+// --- Manual editing + version history ---
+const editing = ref(false);
+const draft = ref("");
+const savingProposal = ref(false);
+
+const draftWordCount = computed(() =>
+  draft.value.trim() ? draft.value.trim().split(/\s+/).length : 0,
+);
+
+function startEdit() {
+  draft.value = lead.value?.proposal_text ?? "";
+  editing.value = true;
+}
+
+function cancelEdit() {
+  editing.value = false;
+  draft.value = "";
+}
+
+async function saveEdit() {
+  if (!lead.value || savingProposal.value || !draft.value.trim()) return;
+  savingProposal.value = true;
+  try {
+    lead.value = await saveLeadProposal(lead.value.id, draft.value);
+    editing.value = false;
+    // The edit created a new version; refresh the timeline if it's open.
+    if (showHistory.value) await loadVersions();
+    const warnings = lead.value.proposal_warnings?.length ?? 0;
+    warnings === 0
+      ? toast.success("Saved. Passes every rule.")
+      : toast.warning(`Saved with ${warnings} rule ${warnings === 1 ? "violation" : "violations"}.`);
+  } catch (error) {
+    toast.error(apiErrorMessage(error, "Could not save the edit."));
+  } finally {
+    savingProposal.value = false;
+  }
+}
+
+const showHistory = ref(false);
+const versions = ref([]);
+const versionsLoading = ref(false);
+const openVersionId = ref(null);
+
+const editTypeLabels = {
+  initial_draft: "First draft",
+  rewrite: "AI rewrite",
+  manual_edit: "Manual edit",
+};
+
+async function loadVersions() {
+  if (!lead.value) return;
+  versionsLoading.value = true;
+  try {
+    versions.value = await fetchProposalVersions(lead.value.id);
+  } catch (error) {
+    toast.error(apiErrorMessage(error, "Could not load history."));
+  } finally {
+    versionsLoading.value = false;
+  }
+}
+
+async function toggleHistory() {
+  showHistory.value = !showHistory.value;
+  if (showHistory.value && versions.value.length === 0) await loadVersions();
+}
+
 const regenLoading = ref(null);
 
 const subScoreBlocks = computed(() => {
@@ -159,6 +233,7 @@ async function handleRegenerateProposal() {
   try {
     lead.value = await regenerateLeadProposal(lead.value.id);
     finishAiTask();
+    if (showHistory.value) await loadVersions();
     toast.success("Fresh proposal written under your rules.");
   } catch (error) {
     failAiTask();
@@ -360,7 +435,7 @@ async function handleRegenerateProposal() {
                 {{ lead.proposal_warnings.length === 1 ? "violation" : "violations" }}
               </span>
             </div>
-            <div class="flex items-center gap-2">
+            <div v-if="!editing" class="flex items-center gap-2">
               <Button
                 variant="secondary"
                 size="sm"
@@ -377,6 +452,16 @@ async function handleRegenerateProposal() {
                       ? "Rewrite"
                       : "Write proposal"
                 }}
+              </Button>
+              <Button
+                v-if="lead.proposal_text"
+                variant="secondary"
+                size="sm"
+                :disabled="regenLoading !== null"
+                title="Edit the proposal by hand (re-checked against your rules)"
+                @click="startEdit"
+              >
+                <Pencil class="h-3.5 w-3.5" /> Edit
               </Button>
               <Button v-if="lead.proposal_text" variant="secondary" size="sm" @click="handleCopy">
                 <Copy class="h-3.5 w-3.5" /> Copy
@@ -401,8 +486,29 @@ async function handleRegenerateProposal() {
               </li>
             </ul>
           </div>
+          <!-- Edit mode: by-hand editing, re-linted on save. -->
+          <div v-if="editing" class="mt-3">
+            <Textarea v-model="draft" rows="14" class="text-sm" />
+            <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
+              <span class="text-xs text-text-tertiary">{{ draftWordCount }} words</span>
+              <div class="flex items-center gap-2">
+                <Button variant="ghost" size="sm" :disabled="savingProposal" @click="cancelEdit">
+                  <X class="h-3.5 w-3.5" /> Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  :loading="savingProposal"
+                  :disabled="!draft.trim() || savingProposal"
+                  @click="saveEdit"
+                >
+                  <Save class="h-3.5 w-3.5" /> Save edit
+                </Button>
+              </div>
+            </div>
+          </div>
+
           <p
-            v-if="lead.proposal_text"
+            v-else-if="lead.proposal_text"
             :class="[
               'mt-3 rounded-md bg-neutral-bg p-4 text-sm whitespace-pre-wrap text-text-primary transition-opacity',
               regenLoading === 'proposal' && 'animate-pulse opacity-50',
@@ -413,6 +519,63 @@ async function handleRegenerateProposal() {
           <p v-else class="mt-3 rounded-md bg-neutral-bg p-4 text-sm text-text-tertiary">
             No proposal yet — click "Write proposal" to draft one under your rules.
           </p>
+
+          <!-- Version history: append-only snapshots, newest first. -->
+          <div v-if="lead.proposal_text && !editing" class="mt-4 border-t border-border pt-3">
+            <button
+              type="button"
+              class="inline-flex items-center gap-1.5 text-xs font-semibold text-text-secondary hover:text-primary"
+              @click="toggleHistory"
+            >
+              <History class="h-3.5 w-3.5" />
+              {{ showHistory ? "Hide history" : "History" }}
+              <span v-if="versions.length" class="text-text-tertiary">({{ versions.length }})</span>
+            </button>
+
+            <div v-if="showHistory" class="mt-3 space-y-2">
+              <p v-if="versionsLoading" class="text-xs text-text-tertiary">Loading…</p>
+              <p v-else-if="!versions.length" class="text-xs text-text-tertiary">
+                No saved versions yet — a rewrite or a manual edit adds one.
+              </p>
+              <div
+                v-for="v in versions"
+                :key="v.id"
+                class="rounded-md border border-border bg-neutral-bg/50"
+              >
+                <button
+                  type="button"
+                  class="flex w-full flex-wrap items-center gap-2 px-3 py-2 text-left"
+                  @click="openVersionId = openVersionId === v.id ? null : v.id"
+                >
+                  <span class="text-xs font-semibold text-text-primary">v{{ v.version_number }}</span>
+                  <span class="rounded-pill border border-border-strong px-1.5 py-0.5 text-[10px] font-medium text-text-secondary">
+                    {{ editTypeLabels[v.edit_type] ?? v.edit_type }}
+                  </span>
+                  <span
+                    v-if="v.is_sent"
+                    class="inline-flex items-center gap-1 rounded-pill border border-success/30 bg-success/10 px-1.5 py-0.5 text-[10px] font-semibold text-success"
+                  >
+                    <Send class="h-2.5 w-2.5" /> Sent
+                  </span>
+                  <span
+                    v-if="v.linter_violation_count"
+                    class="inline-flex items-center gap-1 rounded-pill border border-danger/40 bg-danger-bg px-1.5 py-0.5 text-[10px] font-semibold text-danger"
+                  >
+                    <AlertTriangle class="h-2.5 w-2.5" /> {{ v.linter_violation_count }}
+                  </span>
+                  <span class="ml-auto text-[10px] text-text-tertiary">
+                    {{ v.word_count }}w · {{ relativeTime(v.created_at) }}
+                  </span>
+                </button>
+                <p
+                  v-if="openVersionId === v.id"
+                  class="whitespace-pre-wrap border-t border-border px-3 py-2 text-xs text-text-secondary"
+                >
+                  {{ v.body }}
+                </p>
+              </div>
+            </div>
+          </div>
         </Card>
       </div>
 

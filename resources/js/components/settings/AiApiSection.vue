@@ -46,6 +46,7 @@ const form = reactive({
   proposal_skill: props.settings.proposal_skill ?? "",
   project_facts: props.settings.project_facts ?? "",
   proposal_reference: props.settings.proposal_reference ?? "",
+  training_system_prompt: props.settings.training_system_prompt ?? "",
   proposal_writing_enabled: props.settings.proposal_writing_enabled ?? true,
   proposal_quality_gate: props.settings.proposal_quality_gate ?? true,
   proposal_min_words: props.settings.proposal_min_words ?? 110,
@@ -322,6 +323,20 @@ async function handleSave() {
         <FieldHint>
           Excluded on purpose: it's written in the exact analytical, em-dash-heavy style the rules
           ban, and models copy the style of their context more than they obey instructions in it.
+        </FieldHint>
+      </div>
+
+      <div>
+        <Label>Training system prompt (used only by the training-data export)</Label>
+        <Textarea
+          v-model="form.training_system_prompt"
+          rows="6"
+          class="font-mono text-xs"
+          placeholder="Optional. The system message written into every exported (brief → final proposal) training example. Leave blank to reuse the Proposal skill above — the same voice the writer was given."
+        />
+        <FieldHint>
+          Only affects <span class="font-mono">proposals:export-training-data</span>. Blank falls
+          back to the Proposal skill, so exported pairs teach the same rules the live writer follows.
         </FieldHint>
       </div>
 

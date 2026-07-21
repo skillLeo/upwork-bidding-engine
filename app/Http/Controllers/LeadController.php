@@ -389,7 +389,7 @@ class LeadController extends Controller
         return [];
     }
 
-    public function updateStatus(UpdateLeadStatusRequest $request, Lead $lead): JsonResponse
+    public function updateStatus(UpdateLeadStatusRequest $request, Lead $lead, \App\Services\ProposalVersionRecorder $versions): JsonResponse
     {
         $oldStatus = $lead->status;
         $newStatus = LeadStatus::from($request->validated('status'));
@@ -403,6 +403,12 @@ class LeadController extends Controller
 
         if ($newStatus === LeadStatus::Sent) {
             ActivityLog::record(ActivityType::ProposalSent, subject: $lead, userId: $request->user()?->id);
+
+            // Freeze the current text as the record of what actually went to
+            // the client, so later edits to proposal_text don't rewrite it.
+            // Only the first send freezes (markLatestSent no-ops if already
+            // sent); a re-send after edits is a deliberate manual re-mark.
+            $versions->markLatestSent($lead);
         }
 
         // First forward transition past "ready" is what turns a lead into a real
@@ -526,6 +532,46 @@ class LeadController extends Controller
         }
 
         return response()->json(['data' => new LeadResource($lead->fresh())]);
+    }
+
+    /**
+     * Manual, by-hand edit of the current proposal text. Appends a new
+     * immutable version (which re-runs the linter) and updates the lead's live
+     * proposal_text + warnings so a hand edit can't silently reintroduce a
+     * banned claim - the same rule check the AI writer is held to. Available to
+     * admin + bidder, same as status updates.
+     */
+    public function updateProposal(Request $request, Lead $lead, \App\Services\ProposalVersionRecorder $versions): JsonResponse
+    {
+        $validated = $request->validate([
+            'proposal_text' => ['required', 'string', 'max:20000'],
+        ]);
+
+        $version = $versions->record($lead, $validated['proposal_text'], 'manual_edit', null, $request->user()?->id);
+
+        $lead->update([
+            'proposal_text' => $validated['proposal_text'],
+            'proposal_warnings' => $version->linter_violations,
+        ]);
+
+        ActivityLog::record('proposal_edited', subject: $lead, meta: [
+            'version' => $version->version_number,
+            'violations' => $version->linter_violation_count,
+        ], userId: $request->user()?->id);
+
+        return response()->json(['data' => new LeadResource($lead->fresh('client'))]);
+    }
+
+    /**
+     * The lead's proposal history, newest first, for the version timeline.
+     */
+    public function proposalVersions(Lead $lead): JsonResponse
+    {
+        return response()->json([
+            'data' => \App\Http\Resources\ProposalVersionResource::collection(
+                $lead->proposalVersions()->reorder('version_number', 'desc')->get()
+            ),
+        ]);
     }
 
     /**

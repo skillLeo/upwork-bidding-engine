@@ -7,6 +7,7 @@ use Database\Factories\LeadFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Model;
 
 #[Fillable([
@@ -48,5 +49,15 @@ class Lead extends Model
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
+    }
+
+    /**
+     * Append-only proposal history, newest last by version_number.
+     *
+     * @return HasMany<ProposalVersion, $this>
+     */
+    public function proposalVersions(): HasMany
+    {
+        return $this->hasMany(ProposalVersion::class)->orderBy('version_number');
     }
 }

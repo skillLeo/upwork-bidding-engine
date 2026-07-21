@@ -95,6 +95,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/leads/bulk-favorite', [LeadController::class, 'bulkFavorite']);
     Route::get('/leads/{lead}', [LeadController::class, 'show']);
     Route::post('/leads/{lead}/status', [LeadController::class, 'updateStatus']);
+    Route::put('/leads/{lead}/proposal', [LeadController::class, 'updateProposal']);
+    Route::get('/leads/{lead}/proposal-versions', [LeadController::class, 'proposalVersions']);
     Route::post('/leads/{lead}/regenerate-score', [LeadController::class, 'regenerateScore']);
     Route::post('/leads/{lead}/regenerate-proposal', [LeadController::class, 'regenerateProposal']);
     Route::post('/leads/{lead}/favorite', [LeadController::class, 'toggleFavorite']);

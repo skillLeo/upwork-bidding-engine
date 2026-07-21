@@ -144,6 +144,12 @@ class SettingsService
         // read in the browser and nothing else.
         'proposal_skill' => ['group' => 'ai', 'secret' => false, 'default' => ''],
         'proposal_reference' => ['group' => 'ai', 'secret' => false, 'default' => ''],
+        // The system message written into every exported training example
+        // (proposals:export-training-data). Left empty, the export falls back
+        // to proposal_skill - the actual style guide the writer was given - so
+        // brief->final pairs teach the same voice. Set this only to train
+        // against a different system prompt than the live one.
+        'training_system_prompt' => ['group' => 'ai', 'secret' => false, 'default' => ''],
         // Canonical fact sheet — the only source of truth about Hassam's
         // track record. Anything not derivable from this must never be
         // claimed in a proposal.

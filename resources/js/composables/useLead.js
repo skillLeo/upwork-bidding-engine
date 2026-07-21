@@ -55,6 +55,18 @@ export async function regenerateLeadProposal(id) {
   return res.data.data;
 }
 
+// Manual, by-hand edit. The server appends an immutable version and re-runs the
+// linter, so the returned lead carries fresh proposal_warnings.
+export async function saveLeadProposal(id, text) {
+  const res = await apiClient.put(`/leads/${id}/proposal`, { proposal_text: text });
+  return res.data.data;
+}
+
+export async function fetchProposalVersions(id) {
+  const res = await apiClient.get(`/leads/${id}/proposal-versions`);
+  return res.data.data;
+}
+
 export async function bulkUpdateLeadStatus(ids, status) {
   const res = await apiClient.post("/leads/bulk-status", { ids, status });
   return res.data.data;
