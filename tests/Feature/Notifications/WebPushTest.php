@@ -28,6 +28,50 @@ class WebPushTest extends TestCase
         $this->assertDatabaseHas('push_subscriptions', ['endpoint_hash' => hash('sha256', $payload['endpoint'])]);
     }
 
+    public function test_subscribe_rejects_ssrf_and_non_push_endpoints(): void
+    {
+        $user = User::factory()->create();
+
+        $blocked = [
+            'http://fcm.googleapis.com/fcm/send/x',   // not https
+            'https://169.254.169.254/latest/meta',    // cloud metadata IP
+            'https://127.0.0.1/x',                    // loopback
+            'https://internal.mycorp.local/x',        // internal host
+            'https://evil.example.com/x',             // arbitrary host
+        ];
+
+        foreach ($blocked as $endpoint) {
+            $this->actingAs($user, 'sanctum')
+                ->postJson('/api/push/subscribe', [
+                    'endpoint' => $endpoint,
+                    'keys' => ['p256dh' => 'k', 'auth' => 'a'],
+                ])
+                ->assertStatus(422);
+        }
+
+        $this->assertSame(0, PushSubscription::count());
+    }
+
+    public function test_subscribe_allows_real_push_service_hosts(): void
+    {
+        $user = User::factory()->create();
+
+        foreach ([
+            'https://fcm.googleapis.com/fcm/send/abc',
+            'https://updates.push.services.mozilla.com/wpush/v2/abc',
+            'https://web.push.apple.com/abc',
+        ] as $endpoint) {
+            $this->actingAs($user, 'sanctum')
+                ->postJson('/api/push/subscribe', [
+                    'endpoint' => $endpoint,
+                    'keys' => ['p256dh' => 'k', 'auth' => 'a'],
+                ])
+                ->assertOk();
+        }
+
+        $this->assertSame(3, PushSubscription::count());
+    }
+
     public function test_unsubscribe_removes_the_subscription(): void
     {
         $user = User::factory()->create();

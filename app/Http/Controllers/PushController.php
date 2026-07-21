@@ -20,15 +20,29 @@ class PushController extends Controller
         ]]);
     }
 
+    /**
+     * Hosts a browser push endpoint is ever legitimately on. The server POSTs
+     * to whatever we store here, so this allowlist is what stops an
+     * authenticated user from registering an internal URL and turning us into
+     * an SSRF proxy (loopback / 169.254.169.254 / RFC1918 can never match).
+     */
+    protected const ALLOWED_PUSH_HOSTS = ['fcm.googleapis.com', 'android.googleapis.com', 'web.push.apple.com'];
+
+    protected const ALLOWED_PUSH_SUFFIXES = ['.push.services.mozilla.com', '.notify.windows.com', '.push.apple.com'];
+
     /** Store (or refresh) a device's push subscription. Deduped by endpoint. */
     public function subscribe(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'endpoint' => ['required', 'string'],
-            'keys.p256dh' => ['required', 'string'],
-            'keys.auth' => ['required', 'string'],
+            'endpoint' => ['required', 'url:https'],
+            'keys.p256dh' => ['required', 'string', 'max:255'],
+            'keys.auth' => ['required', 'string', 'max:255'],
             'content_encoding' => ['nullable', 'string', 'max:16'],
         ]);
+
+        if (! $this->isKnownPushEndpoint($validated['endpoint'])) {
+            return response()->json(['message' => 'Unrecognized push endpoint host.'], 422);
+        }
 
         PushSubscription::updateOrCreate(
             ['endpoint_hash' => hash('sha256', $validated['endpoint'])],
@@ -52,5 +66,32 @@ class PushController extends Controller
             ->delete();
 
         return response()->json(['data' => ['unsubscribed' => true]]);
+    }
+
+    /**
+     * True only for an https URL whose host is a real browser push service.
+     * Anything else (internal host, IP literal, private range) is rejected.
+     */
+    protected function isKnownPushEndpoint(string $endpoint): bool
+    {
+        $host = parse_url($endpoint, PHP_URL_HOST);
+
+        if (! is_string($host) || $host === '') {
+            return false;
+        }
+
+        $host = strtolower($host);
+
+        if (in_array($host, self::ALLOWED_PUSH_HOSTS, true)) {
+            return true;
+        }
+
+        foreach (self::ALLOWED_PUSH_SUFFIXES as $suffix) {
+            if (str_ends_with($host, $suffix)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
