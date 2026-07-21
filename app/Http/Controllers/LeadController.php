@@ -583,7 +583,7 @@ class LeadController extends Controller
     public function aiEditProposal(Request $request, Lead $lead, \App\Services\Ai\ProposalEditor $editor): JsonResponse
     {
         $validated = $request->validate([
-            'instruction' => ['required', 'string', 'max:500'],
+            'instruction' => ['required', 'string', 'max:1000'],
             'selection_start' => ['nullable', 'integer', 'min:0', 'required_with:selection_end'],
             'selection_end' => ['nullable', 'integer', 'min:1', 'gt:selection_start', 'required_with:selection_start'],
         ]);
@@ -618,7 +618,7 @@ class LeadController extends Controller
         $validated = $request->validate([
             'proposal_text' => ['required', 'string', 'max:20000'],
             'edit_type' => ['required', Rule::in(['ai_surgical_edit', 'ai_instructed_rewrite'])],
-            'instruction' => ['nullable', 'string', 'max:500'],
+            'instruction' => ['nullable', 'string', 'max:1000'],
             'model' => ['nullable', 'string', 'max:64'],
             'selection_start' => ['nullable', 'integer', 'min:0'],
             'selection_end' => ['nullable', 'integer', 'min:0'],
