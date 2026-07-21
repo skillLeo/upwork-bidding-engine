@@ -97,7 +97,10 @@ class ScoringStageTest extends TestCase
         $service = app(ScoringService::class);
 
         $stage1 = $service->systemPrompt();
-        $this->assertSame(self::RUBRIC."\n\n".ScoringService::SUB_SCORES_SPEC, $stage1);
+        $this->assertSame(
+            self::RUBRIC."\n\n".$this->settings->stackContext()."\n\n".ScoringService::SUB_SCORES_SPEC,
+            $stage1,
+        );
 
         $this->settings->set('account_stage', 'stage_2_established');
         $stage2 = app(ScoringService::class)->systemPrompt();

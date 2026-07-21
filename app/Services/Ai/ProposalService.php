@@ -375,6 +375,7 @@ class ProposalService
         $skill = $this->wordCountTarget().$this->signatureTarget().$skill;
 
         return $skill
+            ."\n\n".$this->settings->stackContext()
             ."\n\n## PROJECT FACTS (the ONLY source of truth about Hassam's track record. Never claim anything not derivable from this sheet.)\n"
             .trim((string) $this->settings->get('project_facts'))
             ."\n\n".self::FORMAT_SPEC;

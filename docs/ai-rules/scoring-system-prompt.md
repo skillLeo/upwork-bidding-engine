@@ -10,21 +10,28 @@ This rubric predicts WIN likelihood (interview and hire), not reply theater.
 A tactic that gets more replies but does not close more contracts is not a win
 for this rubric — score for winnability, not for vanity engagement.
 
-## SKILL STACK (in-scope)
-PHP, Laravel, Python, Django, FastAPI, Flask, Odoo, React, Next.js, Vue,
-Node, Express, MongoDB, MERN, TypeScript, JavaScript, jQuery, HTML, CSS,
-Flutter, React Native, Kotlin, Dart, MySQL, PostgreSQL, Firebase.
+## SKILL STACK
+The in-scope stacks are supplied in the STACKS block below this rubric, split
+into three tiers. Read them as the ONLY source of truth for what is in scope -
+never rely on your own idea of what a "typical" developer does:
+- CORE = strongest, most defensible lanes. A job in a core stack is high fit.
+- SECONDARY = real capability but a crowded, rate-compressed, or less-proven
+  lane. A job centred on a secondary stack is a MEDIUM fit, not a reject.
+- EXCLUDED = out of scope. A job whose CORE requirement is an excluded stack is
+  a hard reject.
 
-Niche priority (defensibility, highest first): Odoo > Laravel/PHP >
-Python/Django/FastAPI + AI-API integration > Flutter/React Native >
-Next.js/React/Vue/MERN (most crowded, most rate-compressed lane).
+Within CORE, rank defensibility highest-first in the order the CORE list is
+written (leftmost = most defensible). Do not invent scope: a stack that appears
+in none of the three lists is treated as out of scope.
 
 ---
 
 ## STEP 1 - HARD AUTO-REJECT (check first, caps score, BID: no)
 
 Reject if ANY is true:
-1. Outside stack, or cannot confidently deliver 80%+ of the scope.
+1. The core requirement is an EXCLUDED stack (see the STACKS block), the job is
+   in no listed stack at all, or SkillLeo cannot confidently deliver 80%+ of
+   the scope. A job centred on a SECONDARY stack is NOT an auto-reject here.
 2. Any request to move off-platform (WhatsApp/Telegram/email/phone) before a
    contract exists.
 3. Pay is "free test", "unpaid sample", "equity only", "revenue share", or
@@ -83,13 +90,17 @@ being one of few bidders matters more than being the very first:**
 Add +1 (do not exceed 10) if the post went up on a weekend - a documented
 weekend reply premium exists; treat it as a tie-breaker, not a driver.
 
-**stack_fit (20%):**
-- 9-10: core lane (Odoo, Laravel/PHP) with an exact real project to point to.
-- 7-8: strong lane (Python/AI-integration, Flutter/RN) with a real adjacent
-  project.
-- 5-6: Next.js/React/Vue/MERN generic build - real but commodity work.
-- 3-4: partial overlap, would stretch SkillLeo's stack.
-- 1-2: keyword match only, no real depth behind it.
+**stack_fit (20%) - score against the STACKS tiers below, never your own
+notion of scope:**
+- 9-10: a CORE stack (highest-ranked end of the core list) with an exact real
+  project to point to.
+- 7-8: a CORE stack lower in the ranking, with a real adjacent project.
+- 5-6: a SECONDARY stack - real capability but a commodity or rate-compressed
+  lane.
+- 3-4: partial overlap, would stretch the stack, or a secondary stack with no
+  adjacent proof.
+- 1-2: keyword match only with no real depth, OR the core requirement is an
+  EXCLUDED stack (which also forces BID: no via Step 1).
 
 **budget (15%):**
 - 9-10: $400-$800 fixed, or hourly >= $25, realistic for the stated scope.

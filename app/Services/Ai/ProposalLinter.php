@@ -24,19 +24,22 @@ use App\Services\SettingsService;
 class ProposalLinter
 {
     /**
-     * Canonical technology names this check recognizes, each a
-     * case-insensitive word-boundary pattern (case-sensitive only where
+     * A PATTERN LIBRARY, not an allow/deny list. Each entry maps a canonical
+     * technology name to a safe, hand-tuned regex (case-sensitive only where
      * the bare word is also common English, e.g. "React" vs. "react to
-     * feedback"). Covers Hassam's real stack (so legitimate mentions are
-     * correctly recognized as allowed) plus technologies he has never
-     * worked in that models commonly invent for stack-adjacent jobs.
-     * Extend this list, not the AI reviewer's prompt, if a new real
-     * project introduces a genuinely new technology.
+     * feedback"; "Node.js" also catches a bare "Node"; "Go" is matched only via
+     * "Golang" so it never fires on the ordinary word "go").
+     *
+     * Whether a term is ALLOWED, secondary, or forbidden is decided entirely by
+     * the operator's core/secondary/excluded_stacks settings - this table only
+     * supplies reliable patterns for the terms it knows. stackPatterns() looks
+     * a stack name up here first and generates a default pattern otherwise, so
+     * a brand-new stack name typed into Settings still works; add an entry here
+     * only when a term needs a tuned pattern a generated one would get wrong.
      *
      * @var array<string, string>
      */
     protected const TECH_VOCABULARY = [
-        // Hassam's real stack.
         'Laravel' => '/\blaravel\b/i',
         'Vue' => '/\bvue(?:\.js)?\b/i',
         'Flutter' => '/\bflutter\b/i',
@@ -65,7 +68,8 @@ class ProposalLinter
         'jQuery' => '/\bjquery\b/i',
         'Kotlin' => '/\bkotlin\b/i',
         'Flask' => '/\bflask\b/i',
-        // Commonly hallucinated - never part of Hassam's real stack.
+        // Patterns for terms that commonly land on the excluded list. Whether
+        // they are actually forbidden is set in excluded_stacks, not here.
         'Ruby on Rails' => '/\brails\b/i',
         'Ruby' => '/\bruby\b/i',
         'Golang' => '/\bgolang\b/i',
@@ -198,38 +202,32 @@ class ProposalLinter
             return [];
         }
 
-        $projectFacts = (string) $this->settings->get('project_facts', '');
-
-        if (trim($projectFacts) === '') {
-            return [];
-        }
-
-        // The "presence" text a tech term is checked against must exclude
-        // any deny-list/disclaimer line - naming a technology to forbid it
-        // ("Technologies NOT in stack: MongoDB...") makes a naive substring
-        // scan of the raw sheet think that technology is present. Caught
-        // live: adding the deny-list line broke the exact check it was
-        // meant to support. Same reasoning applies to the pre-existing
-        // "Magento is not on this sheet" disclaimer sentence.
-        $allowedText = implode("\n", array_filter(
-            preg_split('/\R/u', $projectFacts) ?: [],
-            fn (string $line) => ! preg_match('/^(Technologies NOT|Anything not on this sheet)/iu', trim($line)),
-        ));
-
+        $stacks = $this->settings->stackLists();
         $violations = [];
         $flagged = [];
 
-        foreach (self::TECH_VOCABULARY as $tech => $pattern) {
-            if (preg_match($pattern, $letter) !== 1) {
-                continue;
-            }
-
-            if (preg_match($pattern, $allowedText) !== 1) {
-                $violations[] = "Fabricated tech claim: \"{$tech}\" does not appear anywhere in your project facts and must never be claimed. Name only technology that is actually on the fact sheet, or drop the claim.";
+        // 1. EXCLUDED-STACK DENY. Any stack on the operator's excluded list,
+        //    named anywhere in the letter, is a hard violation - it is out of
+        //    scope and must never be claimed, regardless of project_facts. This
+        //    replaces the old "hallucinated group" hardcoded in this file: the
+        //    deny-list is now operator data (excluded_stacks), not code.
+        foreach ($this->stackPatterns($stacks['excluded']) as $tech => $pattern) {
+            if (preg_match($pattern, $letter) === 1) {
+                $violations[] = "Excluded tech claim: \"{$tech}\" is on the excluded-stacks list and must never be claimed. Remove it, or name only an in-scope stack you actually work in.";
                 $flagged[$tech] = true;
             }
         }
 
+        // 2. PROJECT-STACK ATTRIBUTION. A claimable (core or secondary) stack
+        //    may be mentioned as a general capability, but never attributed to a
+        //    SPECIFIC named project whose own fact-sheet line does not list it.
+        $projectFacts = (string) $this->settings->get('project_facts', '');
+
+        if (trim($projectFacts) === '') {
+            return $violations;
+        }
+
+        $claimable = $this->stackPatterns(array_merge($stacks['core'], $stacks['secondary']));
         $projects = $this->parseProjectFacts($projectFacts);
 
         // Real false positive caught live: "...a guard-management SaaS with
@@ -261,7 +259,7 @@ class ProposalLinter
             usort($projectOccurrences, fn (array $a, array $b) => $a['pos'] <=> $b['pos']);
             $alreadyFlagged = [];
 
-            foreach (self::TECH_VOCABULARY as $tech => $pattern) {
+            foreach ($claimable as $tech => $pattern) {
                 if (isset($flagged[$tech]) || preg_match_all($pattern, $paragraph, $matches, PREG_OFFSET_CAPTURE) < 1) {
                     continue;
                 }
@@ -323,6 +321,67 @@ class ProposalLinter
         }
 
         return $projects;
+    }
+
+    /**
+     * Turn a list of stack names (from the operator's core/secondary/excluded
+     * settings) into name => safe-regex pairs.
+     *
+     * A hand-tuned pattern from TECH_VOCABULARY is used whenever one exists for
+     * the term (case-insensitive), because bare-word matching is dangerous for
+     * real tech names: "React" must be case-sensitive so it never fires on
+     * "react to feedback", "Node.js" must also catch "Node", and "Go" as a bare
+     * word would match ordinary English. Terms with no library entry get a
+     * generated word-boundary pattern; ultra-short terms (<= 2 chars, e.g. a
+     * bare "Go" or "C") with no library entry are skipped rather than risk a
+     * flood of false positives - add such a term to TECH_VOCABULARY with a
+     * tuned pattern to enforce it.
+     *
+     * @param  array<int, string>  $terms
+     * @return array<string, string> term => PCRE pattern
+     */
+    protected function stackPatterns(array $terms): array
+    {
+        static $library = null;
+
+        if ($library === null) {
+            $library = [];
+            foreach (self::TECH_VOCABULARY as $name => $pattern) {
+                $library[mb_strtolower($name)] = $pattern;
+            }
+        }
+
+        $patterns = [];
+
+        foreach ($terms as $term) {
+            $term = trim($term);
+
+            if ($term === '') {
+                continue;
+            }
+
+            $key = mb_strtolower($term);
+
+            if (isset($library[$key])) {
+                $patterns[$term] = $library[$key];
+
+                continue;
+            }
+
+            if (mb_strlen($term) <= 2) {
+                continue;
+            }
+
+            // Escape the term, then loosen it slightly: an escaped dot becomes
+            // optional (so "Node.js" also matches "Nodejs") and an escaped
+            // space allows any run of whitespace ("React Native" over a line
+            // break). Word-boundary anchored, case-insensitive.
+            $escaped = preg_quote($term, '/');
+            $escaped = str_replace(['\.', '\ '], ['\.?', '\s+'], $escaped);
+            $patterns[$term] = '/\b'.$escaped.'\b/iu';
+        }
+
+        return $patterns;
     }
 
     /**

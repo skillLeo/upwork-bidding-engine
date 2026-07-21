@@ -93,7 +93,10 @@ class ScoringService
             );
         }
 
-        $system = $rubric."\n\n".self::SUB_SCORES_SPEC;
+        // The stack lists are injected here, not hardcoded in the rubric text,
+        // so the scorer and the proposal writer read the exact same source of
+        // truth for what is in scope (see SettingsService::stackContext).
+        $system = $rubric."\n\n".$this->settings->stackContext()."\n\n".self::SUB_SCORES_SPEC;
 
         if ($this->settings->get('account_stage', 'stage_1_new') === 'stage_2_established') {
             $addendum = trim((string) $this->settings->get('stage_2_scoring_addendum'));

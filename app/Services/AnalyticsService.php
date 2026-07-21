@@ -109,7 +109,10 @@ class AnalyticsService
      */
     public function bestJobTypes(): array
     {
-        $keywords = $this->settings->get('stack_keywords', []);
+        // Core + secondary = the stacks actually worked in, which is what the
+        // "best job types" chart should reflect (excluded stacks are noise).
+        $stacks = $this->settings->stackLists();
+        $keywords = array_values(array_unique(array_merge($stacks['core'], $stacks['secondary'])));
         $rows = [];
 
         foreach ((array) $keywords as $keyword) {

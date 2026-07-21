@@ -553,7 +553,11 @@ class ProposalQualityGateTest extends TestCase
         $this->assertStringContainsString('SKILL RULES v2 MARKER', $system);
         $this->assertStringContainsString('PROJECT FACTS', $system);
         // Seeded default fact sheet rides along untouched.
-        $this->assertStringContainsString('Magento is not on this sheet', $system);
+        $this->assertStringContainsString('Anything not on this sheet', $system);
+        // The stack lists are injected as their own block, between the skill
+        // and the facts - the single source of truth for in-scope stacks.
+        $this->assertStringContainsString('CORE STACKS', $system);
+        $this->assertStringContainsString('EXCLUDED STACKS', $system);
         $this->assertStringContainsString('OUTPUT FORMAT (strict)', $system);
         $this->assertStringNotContainsString('TEACHING DOC MARKER', $system);
 

@@ -88,10 +88,37 @@ async function handleSave() {
         </div>
       </div>
 
-      <div>
-        <Label>Stack keywords</Label>
-        <TagInput v-model="form.stack_keywords" placeholder="Add a keyword and press Enter…" />
-        <FieldHint>Used for scoring context and the Analytics "best job types" chart.</FieldHint>
+      <div class="space-y-4 rounded-md border border-border bg-neutral-bg/40 p-4">
+        <p class="text-sm font-semibold text-text-primary">Your stacks</p>
+        <FieldHint>
+          The single source of truth for what you do. Scoring and proposal writing both read these
+          three lists — no stack is hardcoded anywhere else. Move a stack between lists and it takes
+          effect on the next score or rewrite, no deploy needed.
+        </FieldHint>
+
+        <div>
+          <Label>Core stacks — your lead pitch (score high, claim freely)</Label>
+          <TagInput v-model="form.core_stacks" placeholder="e.g. Laravel, Vue, Flutter…" />
+          <FieldHint>Left = most defensible. These are what you lead with and score highest.</FieldHint>
+        </div>
+
+        <div>
+          <Label>Secondary stacks — can do, not your lead story (score medium)</Label>
+          <TagInput v-model="form.secondary_stacks" placeholder="e.g. Node.js, React, MongoDB…" />
+          <FieldHint>
+            Score medium and may be mentioned as a capability, but never claimed as the core of a
+            named past project unless your project facts back it.
+          </FieldHint>
+        </div>
+
+        <div>
+          <Label>Excluded stacks — out of scope (score low, never claim)</Label>
+          <TagInput v-model="form.excluded_stacks" placeholder="e.g. Ruby, Go, .NET…" />
+          <FieldHint>
+            A job that core-requires one of these is a low score / no-bid, and the proposal linter
+            blocks any proposal that claims one.
+          </FieldHint>
+        </div>
       </div>
 
       <div>

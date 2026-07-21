@@ -176,9 +176,7 @@ class SettingsService
             ."\nGym_Saas: fitness SaaS platform. Laravel + Stripe. AI coaching, nutrition tracking, workout logging, social community features, recipe management, subscription billing."
             ."\nImage Text Editor: client-side image editing tool, no backend. Vanilla JS + Google Cloud Vision API + HTML5 Canvas. Upload, style, reposition, resize text on images with professional rendering."
             ."\nThynkTech: frontend theme/template, no backend. HTML + Bootstrap + CSS + JavaScript. Landing and inner pages (pricing, shop, product, blog, portfolio), static site."
-            ."\nStack: PHP, Laravel, Python, Django, FastAPI, Flask, Odoo, React, Next.js, Vue, Node, Express, MongoDB, MERN, TypeScript, JavaScript, jQuery, HTML, CSS, Flutter, React Native, Kotlin, Dart, MySQL, PostgreSQL, Firebase."
-            ."\nAnything not on this sheet is NOT in the track record and must never be claimed. Magento is not on this sheet. Never state or link a project URL - none are guaranteed to be live."
-            ."\nTechnologies NOT in Hassam's stack, never claim: Ruby, Ruby on Rails, Golang, Rust, Angular, GraphQL, Redis, Kubernetes, Docker, AWS Lambda, .NET, Java, Spring Boot, Symfony, WordPress, Shopify, Wix, Redux, Vuex, Nuxt, Svelte. If a job requires any of these, name only the closest real match honestly, and never attribute a technology to a named project that project's own line above doesn't list - even if that technology is real elsewhere in this sheet."],
+            ."\nAnything not on this sheet is NOT in the track record and must never be claimed. Never state or link a project URL - none are guaranteed to be live. The list of in-scope stacks (core, secondary, excluded) is supplied separately in the STACKS block; never attribute a technology to a named project above that that project's own line does not list, even if the technology is in scope generally."],
 
         // Proposal quality gate — every generated proposal is mechanically
         // linted (banned phrases, word count, signature, required phrases)
@@ -238,7 +236,31 @@ class SettingsService
         'min_budget' => ['group' => 'rules', 'secret' => false, 'default' => 150],
         'max_proposals' => ['group' => 'rules', 'secret' => false, 'default' => 25],
         'score_cutoff' => ['group' => 'rules', 'secret' => false, 'default' => 7],
+        // DEPRECATED flat list - superseded by core/secondary/excluded_stacks
+        // below, which the scorer, writer, and linter all read. Kept only so
+        // old persisted rows don't error; nothing reads it anymore.
         'stack_keywords' => ['group' => 'rules', 'secret' => false, 'default' => ['Laravel', 'PHP', 'Next.js', 'React', 'Node', 'MERN', 'Flutter', 'Python']],
+        // The single source of truth for what stacks are in scope, split by
+        // strength. The scoring rubric, the proposal writer, and the tech
+        // linter are all rendered from these three lists at prompt-build time -
+        // no stack name is hardcoded in any prompt text or in linter code.
+        // Core = lead pitch, claim freely, score high. Secondary = can do,
+        // score medium, may mention but never claim as a named project's core
+        // unless project_facts backs it. Excluded = out of scope, score low,
+        // never claim (the linter's deny-list).
+        'core_stacks' => ['group' => 'rules', 'secret' => false, 'default' => [
+            'PHP', 'Laravel', 'Vue', 'Flutter', 'Odoo', 'Python', 'Django', 'FastAPI', 'Flask',
+            'Next.js', 'TypeScript', 'React Native', 'Dart', 'Kotlin', 'HTML', 'CSS',
+            'MySQL', 'PostgreSQL', 'Firebase',
+        ]],
+        'secondary_stacks' => ['group' => 'rules', 'secret' => false, 'default' => [
+            'Node.js', 'React', 'JavaScript', 'Express', 'jQuery', 'MongoDB', 'MERN', 'REST API',
+        ]],
+        'excluded_stacks' => ['group' => 'rules', 'secret' => false, 'default' => [
+            'Go', 'Golang', 'Ruby', 'Ruby on Rails', 'Rust', 'Angular', '.NET', 'Java', 'Spring Boot',
+            'Symfony', 'Kubernetes', 'Redis', 'Docker', 'AWS Lambda', 'GraphQL', 'WordPress',
+            'Magento', 'Shopify', 'Wix', 'Redux', 'Vuex', 'Nuxt', 'Svelte',
+        ]],
         'hourly_floor' => ['group' => 'rules', 'secret' => false, 'default' => 8],
         'zero_history_budget_floor' => ['group' => 'rules', 'secret' => false, 'default' => 100],
         'red_flag_words' => ['group' => 'rules', 'secret' => false, 'default' => ['free test', 'unpaid sample', 'urgent no budget', 'revenue share only']],
@@ -506,15 +528,55 @@ class SettingsService
     }
 
     /**
+     * The three stack lists, cleaned (trimmed, blanks dropped). The single
+     * source of truth for stack scope, read by scoring, proposal writing, and
+     * the tech linter.
+     *
+     * @return array{core: array<int, string>, secondary: array<int, string>, excluded: array<int, string>}
+     */
+    public function stackLists(): array
+    {
+        $clean = fn (mixed $v): array => array_values(array_filter(array_map('trim', (array) $v), fn ($s) => $s !== ''));
+
+        return [
+            'core' => $clean($this->get('core_stacks')),
+            'secondary' => $clean($this->get('secondary_stacks')),
+            'excluded' => $clean($this->get('excluded_stacks')),
+        ];
+    }
+
+    /**
+     * The stack lists rendered as a static prompt block, injected verbatim
+     * into both the scoring rubric and the proposal writer so the two can
+     * never disagree about what is in scope. Stays byte-identical across calls
+     * (until the operator edits a list), so it lives inside the cached prefix.
+     */
+    public function stackContext(): string
+    {
+        $lists = $this->stackLists();
+        $fmt = fn (array $l): string => $l === [] ? 'none listed' : implode(', ', $l);
+
+        return "## STACKS (the only source of truth for what is in scope)\n"
+            ."CORE STACKS (strongest fit, lead with these, may claim freely): {$fmt($lists['core'])}.\n"
+            ."SECONDARY STACKS (can do, partial fit: may mention as a general capability, but never present one as the core of a specific named past project unless that project's own facts list it): {$fmt($lists['secondary'])}.\n"
+            ."EXCLUDED STACKS (out of scope: a job that core-requires one of these is a low score / no-bid, and none of these may ever be claimed): {$fmt($lists['excluded'])}.";
+    }
+
+    /**
      * @return array{min_budget: int, max_proposals: int, score_cutoff: int, stack_keywords: array<int, string>, hourly_floor: int, zero_history_budget_floor: int, red_flag_words: array<int, string>, followup_days: int, max_posted_age_days: int}
      */
     public function rules(): array
     {
+        // Legacy consumers (analytics chart, OpenClaw context, score-now
+        // command) asked for a single flat "keywords" list; core+secondary is
+        // now that list - everything in scope you actually build.
+        $stacks = $this->stackLists();
+
         return [
             'min_budget' => (int) $this->get('min_budget'),
             'max_proposals' => (int) $this->get('max_proposals'),
             'score_cutoff' => (int) $this->get('score_cutoff'),
-            'stack_keywords' => (array) $this->get('stack_keywords'),
+            'stack_keywords' => array_values(array_unique(array_merge($stacks['core'], $stacks['secondary']))),
             'hourly_floor' => (int) $this->get('hourly_floor'),
             'zero_history_budget_floor' => (int) $this->get('zero_history_budget_floor'),
             'red_flag_words' => (array) $this->get('red_flag_words'),
