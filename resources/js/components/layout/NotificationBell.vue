@@ -44,8 +44,10 @@ async function openItem(n) {
 
     <template v-if="open">
       <div class="fixed inset-0 z-30" @click="open = false" />
+      <!-- Mobile: a full-width sheet pinned below the nav (never clipped off
+           the left edge). Desktop: a right-anchored dropdown under the bell. -->
       <div
-        class="absolute right-0 z-40 mt-2 w-[360px] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-card border border-border bg-white shadow-popover"
+        class="fixed inset-x-3 top-[4.25rem] z-40 overflow-hidden rounded-card border border-border bg-white shadow-popover sm:absolute sm:inset-x-auto sm:top-full sm:right-0 sm:mt-2 sm:w-[380px]"
       >
         <div class="flex items-center justify-between border-b border-border px-4 py-3">
           <p class="text-sm font-semibold text-text-primary">Notifications</p>

@@ -54,16 +54,39 @@ async function poll() {
   }
 }
 
+// Show a notification cross-platform. On mobile Chrome the `new Notification()`
+// constructor throws ("Illegal constructor"), so we prefer the service worker's
+// showNotification() (the only path that works on mobile) and fall back to the
+// constructor on desktop browsers without an active SW.
+async function show(title, { body, tag, url }) {
+  const options = { body, tag, icon: "/favicon.svg", data: { url } };
+  try {
+    const reg = await navigator.serviceWorker?.ready;
+    if (reg?.showNotification) {
+      await reg.showNotification(title, options);
+      return true;
+    }
+  } catch {
+    /* fall through to the constructor */
+  }
+  try {
+    const notification = new Notification(title, options);
+    notification.onclick = () => {
+      window.focus();
+      if (url) window.location.href = url;
+    };
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function fire(lead) {
-  const notification = new Notification(`Fresh ${lead.score}/10 lead`, {
+  show(`Fresh ${lead.score}/10 lead`, {
     body: lead.title,
     tag: `lead-${lead.id}`,
-    icon: "/favicon.svg",
+    url: `/leads/${lead.id}`,
   });
-  notification.onclick = () => {
-    window.focus();
-    window.location.href = `/leads/${lead.id}`;
-  };
 }
 
 export async function enableLeadAlerts() {
@@ -99,14 +122,13 @@ export async function sendTestNotification() {
     return { ok: false, reason: permission === "denied" ? "denied" : "dismissed" };
   }
 
-  const notification = new Notification("SkillLeo test alert ✅", {
+  const shown = await show("SkillLeo test alert ✅", {
     body: "If you can see this on your phone, real-time lead alerts work on this device.",
     tag: "skillleo-test",
-    icon: "/favicon.svg",
+    url: "/leads",
   });
-  notification.onclick = () => window.focus();
 
-  return { ok: true };
+  return shown ? { ok: true } : { ok: false, reason: "unsupported" };
 }
 
 function startPolling() {

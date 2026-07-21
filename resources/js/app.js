@@ -13,3 +13,9 @@ const app = createApp(App);
 app.use(createPinia());
 app.use(router);
 app.mount("#app");
+
+// Register the notification service worker so alerts can display on mobile
+// Chrome (which can't use the `new Notification()` constructor). Best-effort.
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js").catch(() => {});
+}
