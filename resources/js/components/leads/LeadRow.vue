@@ -36,12 +36,25 @@ const to = computed(() =>
 const tier = computed(() => scoreTier(props.lead.score));
 const age = computed(() => compactAge(props.lead.posted_at));
 
-const railBorderClass = computed(
-  () =>
-    ({ success: "border-success", info: "border-info", neutral: "border-neutral" })[tier.value],
+// Priority is encoded through TYPOGRAPHY WEIGHT, not a colored left-border
+// strip (a well-known AI-generated-UI tell): worked leads recede, hot ones
+// lean forward. Color stays reserved for the score number and the age chip.
+const isDone = computed(() => ["sent", "replied", "won", "archived"].includes(props.lead.status));
+const isHot = computed(
+  () => props.lead.status === "ready" && (props.lead.score ?? 0) >= 7 && age.value.tier === "fresh",
 );
-const scoreClass = computed(
-  () => ({ success: "text-success", info: "text-info", neutral: "text-text-tertiary" })[tier.value],
+
+const scoreClass = computed(() =>
+  isDone.value
+    ? "text-text-tertiary"
+    : { success: "text-success", info: "text-info", neutral: "text-text-tertiary" }[tier.value],
+);
+const titleClass = computed(() =>
+  isDone.value
+    ? "font-normal text-text-tertiary"
+    : isHot.value
+      ? "font-semibold text-text-primary"
+      : "font-medium text-text-secondary",
 );
 const ageClass = computed(() =>
   cn(
@@ -169,7 +182,7 @@ function handleRowKeydown(event) {
       @click="expanded = !expanded"
       :aria-expanded="expanded"
       :aria-label="expanded ? 'Hide quick preview' : 'Show quick preview'"
-      :class="cn('relative flex h-full items-center justify-center border-l-[3px] transition-colors hover:bg-black/5', railBorderClass)"
+      class="relative flex h-full items-center justify-center border-l border-border transition-colors hover:bg-black/5"
     >
       <ChevronRight
         class="h-3.5 w-3.5 shrink-0 text-text-tertiary transition-transform"
@@ -188,7 +201,7 @@ function handleRowKeydown(event) {
       </span>
 
       <span class="flex min-w-0 items-center gap-1.5 py-2">
-        <span class="truncate font-medium">{{ lead.title }}</span>
+        <span class="truncate" :class="titleClass">{{ lead.title }}</span>
         <span
           v-if="lead.matches_filter === false"
           class="shrink-0 rounded-pill bg-danger-bg px-1.5 py-0 text-[10px] font-semibold whitespace-nowrap text-danger"
@@ -240,7 +253,7 @@ function handleRowKeydown(event) {
 
   <div
     v-if="expanded"
-    :class="cn('space-y-3 border-b border-border bg-neutral-bg/40 px-4 py-3 pl-[31px] text-sm', 'border-l-[3px]', railBorderClass)"
+    class="space-y-3 border-b border-l border-border bg-neutral-bg/40 px-4 py-3 pl-[31px] text-sm"
   >
     <div v-if="lead.skills?.length" class="flex flex-wrap items-center gap-1.5">
       <span

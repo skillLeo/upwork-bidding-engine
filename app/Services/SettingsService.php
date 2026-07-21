@@ -261,6 +261,12 @@ class SettingsService
             'Symfony', 'Kubernetes', 'Redis', 'Docker', 'AWS Lambda', 'GraphQL', 'WordPress',
             'Magento', 'Shopify', 'Wix', 'Redux', 'Vuex', 'Nuxt', 'Svelte',
         ]],
+        // Priority-sort decay: the leads list's default "Priority" order is
+        // score minus (hours-since-posted * this rate), so a high score fades
+        // in position as the lead ages and a fresh mid-score can outrank a
+        // stale high-score. At 0.05, a 9 loses ~1 point every 20h; a 9 from 2
+        // days back (score 6.6) drops below a 7 posted minutes ago. Tune here.
+        'priority_decay_rate' => ['group' => 'rules', 'secret' => false, 'default' => 0.05],
         'hourly_floor' => ['group' => 'rules', 'secret' => false, 'default' => 8],
         'zero_history_budget_floor' => ['group' => 'rules', 'secret' => false, 'default' => 100],
         'red_flag_words' => ['group' => 'rules', 'secret' => false, 'default' => ['free test', 'unpaid sample', 'urgent no budget', 'revenue share only']],

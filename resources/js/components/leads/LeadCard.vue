@@ -32,6 +32,21 @@ const scoreBadgeClass = computed(
 );
 
 const age = computed(() => compactAge(props.lead.posted_at));
+
+// Same weight-based priority encoding as the desktop row: worked leads recede,
+// hot ones lean forward. No colored border strip here either.
+const isDone = computed(() => ["sent", "replied", "won", "archived"].includes(props.lead.status));
+const isHot = computed(
+  () => props.lead.status === "ready" && (props.lead.score ?? 0) >= 7 && age.value.tier === "fresh",
+);
+const titleClass = computed(() =>
+  isDone.value
+    ? "font-normal text-text-tertiary"
+    : isHot.value
+      ? "font-semibold text-text-primary"
+      : "font-medium text-text-secondary",
+);
+
 const urgency = computed(() => urgencyTier(props.lead.posted_at));
 const urgencyBadgeClass = computed(
   () =>
@@ -93,7 +108,7 @@ function handleOpen() {
     </div>
 
     <button type="button" class="block w-full text-left" @click="handleOpen">
-      <p class="line-clamp-2 text-sm font-medium text-text-primary">{{ lead.title }}</p>
+      <p class="line-clamp-2 text-sm" :class="titleClass">{{ lead.title }}</p>
     </button>
 
     <div class="flex flex-wrap items-center gap-1.5 text-xs text-text-secondary">

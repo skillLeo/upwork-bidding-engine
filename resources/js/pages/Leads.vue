@@ -36,15 +36,59 @@ import EmptyState from "@/components/ui/EmptyState.vue";
 import LeadRowSkeleton from "@/components/ui/LeadRowSkeleton.vue";
 
 const sortOptions = [
+  { value: "-priority", label: "Priority (score + freshness)" },
   { value: "-posted_at", label: "Recently posted" },
-  { value: "-attention", label: "Attention (ready, highest score, freshest)" },
-  { value: "-created_at", label: "Newest first" },
   { value: "-score", label: "Highest score" },
+  { value: "-created_at", label: "Newest first" },
   { value: "-budget_max", label: "Highest budget" },
   { value: "-proposal_count", label: "Most proposals" },
   { value: "-connects_required", label: "Most connects required" },
   { value: "posted_at", label: "Oldest posted" },
 ];
+
+// Group and Sort are independent controls (Linear/Attio pattern): grouping
+// partitions the loaded rows into labelled sections; sorting orders rows
+// within (and the groups by) their natural key. Default: no grouping.
+const groupOptions = [
+  { value: "none", label: "No grouping" },
+  { value: "status", label: "Group: Status" },
+  { value: "score_tier", label: "Group: Score tier" },
+  { value: "date_posted", label: "Group: Date posted" },
+];
+
+const statusLabels = {
+  new: "New",
+  scoring: "Scoring",
+  needs_review: "Needs review",
+  ready: "Ready",
+  sent: "Sent",
+  replied: "Replied",
+  won: "Won",
+  archived: "Archived",
+};
+const statusOrder = ["ready", "needs_review", "new", "scoring", "sent", "replied", "won", "archived"];
+
+function datePostedLabel(iso) {
+  if (!iso) return "Unknown date";
+  const posted = new Date(iso);
+  const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffDays = Math.round((startOfDay(new Date()) - startOfDay(posted)) / 86_400_000);
+  if (diffDays <= 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  return posted.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    ...(posted.getFullYear() !== new Date().getFullYear() && { year: "numeric" }),
+  });
+}
+
+function scoreTierBucket(score) {
+  if (score == null) return { key: "z-none", label: "Not scored", order: 4 };
+  if (score >= 9) return { key: "a", label: "9–10 · Top", order: 0 };
+  if (score >= 7) return { key: "b", label: "7–8 · Strong", order: 1 };
+  if (score >= 5) return { key: "c", label: "5–6 · Maybe", order: 2 };
+  return { key: "d", label: "Below 5", order: 3 };
+}
 
 // Column headers double as the second, more direct way to sort (click to
 // sort, click again to flip direction) — the dropdown above stays as a
@@ -143,7 +187,8 @@ function removeSearchChip(chip) {
 const page = ref(route.query.page ? Number(route.query.page) : 1);
 const perPage = ref(route.query.per_page ? Number(route.query.per_page) : 50);
 const perPageOptions = [25, 50, 100];
-const sortParam = ref(route.query.sort ?? "-posted_at");
+const sortParam = ref(route.query.sort ?? "-priority");
+const groupBy = ref(route.query.group ?? "none");
 const mobileFiltersOpen = ref(false);
 const mobileFilterCount = computed(
   () => (status.value !== "all" ? 1 : 0) + (scoreMin.value ? 1 : 0),
@@ -185,14 +230,15 @@ watch([status, scoreMin, postedFrom, postedTo, search, sortParam, activeFilterId
 // exact same view instead of resetting to defaults. Posted-date range is
 // deliberately excluded: DateRangeFilter always re-applies its own "last 3
 // days" default on mount, so restoring it here would just get overwritten.
-watch([status, scoreMin, search, sortParam, page, perPage, activeFilterId], () => {
+watch([status, scoreMin, search, sortParam, groupBy, page, perPage, activeFilterId], () => {
   router.replace({
     path: route.path,
     query: {
       ...(status.value !== "all" && { status: status.value }),
       ...(scoreMin.value && { score_min: scoreMin.value }),
       ...(search.value && { search: search.value }),
-      ...(sortParam.value !== "-posted_at" && { sort: sortParam.value }),
+      ...(sortParam.value !== "-priority" && { sort: sortParam.value }),
+      ...(groupBy.value !== "none" && { group: groupBy.value }),
       ...(page.value !== 1 && { page: page.value }),
       ...(perPage.value !== 50 && { per_page: perPage.value }),
       ...(activeFilterId.value != null && { filter: activeFilterId.value }),
@@ -219,6 +265,36 @@ const leadFilters = computed(() => ({
 }));
 
 const { leads, meta, isLoading, refetch } = useLeads(leadFilters);
+
+// Partition the loaded, already-sorted rows into labelled sections. Grouping
+// never reorders within a group (the sort still owns row order); it only
+// slices the list and orders the sections by their natural key. "none" yields
+// a single unlabelled section so the template always renders the same way.
+const leadGroups = computed(() => {
+  if (groupBy.value === "none") {
+    return [{ key: "__all__", label: null, leads: leads.value }];
+  }
+  const map = new Map();
+  const add = (key, label, order, lead) => {
+    if (!map.has(key)) map.set(key, { key, label, order, leads: [] });
+    map.get(key).leads.push(lead);
+  };
+  for (const lead of leads.value) {
+    if (groupBy.value === "status") {
+      const order = statusOrder.indexOf(lead.status);
+      add(lead.status, statusLabels[lead.status] ?? lead.status, order === -1 ? 99 : order, lead);
+    } else if (groupBy.value === "score_tier") {
+      const t = scoreTierBucket(lead.score);
+      add(t.key, t.label, t.order, lead);
+    } else {
+      // date_posted — order sections newest day first.
+      const label = datePostedLabel(lead.posted_at);
+      const order = -(lead.posted_at ? new Date(lead.posted_at).setHours(0, 0, 0, 0) : 0);
+      add(label, label, order, lead);
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => a.order - b.order);
+});
 
 // "What it understood" - the signature element. Only present once a search
 // has actually run (meta comes back empty on a plain unfiltered browse).
@@ -407,7 +483,18 @@ async function handleSync() {
             </div>
 
             <select
+              v-model="groupBy"
+              aria-label="Group leads by"
+              class="h-9 shrink-0 rounded-md border border-border-strong bg-white px-2.5 text-xs font-medium text-text-secondary focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none"
+            >
+              <option v-for="opt in groupOptions" :key="opt.value" :value="opt.value">
+                {{ opt.label }}
+              </option>
+            </select>
+
+            <select
               v-model="sortParam"
+              aria-label="Sort leads by"
               class="h-9 shrink-0 rounded-md border border-border-strong bg-white px-2.5 text-xs font-medium text-text-secondary focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none"
             >
               <option v-for="opt in dropdownOptions" :key="opt.value" :value="opt.value">
@@ -499,9 +586,18 @@ async function handleSync() {
             <template v-if="isLoading">
               <div v-for="i in 8" :key="i" class="h-[124px] animate-pulse rounded-lg bg-neutral-bg" />
             </template>
-            <template v-else>
+            <template v-else v-for="group in leadGroups" :key="group.key">
+              <div
+                v-if="group.label"
+                class="sticky top-0 z-10 -mx-1 flex items-center gap-2 bg-bg/90 px-1 py-1.5 backdrop-blur"
+              >
+                <span class="text-xs font-semibold text-text-secondary">{{ group.label }}</span>
+                <span class="rounded-pill bg-neutral-bg px-1.5 text-[11px] font-medium text-text-tertiary">
+                  {{ group.leads.length }}
+                </span>
+              </div>
               <LeadCard
-                v-for="lead in leads"
+                v-for="lead in group.leads"
                 :key="lead.id"
                 :lead="lead"
                 :active-filter-id="activeFilterId"
@@ -554,9 +650,18 @@ async function handleSync() {
               <template v-if="isLoading">
                 <LeadRowSkeleton v-for="i in 20" :key="i" />
               </template>
-              <template v-else>
+              <template v-else v-for="group in leadGroups" :key="group.key">
+                <div
+                  v-if="group.label"
+                  class="sticky top-0 z-[5] flex items-center gap-2 border-b border-border bg-neutral-bg/80 px-3 py-1.5 backdrop-blur"
+                >
+                  <span class="text-[11px] font-semibold tracking-wide text-text-secondary uppercase">
+                    {{ group.label }}
+                  </span>
+                  <span class="text-[11px] text-text-tertiary">{{ group.leads.length }}</span>
+                </div>
                 <LeadRow
-                  v-for="lead in leads"
+                  v-for="lead in group.leads"
                   :key="lead.id"
                   :lead="lead"
                   :active-filter-id="activeFilterId"

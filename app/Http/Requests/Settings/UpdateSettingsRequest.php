@@ -103,6 +103,7 @@ class UpdateSettingsRequest extends FormRequest
             'secondary_stacks.*' => ['string', 'max:50'],
             'excluded_stacks' => ['sometimes', 'array'],
             'excluded_stacks.*' => ['string', 'max:50'],
+            'priority_decay_rate' => ['sometimes', 'numeric', 'min:0', 'max:1'],
             'hourly_floor' => ['sometimes', 'integer', 'min:0'],
             'zero_history_budget_floor' => ['sometimes', 'integer', 'min:0'],
             'red_flag_words' => ['sometimes', 'array'],

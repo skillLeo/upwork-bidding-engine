@@ -72,7 +72,24 @@ class LeadController extends Controller
 
         $sort = (string) $request->query('sort', '-posted_at');
 
-        if (ltrim($sort, '-') === 'attention') {
+        if (ltrim($sort, '-') === 'priority') {
+            // Priority = score minus a continuous age penalty, so a fresh
+            // mid-score can outrank a stale high-score (unlike the lexicographic
+            // "attention" sort, where score always dominates). The decay rate
+            // is operator-tunable. Age is computed DB-side (differs by driver)
+            // so ordering stays correct across pages, not just the loaded rows.
+            $decay = (float) app(\App\Services\SettingsService::class)->get('priority_decay_rate', 0.05);
+            $ageHours = $query->getConnection()->getDriverName() === 'sqlite'
+                ? "((julianday('now') - julianday(posted_at)) * 24.0)"
+                : 'TIMESTAMPDIFF(SECOND, posted_at, NOW()) / 3600.0';
+            $direction = str_starts_with($sort, '-') ? 'desc' : 'asc';
+
+            // COALESCE keeps unscored / undated leads from poisoning the sort:
+            // no score counts as 0, no posted_at as no age penalty.
+            $query->orderByRaw("(COALESCE(score, 0) - COALESCE({$ageHours}, 0) * ?) {$direction}", [$decay])
+                ->orderByDesc('score')
+                ->orderBy('id', 'desc');
+        } elseif (ltrim($sort, '-') === 'attention') {
             // Default browse order: still-unbid ready leads surface first,
             // highest score next, freshest last — matches actual bidding
             // priority (a 9/10 posted 20 minutes ago beats a 7/10 from
