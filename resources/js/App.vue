@@ -24,12 +24,21 @@ onMounted(() => {
   <AiProgressToast />
   <Toaster
     position="top-right"
+    theme="light"
+    rich-colors
+    close-button
+    :duration="4500"
+    :gap="12"
+    :offset="20"
     :toast-options="{
+      class: 'skl-toast',
       style: {
-        borderRadius: '8px',
-        border: '1px solid var(--color-border)',
-        boxShadow: 'var(--shadow-popover)',
-        fontSize: '14px',
+        borderRadius: '12px',
+        padding: '14px 16px',
+        fontSize: '13.5px',
+        fontWeight: '500',
+        boxShadow:
+          '0 16px 40px -16px rgba(16, 24, 40, 0.32), 0 0 0 1px rgba(16, 24, 40, 0.05)',
       },
     }"
   />

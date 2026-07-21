@@ -181,3 +181,48 @@ body {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* --- Toast (vue-sonner) polish ---------------------------------------------
+   Premium, professional alerts: crisp icon/text alignment, a subtle divider-
+   free layout, and a close button that only reveals on hover. rich-colors on
+   the Toaster supplies the semantic success/error/warning/info palettes. */
+[data-sonner-toaster] {
+  --width: 380px;
+  font-family: inherit;
+}
+[data-sonner-toast] {
+  align-items: flex-start;
+  gap: 12px;
+  line-height: 1.45;
+  letter-spacing: -0.006em;
+  -webkit-font-smoothing: antialiased;
+}
+[data-sonner-toast] [data-icon] {
+  margin-top: 1px;
+}
+[data-sonner-toast] [data-icon] > svg {
+  width: 18px;
+  height: 18px;
+}
+[data-sonner-toast] [data-title] {
+  font-weight: 600;
+}
+[data-sonner-toast] [data-description] {
+  font-weight: 500;
+  opacity: 0.85;
+  margin-top: 2px;
+}
+/* Close button: hidden until hover, then a clean, understated control. */
+[data-sonner-toast] [data-close-button] {
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease;
+  background: transparent;
+  border-color: transparent;
+}
+[data-sonner-toast]:hover [data-close-button] {
+  opacity: 0.7;
+}
+[data-sonner-toast] [data-close-button]:hover {
+  opacity: 1;
+  background: rgba(16, 24, 40, 0.06);
+}
