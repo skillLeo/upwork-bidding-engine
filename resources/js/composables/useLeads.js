@@ -42,6 +42,13 @@ export function buildQuery(filters) {
   return params.toString();
 }
 
+// Module-scoped stale-while-revalidate cache, keyed by query string. The app
+// server responds in ~40ms; the felt slowness is network round-trip to the
+// datacenter, so the highest-impact win is to NOT block navigation on it -
+// show the last results for this exact query instantly, then revalidate
+// silently in the background.
+const leadsCache = new Map();
+
 /**
  * `filtersRef` may be a plain object or a getter/ref - re-fetches whenever
  * its serialized query string actually changes (not on every render), same
@@ -54,13 +61,13 @@ export function useLeads(filtersRef) {
   const error = ref(null);
 
   async function fetchLeads({ silent = false } = {}) {
-    const filters = toValue(filtersRef);
-    const query = buildQuery(filters);
+    const query = buildQuery(toValue(filtersRef));
     if (!silent) isLoading.value = true;
     try {
       const res = await apiClient.get(`/leads${query ? `?${query}` : ""}`);
       leads.value = res.data.data;
       meta.value = res.data.meta;
+      leadsCache.set(query, { data: res.data.data, meta: res.data.meta });
       error.value = null;
     } catch (e) {
       // A background poll failing silently is fine - the next tick retries.
@@ -72,7 +79,18 @@ export function useLeads(filtersRef) {
 
   watch(
     () => buildQuery(toValue(filtersRef)),
-    () => fetchLeads(),
+    (query) => {
+      const cached = leadsCache.get(query);
+      if (cached) {
+        // Instant paint from cache, then revalidate without a loading flicker.
+        leads.value = cached.data;
+        meta.value = cached.meta;
+        isLoading.value = false;
+        fetchLeads({ silent: true });
+      } else {
+        fetchLeads();
+      }
+    },
     { immediate: true },
   );
 

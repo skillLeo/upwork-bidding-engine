@@ -18,9 +18,24 @@ class ProfileTest extends TestCase
         $this->putJson('/api/profile', ['name' => 'X', 'email' => 'x@x.com'])->assertStatus(401);
     }
 
+    public function test_bidder_is_forbidden_from_profile_management(): void
+    {
+        // Account management is admin-only; the bidder account is locked to
+        // the leads workflow (also hidden in the SPA nav + router).
+        $bidder = User::factory()->bidder()->create();
+
+        $this->actingAs($bidder, 'sanctum')
+            ->putJson('/api/profile', ['name' => 'X', 'email' => 'x@skillleo.test'])
+            ->assertStatus(403);
+
+        $this->actingAs($bidder, 'sanctum')
+            ->putJson('/api/profile/two-factor', ['enabled' => true])
+            ->assertStatus(403);
+    }
+
     public function test_name_only_change_does_not_require_current_password(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->admin()->create();
 
         $this->actingAs($user, 'sanctum')
             ->putJson('/api/profile', ['name' => 'New Name', 'email' => $user->email])
@@ -32,7 +47,7 @@ class ProfileTest extends TestCase
 
     public function test_changing_email_without_current_password_is_rejected(): void
     {
-        $user = User::factory()->create(['email' => 'old@skillleo.test']);
+        $user = User::factory()->admin()->create(['email' => 'old@skillleo.test']);
 
         $this->actingAs($user, 'sanctum')
             ->putJson('/api/profile', ['name' => $user->name, 'email' => 'new-email@skillleo.test'])
@@ -43,7 +58,7 @@ class ProfileTest extends TestCase
 
     public function test_changing_email_with_wrong_current_password_is_rejected(): void
     {
-        $user = User::factory()->create(['email' => 'old@skillleo.test', 'password' => 'correct-password']);
+        $user = User::factory()->admin()->create(['email' => 'old@skillleo.test', 'password' => 'correct-password']);
 
         $this->actingAs($user, 'sanctum')
             ->putJson('/api/profile', [
@@ -58,7 +73,7 @@ class ProfileTest extends TestCase
 
     public function test_changing_email_with_correct_current_password_succeeds(): void
     {
-        $user = User::factory()->create(['email' => 'old@skillleo.test', 'password' => 'correct-password']);
+        $user = User::factory()->admin()->create(['email' => 'old@skillleo.test', 'password' => 'correct-password']);
 
         $this->actingAs($user, 'sanctum')
             ->putJson('/api/profile', [
@@ -72,8 +87,8 @@ class ProfileTest extends TestCase
 
     public function test_email_must_be_unique_across_other_users(): void
     {
-        $other = User::factory()->create(['email' => 'taken@skillleo.test']);
-        $user = User::factory()->create(['password' => 'correct-password']);
+        $other = User::factory()->admin()->create(['email' => 'taken@skillleo.test']);
+        $user = User::factory()->admin()->create(['password' => 'correct-password']);
 
         $this->actingAs($user, 'sanctum')
             ->putJson('/api/profile', [
@@ -86,7 +101,7 @@ class ProfileTest extends TestCase
 
     public function test_updating_own_profile_with_the_same_email_is_allowed(): void
     {
-        $user = User::factory()->create(['email' => 'me@skillleo.test']);
+        $user = User::factory()->admin()->create(['email' => 'me@skillleo.test']);
 
         $this->actingAs($user, 'sanctum')
             ->putJson('/api/profile', ['name' => 'Still Me', 'email' => 'me@skillleo.test'])
@@ -95,7 +110,7 @@ class ProfileTest extends TestCase
 
     public function test_wrong_current_password_is_rejected(): void
     {
-        $user = User::factory()->create(['password' => 'correct-password']);
+        $user = User::factory()->admin()->create(['password' => 'correct-password']);
 
         $this->actingAs($user, 'sanctum')
             ->putJson('/api/profile/password', [
@@ -110,7 +125,7 @@ class ProfileTest extends TestCase
 
     public function test_correct_current_password_updates_and_revokes_other_tokens(): void
     {
-        $user = User::factory()->create(['password' => 'correct-password']);
+        $user = User::factory()->admin()->create(['password' => 'correct-password']);
         $otherToken = $user->createToken('other-device')->plainTextToken;
         $otherTokenId = (int) explode('|', $otherToken)[0];
 
@@ -132,7 +147,7 @@ class ProfileTest extends TestCase
     public function test_user_can_upload_an_avatar(): void
     {
         Storage::fake('public');
-        $user = User::factory()->create();
+        $user = User::factory()->admin()->create();
         $file = UploadedFile::fake()->image('avatar.jpg');
 
         $response = $this->actingAs($user, 'sanctum')
@@ -148,7 +163,7 @@ class ProfileTest extends TestCase
     public function test_non_image_avatar_upload_is_rejected(): void
     {
         Storage::fake('public');
-        $user = User::factory()->create();
+        $user = User::factory()->admin()->create();
         $file = UploadedFile::fake()->create('not-an-image.pdf', 100);
 
         $this->actingAs($user, 'sanctum')
@@ -161,7 +176,7 @@ class ProfileTest extends TestCase
         // SVG can carry an inline <script> - explicitly excluded even
         // though Laravel's generic `image` rule would normally allow it.
         Storage::fake('public');
-        $user = User::factory()->create();
+        $user = User::factory()->admin()->create();
         $file = UploadedFile::fake()->create('avatar.svg', 10, 'image/svg+xml');
 
         $this->actingAs($user, 'sanctum')
@@ -171,7 +186,7 @@ class ProfileTest extends TestCase
 
     public function test_user_can_toggle_two_factor(): void
     {
-        $user = User::factory()->create(['two_factor_enabled' => false]);
+        $user = User::factory()->admin()->create(['two_factor_enabled' => false]);
 
         $this->actingAs($user, 'sanctum')
             ->putJson('/api/profile/two-factor', ['enabled' => true])
