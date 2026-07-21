@@ -110,6 +110,12 @@ class SendLeadRemindersCommand extends Command
                 'reminder_number' => $dueReminderNumber,
                 'minutes_since_notified' => $minutesSinceNotified,
             ]);
+
+            // Mirror the WhatsApp reminder into the in-app bell (best-effort).
+            app(\App\Services\NotificationService::class)->reminder(
+                $lead,
+                "Still unbid: {$lead->score}/10 \"{$lead->title}\" — reminder {$dueReminderNumber} of 2.",
+            );
         } catch (\Throwable $e) {
             report($e);
         }

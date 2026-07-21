@@ -138,6 +138,14 @@ class ScoreLeadJob implements ShouldQueue
         ]);
 
         if ($isReady) {
+            // In-app bell notification — created here (not inside NotifyBidderJob)
+            // so it lands even if the WhatsApp/browser path fails. Best-effort.
+            try {
+                app(\App\Services\NotificationService::class)->leadReady($lead);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+
             // Sync, not queued: the whole point of scoring inline on the
             // webhook is that a bidder gets the WhatsApp alert within
             // seconds — queuing this step back up would reintroduce the

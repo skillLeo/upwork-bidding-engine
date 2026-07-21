@@ -6,6 +6,7 @@ import NavBar from "@/components/layout/NavBar.vue";
 import AiProgressToast from "@/components/ui/AiProgressToast.vue";
 import { useBrandingStore } from "@/stores/branding";
 import { initLeadAlerts } from "@/stores/leadAlerts";
+import { initNotifications } from "@/stores/notifications";
 
 const route = useRoute();
 const showNav = computed(() => route.name !== "login");
@@ -13,6 +14,7 @@ const showNav = computed(() => route.name !== "login");
 onMounted(() => {
   useBrandingStore().fetch();
   initLeadAlerts();
+  initNotifications();
 });
 </script>
 

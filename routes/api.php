@@ -111,6 +111,15 @@ Route::middleware('auth:sanctum')->group(function () {
     | than owned per-user (this is a single-bidder tool, not multi-tenant).
     |----------------------------------------------------------------------
     */
+    /*
+    |----------------------------------------------------------------------
+    | In-app notifications (the bell) — account-wide, both roles.
+    |----------------------------------------------------------------------
+    */
+    Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'index']);
+    Route::post('/notifications/read-all', [\App\Http\Controllers\NotificationController::class, 'markAllRead']);
+    Route::post('/notifications/{notification}/read', [\App\Http\Controllers\NotificationController::class, 'markRead']);
+
     Route::get('/saved-filters', [SavedFilterController::class, 'index']);
     Route::post('/saved-filters', [SavedFilterController::class, 'store']);
     Route::put('/saved-filters/{savedFilter}', [SavedFilterController::class, 'update']);

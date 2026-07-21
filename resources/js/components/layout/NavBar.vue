@@ -7,6 +7,7 @@ import { useAuthStore } from "@/stores/auth";
 import { useBrandingStore } from "@/stores/branding";
 import { apiClient } from "@/lib/api-client";
 import Avatar from "@/components/ui/Avatar.vue";
+import NotificationBell from "@/components/layout/NotificationBell.vue";
 import { cn, initials } from "@/lib/utils";
 
 const route = useRoute();
@@ -92,7 +93,10 @@ async function handleLogout() {
         </nav>
       </div>
 
-      <div class="relative">
+      <div class="flex items-center gap-1 sm:gap-2">
+        <NotificationBell v-if="auth.token" />
+
+        <div class="relative">
         <button
           @click="menuOpen = !menuOpen"
           class="flex items-center gap-2 rounded-full py-1 pr-2.5 pl-1 transition-colors hover:bg-black/5"
@@ -135,6 +139,7 @@ async function handleLogout() {
             </button>
           </div>
         </template>
+        </div>
       </div>
     </div>
   </header>
