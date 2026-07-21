@@ -8,7 +8,6 @@ use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -80,11 +79,16 @@ class AppServiceProvider extends ServiceProvider
      */
     protected function configureDynamicMail(): void
     {
-        if (! Schema::hasTable('settings')) {
+        // This runs on EVERY request boot, so it must not add a database
+        // round-trip on the happy path. mailConfig() reads the cached settings;
+        // on a fresh install where the settings table doesn't exist yet the
+        // read throws, and we simply bail - no per-request Schema::hasTable()
+        // metadata query (that query alone was ~1 DB round-trip on every hit).
+        try {
+            $mail = app(SettingsService::class)->mailConfig();
+        } catch (\Throwable) {
             return;
         }
-
-        $mail = app(SettingsService::class)->mailConfig();
 
         if ($mail['host'] === '') {
             return;
