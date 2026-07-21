@@ -119,7 +119,6 @@ async function handleLogout() {
               </span>
             </div>
             <router-link
-              v-if="auth.isAdmin"
               to="/profile"
               @click="menuOpen = false"
               class="flex w-full items-center gap-2 px-3 py-2 text-sm text-text-secondary transition-colors hover:bg-black/5 hover:text-text-primary"

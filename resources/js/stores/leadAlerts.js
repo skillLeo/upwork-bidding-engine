@@ -1,5 +1,6 @@
 import { reactive } from "vue";
 import { apiClient } from "@/lib/api-client";
+import { useAuthStore } from "@/stores/auth";
 
 // Browser-push failover for WhatsApp, scoped to "the dashboard is open in
 // some tab" (the Notification API needs no service worker or VAPID keys
@@ -18,6 +19,10 @@ let timer = null;
 let seenIds = null;
 
 async function poll() {
+  // Never poll while signed out - an unauthenticated background poll would
+  // 401 and (before this) could contribute to a spurious logout.
+  if (!useAuthStore().token) return;
+
   let leads;
   try {
     const res = await apiClient.get("/leads", {

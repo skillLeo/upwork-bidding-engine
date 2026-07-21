@@ -25,7 +25,7 @@ const routes = [
     path: "/profile",
     name: "profile",
     component: () => import("@/pages/Profile.vue"),
-    meta: { requiresAuth: true, adminOnly: true },
+    meta: { requiresAuth: true },
   },
   {
     path: "/leads",
@@ -79,7 +79,8 @@ router.beforeEach((to) => {
   const auth = useAuthStore();
 
   if (to.meta.requiresAuth && !auth.token) {
-    return { name: "login" };
+    // Preserve where they were headed so login can return them there.
+    return { name: "login", query: to.fullPath !== "/" ? { redirect: to.fullPath } : {} };
   }
 
   if (to.meta.adminOnly && !auth.isAdmin) {
@@ -91,6 +92,14 @@ router.beforeEach((to) => {
   }
 
   return true;
+});
+
+// Remember the last real page the user was on, so a later sign-in (even after
+// a deliberate logout on another day) can drop them back exactly where they left.
+router.afterEach((to) => {
+  if (to.name && to.name !== "login") {
+    useAuthStore().rememberRoute(to.fullPath);
+  }
 });
 
 export default router;

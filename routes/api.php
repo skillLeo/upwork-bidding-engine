@@ -74,18 +74,14 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /*
     |----------------------------------------------------------------------
-    | Profile — admin only. The bidder account is deliberately locked to the
-    | leads workflow; account management (name/email/password/2FA/avatar)
-    | belongs to the admin. Enforced here (the real boundary) and hidden in
-    | the SPA nav + router.
+    | Profile — every authenticated user manages their own account (name,
+    | email, password, 2FA, avatar), bidder and admin alike.
     |----------------------------------------------------------------------
     */
-    Route::middleware('role:admin')->group(function () {
-        Route::put('/profile', [ProfileController::class, 'update']);
-        Route::put('/profile/password', [ProfileController::class, 'updatePassword']);
-        Route::post('/profile/avatar', [ProfileController::class, 'uploadAvatar']);
-        Route::put('/profile/two-factor', [ProfileController::class, 'toggleTwoFactor']);
-    });
+    Route::put('/profile', [ProfileController::class, 'update']);
+    Route::put('/profile/password', [ProfileController::class, 'updatePassword']);
+    Route::post('/profile/avatar', [ProfileController::class, 'uploadAvatar']);
+    Route::put('/profile/two-factor', [ProfileController::class, 'toggleTwoFactor']);
 
     /*
     |----------------------------------------------------------------------

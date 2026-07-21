@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { toast } from "vue-sonner";
 import { AlertTriangle, Lock, Mail } from "@lucide/vue";
 import { apiClient, apiErrorMessage } from "@/lib/api-client";
@@ -12,12 +12,21 @@ import Label from "@/components/ui/Label.vue";
 import FieldError from "@/components/ui/FieldError.vue";
 
 const router = useRouter();
+const route = useRoute();
 const auth = useAuthStore();
 
 const email = ref("");
 const password = ref("");
+const remember = ref(true);
 const errors = ref({});
 const submitting = ref(false);
+
+// Where to land after signing in: an explicit ?redirect (from a guarded route
+// or an expired session), else the last page this browser was on, else Leads.
+function landing() {
+  const target = route.query.redirect || auth.takeLastRoute();
+  return typeof target === "string" && target.startsWith("/") ? target : "/leads";
+}
 
 // Set when login() responds with { requires_otp: true, challenge } instead
 // of a token — swaps the form to the code-entry step, same page.
@@ -46,9 +55,9 @@ async function quickLogin(role) {
   submitting.value = true;
   try {
     const res = await apiClient.post("/auth/dev-login", { role });
-    auth.setAuth(res.data.data.token, res.data.data.user);
+    auth.setAuth(res.data.data.token, res.data.data.user, remember.value);
     toast.success(`Signed in as ${role}.`);
-    router.replace({ name: "leads" });
+    router.replace(landing());
   } catch (error) {
     toast.error(apiErrorMessage(error, `Could not sign in as ${role}.`));
   } finally {
@@ -70,9 +79,9 @@ async function onSubmit() {
       return;
     }
 
-    auth.setAuth(res.data.data.token, res.data.data.user);
+    auth.setAuth(res.data.data.token, res.data.data.user, remember.value);
     toast.success("Welcome back.");
-    router.replace({ name: "leads" });
+    router.replace(landing());
   } catch (error) {
     toast.error(apiErrorMessage(error, "Could not log in."));
   } finally {
@@ -92,9 +101,9 @@ async function onVerifyOtp() {
       challenge: otpChallenge.value,
       code: otpCode.value,
     });
-    auth.setAuth(res.data.data.token, res.data.data.user);
+    auth.setAuth(res.data.data.token, res.data.data.user, remember.value);
     toast.success("Welcome back.");
-    router.replace({ name: "leads" });
+    router.replace(landing());
   } catch (error) {
     otpError.value = apiErrorMessage(error, "That code is incorrect or has expired.");
   } finally {
@@ -182,6 +191,14 @@ function backToPassword() {
           </div>
           <FieldError :text="errors.password" />
         </div>
+        <label class="flex items-center gap-2 text-sm text-text-secondary select-none">
+          <input
+            type="checkbox"
+            v-model="remember"
+            class="h-4 w-4 rounded border-border-strong text-primary focus:ring-2 focus:ring-primary/30"
+          />
+          Keep me signed in on this device
+        </label>
         <Button type="submit" class="w-full" size="lg" :loading="submitting">Sign in</Button>
       </form>
 
