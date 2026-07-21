@@ -8,7 +8,6 @@ use App\Enums\LeadStatus;
 use App\Http\Requests\Leads\UpdateLeadStatusRequest;
 use App\Http\Resources\LeadResource;
 use App\Jobs\ScoreLeadJob;
-use App\Jobs\VollnaSyncJob;
 use App\Models\ActivityLog;
 use App\Models\Client;
 use App\Models\Lead;
@@ -719,14 +718,45 @@ class LeadController extends Controller
     }
 
     /**
-     * Manual, on-demand mirror of the configured Vollna filter's current
-     * results — runs as a background job since it can take a couple of
-     * minutes (Vollna's own rate limit). Never triggered automatically.
+     * Manual "Sync now" — runs the SAME additive poll the scheduler runs every
+     * minute (vollna:poll-api), but INLINE so the operator gets an immediate,
+     * honest result: a count of what was imported, or the real failure reason.
+     *
+     * This deliberately replaced the old async VollnaSyncJob dispatch, which
+     * (a) still sent Vollna's rejected `limit` param, (b) competed with the
+     * every-minute poller for Vollna's ~5-req/min limit and 429'd, and (c)
+     * reported failure only to a hidden setting, so the button looked dead.
      */
     public function syncVollna(): JsonResponse
     {
-        VollnaSyncJob::dispatch();
+        @set_time_limit(60);
 
-        return response()->json(['data' => ['message' => 'Sync started — this can take a couple of minutes.']]);
+        $exit = \Illuminate\Support\Facades\Artisan::call('vollna:poll-api');
+        $output = trim(\Illuminate\Support\Facades\Artisan::output());
+
+        if ($exit !== 0) {
+            // Surface the actual reason (rate limit, auth, network) - never a
+            // silent failure. HTTP 429 from Vollna is common right after the
+            // auto-poller just ran; the operator gets told to retry shortly.
+            $reason = str_contains($output, 'failed:')
+                ? trim(mb_substr($output, mb_strpos($output, 'failed:') + 7))
+                : 'The Vollna poll did not complete. Try again in a moment.';
+
+            if (str_contains($output, 'HTTP 429')) {
+                $reason = 'Vollna is rate-limiting right now (the auto-poller just ran). New leads still arrive automatically every minute — try Sync again in a minute.';
+            }
+
+            return response()->json(['message' => $reason], 503);
+        }
+
+        preg_match('/(\d+) new/', $output, $matches);
+        $new = (int) ($matches[1] ?? 0);
+
+        return response()->json(['data' => [
+            'imported' => $new,
+            'message' => $new > 0
+                ? "{$new} new lead".($new === 1 ? '' : 's')." imported."
+                : "No new leads — you're already up to date.",
+        ]]);
     }
 }

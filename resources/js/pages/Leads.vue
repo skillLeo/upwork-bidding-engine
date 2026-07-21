@@ -384,13 +384,14 @@ const syncing = ref(false);
 async function handleSync() {
   syncing.value = true;
   try {
-    const res = await apiClient.post("/leads/sync-vollna");
-    // The job runs for 1-3 minutes in the background (Vollna's own rate
-    // limit) - the page's existing 20s poll picks up results as they land,
-    // no need to force an immediate refetch here.
+    // Runs the Vollna poll synchronously server-side and returns a real count
+    // ("3 new leads imported" / "up to date"), so the button gives immediate
+    // feedback instead of silently queueing a job.
+    const res = await apiClient.post("/leads/sync-vollna", null, { timeout: 60000 });
     toast.success(res.data.data.message);
+    refetch({ silent: true });
   } catch (error) {
-    toast.error(apiErrorMessage(error, "Could not start the sync."));
+    toast.error(apiErrorMessage(error, "Could not sync from Vollna."));
   } finally {
     syncing.value = false;
   }
