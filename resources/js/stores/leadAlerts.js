@@ -85,6 +85,30 @@ export function disableLeadAlerts() {
   stopPolling();
 }
 
+// Fire a notification RIGHT NOW on this device, so the user can confirm on
+// their phone (open the app in Chrome, tap the button) that notifications
+// actually appear here. Requests permission first if needed. Returns a reason
+// the UI can explain, since a mobile browser can silently deny.
+export async function sendTestNotification() {
+  if (!leadAlerts.supported) return { ok: false, reason: "unsupported" };
+
+  const permission =
+    Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
+
+  if (permission !== "granted") {
+    return { ok: false, reason: permission === "denied" ? "denied" : "dismissed" };
+  }
+
+  const notification = new Notification("SkillLeo test alert ✅", {
+    body: "If you can see this on your phone, real-time lead alerts work on this device.",
+    tag: "skillleo-test",
+    icon: "/favicon.svg",
+  });
+  notification.onclick = () => window.focus();
+
+  return { ok: true };
+}
+
 function startPolling() {
   stopPolling();
   seenIds = null;

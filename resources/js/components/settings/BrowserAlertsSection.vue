@@ -8,10 +8,35 @@ import CardTitle from "@/components/ui/CardTitle.vue";
 import CardDescription from "@/components/ui/CardDescription.vue";
 import CardContent from "@/components/ui/CardContent.vue";
 import Button from "@/components/ui/Button.vue";
-import { leadAlerts, enableLeadAlerts, disableLeadAlerts } from "@/stores/leadAlerts";
+import {
+  leadAlerts,
+  enableLeadAlerts,
+  disableLeadAlerts,
+  sendTestNotification,
+} from "@/stores/leadAlerts";
 
 const enabling = ref(false);
+const testing = ref(false);
 const blocked = ref(typeof Notification !== "undefined" && Notification.permission === "denied");
+
+async function handleTest() {
+  testing.value = true;
+  try {
+    const result = await sendTestNotification();
+    if (result.ok) {
+      toast.success("Test notification sent — check your device's notification tray.");
+    } else if (result.reason === "denied") {
+      blocked.value = true;
+      toast.error("Notifications are blocked for this site. Re-allow them in your browser settings.");
+    } else if (result.reason === "unsupported") {
+      toast.error("This browser doesn't support notifications.");
+    } else {
+      toast.error("Notification permission was not granted.");
+    }
+  } finally {
+    testing.value = false;
+  }
+}
 
 async function handleEnable() {
   enabling.value = true;
@@ -81,9 +106,28 @@ function handleDisable() {
             <Bell class="h-3.5 w-3.5" /> Enable browser alerts
           </Button>
         </div>
+        <div class="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-neutral-bg/40 p-4">
+          <div class="min-w-0">
+            <p class="text-sm font-semibold text-text-primary">Test it on this device</p>
+            <p class="text-xs text-text-tertiary">
+              Open this page in Chrome on your phone and tap Send — you should see a notification
+              appear. That confirms alerts reach this device.
+            </p>
+          </div>
+          <Button variant="secondary" size="sm" :loading="testing" @click="handleTest">
+            <BellRing class="h-3.5 w-3.5" /> Send test notification
+          </Button>
+        </div>
+
         <p v-if="blocked" class="text-xs text-warning">
           Notifications are blocked for this site. Re-allow them in your browser's site settings, then
           try again.
+        </p>
+
+        <p class="text-xs text-text-tertiary">
+          Heads-up: these fire only while the app is open in a tab on the device — they can't wake a
+          fully-closed browser. For alerts that arrive even when the browser is shut, ask for true
+          web-push (a bigger, separate feature).
         </p>
       </template>
     </CardContent>
