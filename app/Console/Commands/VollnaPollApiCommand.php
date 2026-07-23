@@ -61,6 +61,15 @@ class VollnaPollApiCommand extends Command
 
         $projects = $response->json()['data'] ?? [];
 
+        // Debug-only capture, not a feature: several fields in mapPayload()
+        // (connects_required among them) were mapped from guessed key names
+        // with no real payload ever available to confirm against (see that
+        // method's own comment). Cheap, self-overwriting, never grows -
+        // remove once the real field names are confirmed and fixed.
+        if ($projects !== []) {
+            Cache::forever('vollna:last_raw_project_sample', mb_substr(json_encode($projects[0]), 0, 5000));
+        }
+
         // A healthy authenticated response proves the intake path is alive
         // even when every project is a duplicate — that's what the
         // dead-man's switch watches.
