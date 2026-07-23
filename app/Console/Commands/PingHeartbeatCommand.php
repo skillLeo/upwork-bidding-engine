@@ -15,10 +15,17 @@ use Illuminate\Support\Facades\Http;
  * health:check, vollna:check-silence) rides the same single Hostinger cron
  * entry, so if that cron dies, every alarm that depends on it dies with it.
  *
- * Scheduled directly after the cron-heartbeat entry in routes/console.php,
- * so this only runs once the tick has actually reached that point - a tick
- * that errored earlier never gets here, and never pings, which is what
- * makes an external monitor meaningful instead of trivially green forever.
+ * Scheduled directly after the cron-heartbeat entry in routes/console.php.
+ * Proves ONLY that the OS cron is still invoking `schedule:run` at all - NOT
+ * that every task this minute succeeded. Laravel's scheduler isolates each
+ * event's exceptions (ScheduleRunCommand::runEvent catches per-event and
+ * keeps going), so an earlier task failing does not stop this from running
+ * and pinging right after it - verified live 2026-07-23 with a deliberately
+ * throwing task placed immediately before it. That's the correct scope: a
+ * single task failing already has its own targeted, once-per-incident alert
+ * elsewhere (health:check, vollna:check-silence, the AI failure alerts);
+ * this ping reacting to those too would just be noise on top of them. See
+ * routes/console.php's external-heartbeat comment for the full detail.
  */
 class PingHeartbeatCommand extends Command
 {

@@ -81,9 +81,23 @@ Schedule::call(fn () => Cache::forever('cron:last_tick', now()->toIso8601String(
     ->name('cron-heartbeat');
 
 // External dead-man's-switch ping. Runs AFTER cron:last_tick above (schedule
-// events fire in file order within one schedule:run process), so a tick that
-// died before reaching this point never pings — see PingHeartbeatCommand.
-// No-op until heartbeat_ping_url is set in Settings > Bidding Rules.
+// events fire in file order within one schedule:run process). No-op until
+// heartbeat_ping_url is set in Settings > Bidding Rules.
+//
+// What this actually proves, verified live 2026-07-23: only that the OS cron
+// is still invoking `schedule:run` at all — the ONE failure mode nothing else
+// in this app can detect (that's the 2026-07-16 incident this exists for).
+// It does NOT prove every task this minute succeeded: Laravel's scheduler
+// (ScheduleRunCommand::runEvent) catches each event's exception individually
+// and keeps running the rest of the list, so a failing vollna-poll-api or
+// queue-drain does not stop cron-heartbeat or this ping from running right
+// after it. Confirmed live: a deliberately-throwing task placed immediately
+// before this one still let the ping fire, with the failure correctly logged
+// to laravel.log via Laravel's own exception reporting. That's correct scope,
+// not a gap — a single task failing is already handled by its own targeted
+// alert (health:check, vollna:check-silence, the AI failure alerts), each
+// once-per-incident; this ping would just add noise if it also reacted to
+// those. This is a scheduler-alive signal ONLY.
 Schedule::call(fn () => Artisan::call('ops:heartbeat'))
     ->everyMinute()
     ->name('external-heartbeat');
