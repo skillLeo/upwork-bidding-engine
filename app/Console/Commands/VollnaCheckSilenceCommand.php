@@ -11,12 +11,24 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 
 /**
- * Dead-man's switch for the Vollna webhook. Vollna has gone silently dark
- * twice (stale secret, then an API-token outage) and the only signal was
- * someone eventually noticing leads had stopped — this closes that gap.
- * Runs hourly from the scheduler; alerts once per incident, and the
- * incident resets the moment an authenticated delivery arrives (the
- * webhook controller clears the flag and re-stamps the timestamp).
+ * Dead-man's switch for Vollna intake (webhook OR the API poller — whichever
+ * is the live door on the current plan). Vollna has gone silently dark
+ * multiple times (a stale secret, an API-token outage, an insufficient-
+ * credits outage) and the only signal was someone eventually noticing leads
+ * had stopped — this closes that gap.
+ *
+ * Runs hourly from the scheduler; alerts once per incident. The incident
+ * clears here, on THIS command's own next healthy run — not only via
+ * VollnaWebhookController's Cache::forget on a fresh webhook delivery. That
+ * webhook-only clear was the sole path for a long time and is a real bug on
+ * this account: Vollna's webhooks need their paid Agency plan, which this
+ * account doesn't have, so a real webhook delivery structurally never
+ * happens here. Under polling-only intake that made the flag permanently
+ * one-way once set — the FIRST-ever silence alert would fire, and every
+ * subsequent outage, forever after, would alert silently never again.
+ * Confirmed live 2026-07-24: exactly this happened - one alert on 7/23
+ * 04:00 for a still-ongoing outage that started 7/22 17:13, with zero
+ * further alerts despite the outage continuing well past that point.
  */
 class VollnaCheckSilenceCommand extends Command
 {
@@ -60,7 +72,19 @@ class VollnaCheckSilenceCommand extends Command
         $silentHours = $last->diffInHours(now());
 
         if ($silentHours < $threshold) {
-            $this->info(sprintf('Webhook alive: last delivery %.1fh ago (threshold %dh).', $silentHours, $threshold));
+            // Self-clear on recovery, the same as VollnaPollApiCommand's own
+            // failure flag does - this is the ONLY reliable recovery signal
+            // under polling-only intake, since the webhook-delivery clear in
+            // VollnaWebhookController never fires on a plan with no webhooks.
+            if (Cache::has(self::ALERTED_CACHE_KEY)) {
+                Cache::forget(self::ALERTED_CACHE_KEY);
+                ActivityLog::record(ActivityType::VollnaSilenceRecovered, meta: [
+                    'silent_hours_at_recovery' => round($silentHours, 1),
+                ]);
+                $this->info('Intake recovered — silence alert flag cleared.');
+            }
+
+            $this->info(sprintf('Intake alive: last delivery %.1fh ago (threshold %dh).', $silentHours, $threshold));
 
             return self::SUCCESS;
         }

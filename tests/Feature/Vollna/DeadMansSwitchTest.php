@@ -119,6 +119,40 @@ class DeadMansSwitchTest extends TestCase
         $this->assertFalse(Cache::has(VollnaCheckSilenceCommand::ALERTED_CACHE_KEY));
     }
 
+    public function test_recovery_via_the_poller_alone_clears_the_flag_and_allows_a_second_alert(): void
+    {
+        // The real bug this closes: on this account intake is the API
+        // poller, not the webhook (Vollna webhooks need their paid Agency
+        // plan) - a real webhook delivery structurally never happens, so
+        // the ONLY recovery signal that actually occurs in production is
+        // vollna_last_intake_at advancing. Before this fix, ALERTED_CACHE_KEY
+        // could only be cleared by VollnaWebhookController, meaning the
+        // first-ever alert would permanently suppress every future one.
+        Http::fake(['*' => Http::response(['success' => true])]);
+
+        // Incident 1: silent past threshold -> one alert.
+        $this->settings->set('vollna_last_intake_at', now()->subHours(10)->toIso8601String());
+        $this->artisan('vollna:check-silence')->assertSuccessful();
+        Http::assertSentCount(1);
+        $this->assertTrue(Cache::has(VollnaCheckSilenceCommand::ALERTED_CACHE_KEY));
+
+        // Recovery arrives ONLY via the poller stamping a fresh intake time -
+        // no webhook call happens at all in this scenario.
+        $this->settings->set('vollna_last_intake_at', now()->toIso8601String());
+        $this->artisan('vollna:check-silence')->assertSuccessful();
+
+        $this->assertFalse(Cache::has(VollnaCheckSilenceCommand::ALERTED_CACHE_KEY));
+        $this->assertDatabaseHas('activity_logs', ['type' => 'vollna_silence_recovered']);
+        Http::assertSentCount(1); // recovery itself does not alert
+
+        // Incident 2, a NEW outage after recovery: must alert again. Before
+        // the fix this would have silently done nothing forever.
+        $this->settings->set('vollna_last_intake_at', now()->subHours(10)->toIso8601String());
+        $this->artisan('vollna:check-silence')->assertSuccessful();
+
+        Http::assertSentCount(2);
+    }
+
     public function test_authenticated_delivery_stamps_liveness_and_resets_incidents(): void
     {
         Http::fake([
