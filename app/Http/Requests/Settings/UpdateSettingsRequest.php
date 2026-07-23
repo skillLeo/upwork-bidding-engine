@@ -104,7 +104,21 @@ class UpdateSettingsRequest extends FormRequest
             'excluded_stacks' => ['sometimes', 'array'],
             'excluded_stacks.*' => ['string', 'max:50'],
             'priority_decay_rate' => ['sometimes', 'numeric', 'min:0', 'max:1'],
-            'heartbeat_ping_url' => ['sometimes', 'nullable', 'string', 'max:500'],
+            // Empty disables the ping. Anything else must be a real http(s)
+            // URL: the scheduler and the "Send test ping" button both dial
+            // this value out, so a typo'd or non-web scheme should be caught
+            // at save time rather than failing silently once a minute.
+            'heartbeat_ping_url' => ['sometimes', 'nullable', 'string', 'max:500', function (string $attribute, mixed $value, \Closure $fail) {
+                if (trim((string) $value) === '') {
+                    return;
+                }
+
+                $scheme = strtolower((string) parse_url(trim((string) $value), PHP_URL_SCHEME));
+
+                if (! in_array($scheme, ['http', 'https'], true)) {
+                    $fail('The heartbeat ping URL must be a full http:// or https:// URL.');
+                }
+            }],
             'hourly_floor' => ['sometimes', 'integer', 'min:0'],
             'zero_history_budget_floor' => ['sometimes', 'integer', 'min:0'],
             'red_flag_words' => ['sometimes', 'array'],

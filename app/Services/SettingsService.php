@@ -297,7 +297,7 @@ class SettingsService
         'max_posted_age_days' => ['group' => 'rules', 'secret' => false, 'default' => 7],
     ];
 
-    public const SERVICES = ['vollna', 'openclaw', 'whatsapp', 'mail', 'anthropic', 'openai'];
+    public const SERVICES = ['vollna', 'openclaw', 'whatsapp', 'mail', 'anthropic', 'openai', 'heartbeat'];
 
     /**
      * All settings, decrypted, keyed by setting key. Cached forever;

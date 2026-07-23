@@ -226,6 +226,7 @@ class SettingsController extends Controller
             'whatsapp' => $openClaw->testWhatsAppConnection(),
             'vollna' => $this->testVollna(),
             'mail' => $this->testMail($request),
+            'heartbeat' => $this->testHeartbeat(),
             'anthropic' => $this->testAiProvider(
                 'https://api.anthropic.com/v1/models',
                 ['x-api-key' => (string) $this->settings->get('anthropic_api_key'), 'anthropic-version' => '2023-06-01'],
@@ -298,6 +299,42 @@ class SettingsController extends Controller
      *
      * @return array{success: bool, message: string}
      */
+    /**
+     * Fires ONE real ping at the saved heartbeat URL and reports the HTTP
+     * status inline, so the monitor can be confirmed green from this screen
+     * instead of pasting a URL, waiting for the next scheduler tick, and
+     * then going to read the monitor's own dashboard to find out.
+     *
+     * Reads the SAVED value, like every other test here — an unsaved field
+     * would test a URL the scheduler is not actually going to ping.
+     *
+     * @return array{success: bool, message: string}
+     */
+    protected function testHeartbeat(): array
+    {
+        $url = trim((string) $this->settings->get('heartbeat_ping_url', ''));
+
+        if ($url === '') {
+            return ['success' => false, 'message' => 'No heartbeat URL saved yet — save the rules first, then test.'];
+        }
+
+        // Slightly longer than the scheduler's own 3s budget: this one is a
+        // human waiting on a button, not a tick that must not be delayed.
+        try {
+            $response = \Illuminate\Support\Facades\Http::timeout(5)->connectTimeout(3)->get($url);
+
+            if ($response->successful()) {
+                return ['success' => true, 'message' => "Ping delivered — monitor answered HTTP {$response->status()}."];
+            }
+
+            return ['success' => false, 'message' => "Monitor answered HTTP {$response->status()} — check the ping URL."];
+        } catch (\Throwable $e) {
+            report($e);
+
+            return ['success' => false, 'message' => 'Could not reach the monitor — check the URL is correct and publicly reachable.'];
+        }
+    }
+
     protected function testMail(Request $request): array
     {
         $to = $request->user()?->email;

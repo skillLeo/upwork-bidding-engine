@@ -4,7 +4,12 @@ import { CheckCircle2, XCircle, Zap } from "@lucide/vue";
 import Button from "@/components/ui/Button.vue";
 import { testConnection } from "@/composables/useSettings";
 
-const props = defineProps({ service: { type: String, required: true } });
+const props = defineProps({
+  service: { type: String, required: true },
+  // Overridable because not every test is a "connection" — the heartbeat one
+  // actually sends a ping, and the button should say what it does.
+  label: { type: String, default: "Test connection" },
+});
 
 const loading = ref(false);
 const result = ref(null);
@@ -25,7 +30,7 @@ async function handleTest() {
 <template>
   <div class="flex flex-col items-end gap-1.5">
     <Button type="button" variant="secondary" size="sm" @click="handleTest" :loading="loading">
-      <Zap class="h-3.5 w-3.5" /> Test connection
+      <Zap class="h-3.5 w-3.5" /> {{ label }}
     </Button>
     <div
       v-if="result"

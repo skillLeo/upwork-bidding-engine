@@ -5,6 +5,7 @@ use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\DiagnosticsController;
+use App\Http\Controllers\HealthPingController;
 use App\Http\Controllers\LeadController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SavedFilterController;
@@ -44,6 +45,13 @@ Route::prefix('agent')->middleware(['agent', 'throttle:60,1'])->group(function (
 // Product name + logo — the sign-in screen needs these before anyone has
 // a token, so this stays outside auth:sanctum entirely.
 Route::get('/branding', [SettingsController::class, 'branding']);
+
+// Liveness probe for an external uptime monitor. Unauthenticated by
+// necessity — a monitor holding a Sanctum token would be a permanent
+// credential sitting in a third party's config. See HealthPingController
+// for why this exists alongside the outbound ops:heartbeat ping.
+Route::get('/health/ping', HealthPingController::class)
+    ->middleware('throttle:30,1');
 
 // Outbound WhatsApp goes through OpenClaw (see OpenClawService), not Meta's
 // Cloud API, so there is no inbound Meta webhook to receive here.

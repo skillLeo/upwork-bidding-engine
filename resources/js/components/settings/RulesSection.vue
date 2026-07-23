@@ -10,6 +10,7 @@ import Input from "@/components/ui/Input.vue";
 import Label from "@/components/ui/Label.vue";
 import FieldHint from "@/components/ui/FieldHint.vue";
 import TagInput from "@/components/ui/TagInput.vue";
+import TestConnectionButton from "@/components/settings/TestConnectionButton.vue";
 import { saveSettings } from "@/composables/useSettings";
 import { apiErrorMessage } from "@/lib/api-client";
 
@@ -145,6 +146,12 @@ async function handleSave() {
             service can alert you if the Hostinger cron itself ever dies — the one failure
             this app can never detect about itself. Leave blank to disable.
           </FieldHint>
+          <div class="mt-2 flex items-start justify-between gap-3">
+            <p class="text-xs text-text-tertiary">
+              Save first — the test pings the saved URL, not what's typed above.
+            </p>
+            <TestConnectionButton service="heartbeat" label="Send test ping" />
+          </div>
         </div>
       </div>
 
