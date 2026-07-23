@@ -79,3 +79,11 @@ Schedule::call(fn () => Artisan::call('queue:work --stop-when-empty --max-time=4
 Schedule::call(fn () => Cache::forever('cron:last_tick', now()->toIso8601String()))
     ->everyMinute()
     ->name('cron-heartbeat');
+
+// External dead-man's-switch ping. Runs AFTER cron:last_tick above (schedule
+// events fire in file order within one schedule:run process), so a tick that
+// died before reaching this point never pings — see PingHeartbeatCommand.
+// No-op until heartbeat_ping_url is set in Settings > Bidding Rules.
+Schedule::call(fn () => Artisan::call('ops:heartbeat'))
+    ->everyMinute()
+    ->name('external-heartbeat');

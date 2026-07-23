@@ -48,6 +48,14 @@ class DiagnosticsController extends Controller
             // request so a dead cron is visible even though the scheduler
             // can't alert about its own death.
             'cron_last_tick' => \Illuminate\Support\Facades\Cache::get('cron:last_tick'),
+            // The one alarm that can fire from outside this box - see
+            // PingHeartbeatCommand. configured=false means nothing has been
+            // pasted into Settings > Bidding Rules yet, not that it's broken.
+            'heartbeat' => [
+                'configured' => trim((string) $settings->get('heartbeat_ping_url', '')) !== '',
+                'last_attempt_at' => \Illuminate\Support\Facades\Cache::get(\App\Console\Commands\PingHeartbeatCommand::LAST_ATTEMPT_KEY),
+                'last_result' => \Illuminate\Support\Facades\Cache::get(\App\Console\Commands\PingHeartbeatCommand::LAST_RESULT_KEY),
+            ],
             'queue_depth' => DB::table('jobs')->count(),
             'failed_jobs' => DB::table('failed_jobs')->count(),
             'ai_engine_enabled' => $settings->aiEngineEnabled(),

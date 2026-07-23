@@ -104,6 +104,7 @@ class UpdateSettingsRequest extends FormRequest
             'excluded_stacks' => ['sometimes', 'array'],
             'excluded_stacks.*' => ['string', 'max:50'],
             'priority_decay_rate' => ['sometimes', 'numeric', 'min:0', 'max:1'],
+            'heartbeat_ping_url' => ['sometimes', 'nullable', 'string', 'max:500'],
             'hourly_floor' => ['sometimes', 'integer', 'min:0'],
             'zero_history_budget_floor' => ['sometimes', 'integer', 'min:0'],
             'red_flag_words' => ['sometimes', 'array'],

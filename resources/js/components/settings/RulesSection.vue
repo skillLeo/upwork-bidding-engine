@@ -127,6 +127,27 @@ async function handleSave() {
         <FieldHint>Any brief containing one of these is archived before any AI call runs.</FieldHint>
       </div>
 
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <Label>Priority sort decay rate</Label>
+          <Input type="number" step="0.01" min="0" max="1" v-model.number="form.priority_decay_rate" />
+          <FieldHint>
+            How fast a high score fades in the Leads page's Priority sort as a lead ages
+            (score − hours_old × this rate). Higher = older leads drop faster.
+          </FieldHint>
+        </div>
+        <div>
+          <Label>Heartbeat ping URL</Label>
+          <Input type="text" v-model="form.heartbeat_ping_url" placeholder="https://hc-ping.com/…" />
+          <FieldHint>
+            Optional. A ping URL from an external cron monitor (Healthchecks.io, Cronitor, or
+            UptimeRobot — free tier). Pinged every minute the scheduler is alive, so that
+            service can alert you if the Hostinger cron itself ever dies — the one failure
+            this app can never detect about itself. Leave blank to disable.
+          </FieldHint>
+        </div>
+      </div>
+
       <div class="flex justify-end">
         <Button @click="handleSave" :loading="saving">Save rules</Button>
       </div>

@@ -273,6 +273,14 @@ class SettingsService
         // stale high-score. At 0.05, a 9 loses ~1 point every 20h; a 9 from 2
         // days back (score 6.6) drops below a 7 posted minutes ago. Tune here.
         'priority_decay_rate' => ['group' => 'rules', 'secret' => false, 'default' => 0.05],
+        // External dead-man's-switch ping (Healthchecks.io / Cronitor / UptimeRobot free
+        // tier). The scheduler itself can't alert about its own death - everything that
+        // WOULD alert (the queue drain, health checks, vollna:check-silence) rides the same
+        // single Hostinger cron entry, so if that cron dies, the alarm dies with it. This
+        // URL is pinged from a channel outside this server on every successful tick, so an
+        // external monitor - not this app - notices the silence. Empty = disabled, no ping
+        // sent, nothing to configure by default.
+        'heartbeat_ping_url' => ['group' => 'rules', 'secret' => false, 'default' => ''],
         'hourly_floor' => ['group' => 'rules', 'secret' => false, 'default' => 8],
         'zero_history_budget_floor' => ['group' => 'rules', 'secret' => false, 'default' => 100],
         'red_flag_words' => ['group' => 'rules', 'secret' => false, 'default' => ['free test', 'unpaid sample', 'urgent no budget', 'revenue share only']],

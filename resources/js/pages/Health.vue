@@ -80,6 +80,17 @@ const services = computed(() => {
       healthy: data.value.ai_engine_enabled,
       detail: data.value.ai_engine_enabled ? "enabled" : "paused via Settings toggle",
     },
+    {
+      name: "External heartbeat",
+      // Not configured is a neutral "off," not a red failure — only a
+      // configured-but-failing ping counts as unhealthy.
+      healthy: !data.value.heartbeat?.configured || data.value.heartbeat?.last_result === "ok",
+      detail: !data.value.heartbeat?.configured
+        ? "not configured — Settings → Bidding Rules → heartbeat ping URL"
+        : data.value.heartbeat?.last_attempt_at
+          ? `${data.value.heartbeat.last_result === "ok" ? "ok" : data.value.heartbeat.last_result} — last attempt ${relativeTime(data.value.heartbeat.last_attempt_at)}`
+          : "configured, no attempt recorded yet",
+    },
   ];
 });
 
