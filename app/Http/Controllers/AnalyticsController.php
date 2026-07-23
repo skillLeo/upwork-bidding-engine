@@ -17,6 +17,8 @@ class AnalyticsController extends Controller
                 'best_hours' => $analytics->bestHours(),
                 'score_calibration' => $analytics->scoreCalibration(),
                 'recent_activity' => $analytics->recentActivity(20),
+                'speed' => $analytics->speed(),
+                'dying_proposals' => $analytics->dyingProposals(),
             ],
         ]);
     }

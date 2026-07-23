@@ -2,10 +2,16 @@
 import { ref, computed } from "vue";
 import { useRouter } from "vue-router";
 import { toast } from "vue-sonner";
-import { Bookmark, ChevronRight, Copy, ExternalLink, Loader2, ShieldCheck, Star } from "@lucide/vue";
+import { Bookmark, ChevronRight, Copy, Eye, EyeOff, ExternalLink, Loader2, ShieldCheck, Star } from "@lucide/vue";
 import StatusPill from "@/components/ui/StatusPill.vue";
 import Button from "@/components/ui/Button.vue";
-import { toggleLeadFavorite, updateLeadStatus } from "@/composables/useLead";
+import {
+  toggleLeadFavorite,
+  updateLeadStatus,
+  toggleLeadViewed,
+  updateLeadOutcome,
+  LEAD_OUTCOMES,
+} from "@/composables/useLead";
 import { apiErrorMessage } from "@/lib/api-client";
 import { cn, scoreTier, compactAge, urgencyTier } from "@/lib/utils";
 
@@ -113,6 +119,36 @@ const quickActions = [
   { status: "won", label: "Won" },
   { status: "archived", label: "Not interested" },
 ];
+
+// Outcome tracking — independent of status, two clicks each.
+const viewedLoading = ref(false);
+const outcomeLoading = ref(false);
+
+async function handleToggleViewed() {
+  viewedLoading.value = true;
+  try {
+    const updated = await toggleLeadViewed(props.lead.id);
+    props.lead.viewed_at = updated.viewed_at;
+  } catch (error) {
+    toast.error(apiErrorMessage(error, "Could not update."));
+  } finally {
+    viewedLoading.value = false;
+  }
+}
+
+async function handleOutcomeChange(event) {
+  const value = event.target.value || null;
+  outcomeLoading.value = true;
+  try {
+    const updated = await updateLeadOutcome(props.lead.id, value);
+    props.lead.outcome = updated.outcome;
+    props.lead.outcome_at = updated.outcome_at;
+  } catch (error) {
+    toast.error(apiErrorMessage(error, "Could not update outcome."));
+  } finally {
+    outcomeLoading.value = false;
+  }
+}
 
 async function handleQuickStatus(status) {
   statusLoading.value = status;
@@ -330,6 +366,39 @@ function handleRowKeydown(event) {
       >
         Mark {{ action.label }}
       </Button>
+    </div>
+
+    <!-- Outcome tracking: independent of status, only meaningful once this
+         was really sent (submitted_at set), regardless of current status. -->
+    <div v-if="lead.submitted_at" class="flex flex-wrap items-center gap-2 pt-0.5">
+      <button
+        type="button"
+        :disabled="viewedLoading"
+        @click="handleToggleViewed"
+        :class="
+          cn(
+            'flex items-center gap-1.5 rounded-pill border px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50',
+            lead.viewed_at
+              ? 'border-success/30 bg-success/10 text-success'
+              : 'border-border-strong text-text-secondary hover:bg-black/5',
+          )
+        "
+      >
+        <Eye v-if="lead.viewed_at" class="h-3 w-3" />
+        <EyeOff v-else class="h-3 w-3" />
+        {{ lead.viewed_at ? "Viewed" : "Viewed?" }}
+      </button>
+
+      <select
+        :value="lead.outcome ?? ''"
+        :disabled="outcomeLoading"
+        @change="handleOutcomeChange"
+        @click.stop
+        class="h-7 rounded-pill border border-border-strong bg-white px-2.5 text-xs font-medium text-text-secondary focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none disabled:opacity-50"
+      >
+        <option value="">Outcome: not set</option>
+        <option v-for="o in LEAD_OUTCOMES" :key="o.value" :value="o.value">{{ o.label }}</option>
+      </select>
     </div>
 
     <div class="flex items-center gap-4 pt-0.5 text-xs font-medium">

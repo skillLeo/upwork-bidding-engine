@@ -43,6 +43,25 @@ export async function toggleLeadFavorite(id) {
   return res.data.data;
 }
 
+export async function toggleLeadViewed(id) {
+  const res = await apiClient.post(`/leads/${id}/viewed`);
+  return res.data.data;
+}
+
+export async function updateLeadOutcome(id, outcome) {
+  const res = await apiClient.post(`/leads/${id}/outcome`, { outcome });
+  return res.data.data;
+}
+
+export const LEAD_OUTCOMES = [
+  { value: "replied", label: "Replied" },
+  { value: "hired_me", label: "Hired me" },
+  { value: "hired_other", label: "Hired someone else" },
+  { value: "closed_no_hire", label: "Closed, nobody hired" },
+  { value: "expired", label: "Expired" },
+  { value: "unknown", label: "Unknown" },
+];
+
 export async function regenerateLeadScore(id) {
   // Synchronous rubric re-score (~3-5s) — generous timeout for cold runs.
   const res = await apiClient.post(`/leads/${id}/regenerate-score`, null, { timeout: 60000 });

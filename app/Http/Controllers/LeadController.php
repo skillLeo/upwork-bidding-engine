@@ -463,6 +463,48 @@ class LeadController extends Controller
     }
 
     /**
+     * Two-click record of whether the client actually opened the proposal
+     * (visible on the job's Upwork page) - a toggle, not a one-way flag, so
+     * a mis-tap is one more tap to undo.
+     */
+    public function toggleViewed(Request $request, Lead $lead): JsonResponse
+    {
+        $lead->update(['viewed_at' => $lead->viewed_at === null ? now() : null]);
+
+        ActivityLog::record(ActivityType::LeadStatusUpdated, subject: $lead, meta: [
+            'action' => 'viewed_toggled',
+            'viewed' => $lead->viewed_at !== null,
+        ], userId: $request->user()?->id);
+
+        return response()->json(['data' => new LeadResource($lead->fresh('client'))]);
+    }
+
+    /**
+     * Records what actually happened after this lead was sent - independent
+     * of `status`, which stays exactly as it is (see LeadOutcome's own
+     * docblock for why the two are kept separate). Two clicks: open the
+     * selector, pick a value.
+     */
+    public function updateOutcome(Request $request, Lead $lead): JsonResponse
+    {
+        $validated = $request->validate([
+            'outcome' => ['nullable', Rule::in(\App\Enums\LeadOutcome::values())],
+        ]);
+
+        $lead->update([
+            'outcome' => $validated['outcome'],
+            'outcome_at' => $validated['outcome'] !== null ? now() : null,
+        ]);
+
+        ActivityLog::record(ActivityType::LeadStatusUpdated, subject: $lead, meta: [
+            'action' => 'outcome_set',
+            'outcome' => $validated['outcome'],
+        ], userId: $request->user()?->id);
+
+        return response()->json(['data' => new LeadResource($lead->fresh('client'))]);
+    }
+
+    /**
      * Bulk status change from the leads list's row-checkbox selection. One
      * query, one activity log entry — not a loop of single updateStatus()
      * calls, which would be both slow and enough parallel requests to flirt
@@ -482,6 +524,15 @@ class LeadController extends Controller
             // bidder-driven, forward transitions are settable here.
             'status' => ['required', 'string', Rule::in(['sent', 'replied', 'won', 'archived'])],
         ]);
+
+        // Mass update, so the Lead model's booted()->updating() stamp never
+        // fires (that hook only runs on individual model saves) - stamp
+        // submitted_at here directly for the same first-sent-only rule,
+        // scoped with whereNull so a lead already sent once keeps its
+        // original time even if it's bulk-marked sent again.
+        if ($validated['status'] === 'sent') {
+            Lead::query()->whereIn('id', $validated['ids'])->whereNull('submitted_at')->update(['submitted_at' => now()]);
+        }
 
         $count = Lead::query()->whereIn('id', $validated['ids'])->update(['status' => $validated['status']]);
 

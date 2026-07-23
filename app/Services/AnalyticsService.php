@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\LeadOutcome;
 use App\Enums\LeadStatus;
 use App\Models\ActivityLog;
 use App\Models\Lead;
@@ -11,6 +12,12 @@ class AnalyticsService
 {
     // Below this many sent leads at a given score, the rate is noise, not signal.
     public const LOW_CONFIDENCE_THRESHOLD = 5;
+
+    /** Below this many leads in a rate's own denominator, render "not enough
+     * data" instead of a percentage - applies to every NEW rate this class
+     * reports (reply_rate_raw/contested, speed). Pre-existing fields
+     * (reply_rate, win_rate) are left exactly as they were. */
+    public const MIN_SAMPLE_FOR_RATE = 5;
 
     public function __construct(protected SettingsService $settings) {}
 
@@ -40,17 +47,93 @@ class AnalyticsService
         $knownConnects = (int) (Lead::query()->whereIn('status', $sentStatuses)->sum('connects_required'));
         $sentWithoutKnownConnects = Lead::query()->whereIn('status', $sentStatuses)->whereNull('connects_required')->count();
 
+        // A large share of Upwork jobs never hire anyone at all - counting
+        // every one of those as a personal loss (which the plain reply_rate
+        // above does) understates real performance. "Contested" narrows the
+        // denominator to leads whose outcome we know did NOT end in one of
+        // those no-fault dead ends. A lead with no outcome recorded yet is
+        // still counted here (we don't yet know it's a dead end, so it isn't
+        // excluded) - only a CONFIRMED dead-end outcome removes a lead from
+        // this denominator. The numerator (replied+won) is unchanged and is
+        // already a subset of "contested" by definition - a lead can't be
+        // status Replied/Won while also being a confirmed no-reply dead end.
+        $deadEndOutcomes = [LeadOutcome::ClosedNoHire->value, LeadOutcome::Expired->value, LeadOutcome::Unknown->value];
+        $contestedSent = Lead::query()->whereIn('status', $sentStatuses)
+            ->where(fn ($q) => $q->whereNull('outcome')->orWhereNotIn('outcome', $deadEndOutcomes))
+            ->count();
+
         return [
             'total_leads' => array_sum($byStatus),
             'by_status' => $byStatus,
             'proposals_sent' => $sent,
             'reply_rate' => $sent > 0 ? round(($repliedOrWon / $sent) * 100, 1) : 0.0,
             'win_rate' => $sent > 0 ? round(($won / $sent) * 100, 1) : 0.0,
+            'reply_rate_raw' => [
+                'n' => $sent,
+                'rate' => $sent >= self::MIN_SAMPLE_FOR_RATE ? round(($repliedOrWon / $sent) * 100, 1) : null,
+            ],
+            'reply_rate_contested' => [
+                'n' => $contestedSent,
+                'rate' => $contestedSent >= self::MIN_SAMPLE_FOR_RATE ? round(($repliedOrWon / $contestedSent) * 100, 1) : null,
+            ],
             'avg_score' => round($avgScore, 1),
             // Real connects_required (from Vollna) for leads that have it,
             // plus a clearly-labeled 4-per-proposal estimate only for the
             // remainder that don't - not a pure guess once real data exists.
             'estimated_connects_spent' => $knownConnects + ($sentWithoutKnownConnects * 4),
+        ];
+    }
+
+    /**
+     * Median and p90 minutes from a job posting to us actually submitting -
+     * the number the whole "freshness wins" architecture has never measured.
+     * Windowed on submitted_at (was this proposal submitted in the last 30
+     * days), not posted_at.
+     *
+     * @return array{n: int, median_minutes: ?int, p90_minutes: ?int}
+     */
+    public function speed(): array
+    {
+        $minutes = Lead::query()
+            ->whereNotNull('submitted_at')
+            ->whereNotNull('posted_at')
+            ->where('submitted_at', '>=', now()->subDays(30))
+            ->get(['posted_at', 'submitted_at'])
+            ->map(fn (Lead $lead) => $lead->posted_at->diffInMinutes($lead->submitted_at))
+            ->sort()
+            ->values();
+
+        $n = $minutes->count();
+        $percentile = fn (float $p) => $minutes[min((int) floor($n * $p), $n - 1)];
+
+        return [
+            'n' => $n,
+            'median_minutes' => $n >= self::MIN_SAMPLE_FOR_RATE ? $percentile(0.5) : null,
+            'p90_minutes' => $n >= self::MIN_SAMPLE_FOR_RATE ? $percentile(0.9) : null,
+        ];
+    }
+
+    /**
+     * Splits sent-or-beyond leads into three buckets so a low reply rate
+     * points at a specific fix: never viewed points at the title/opening
+     * line/profile (the client didn't even open it), viewed-but-no-reply
+     * points at the letter body and the closing question.
+     *
+     * @return array{never_viewed: int, viewed_no_reply: int, viewed_and_replied: int}
+     */
+    public function dyingProposals(): array
+    {
+        $sentStatuses = [LeadStatus::Sent->value, LeadStatus::Replied->value, LeadStatus::Won->value];
+        $repliedOutcomes = [LeadOutcome::Replied->value, LeadOutcome::HiredMe->value];
+
+        $base = fn () => Lead::query()->whereIn('status', $sentStatuses);
+
+        return [
+            'never_viewed' => $base()->whereNull('viewed_at')->count(),
+            'viewed_no_reply' => $base()->whereNotNull('viewed_at')
+                ->where(fn ($q) => $q->whereNull('outcome')->orWhereNotIn('outcome', $repliedOutcomes))
+                ->count(),
+            'viewed_and_replied' => $base()->whereNotNull('viewed_at')->whereIn('outcome', $repliedOutcomes)->count(),
         ];
     }
 

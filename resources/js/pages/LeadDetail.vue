@@ -7,6 +7,8 @@ import {
   ArrowLeft,
   Coins,
   Copy,
+  Eye,
+  EyeOff,
   ExternalLink,
   Globe2,
   History,
@@ -32,6 +34,9 @@ import {
   fetchProposalVersions,
   aiEditProposal,
   acceptAiEditProposal,
+  toggleLeadViewed,
+  updateLeadOutcome,
+  LEAD_OUTCOMES,
 } from "@/composables/useLead";
 import Textarea from "@/components/ui/Textarea.vue";
 import Input from "@/components/ui/Input.vue";
@@ -128,6 +133,36 @@ async function handleCopy() {
   if (!lead.value?.proposal_text) return;
   await navigator.clipboard.writeText(lead.value.proposal_text);
   toast.success("Proposal copied to clipboard.");
+}
+
+// Outcome tracking — independent of status, two clicks each.
+const viewedLoading = ref(false);
+const outcomeLoading = ref(false);
+
+async function handleToggleViewed() {
+  if (!lead.value || viewedLoading.value) return;
+  viewedLoading.value = true;
+  try {
+    lead.value = await toggleLeadViewed(lead.value.id);
+  } catch (error) {
+    toast.error(apiErrorMessage(error, "Could not update."));
+  } finally {
+    viewedLoading.value = false;
+  }
+}
+
+async function handleOutcomeChange(event) {
+  if (!lead.value) return;
+  const value = event.target.value || null;
+  outcomeLoading.value = true;
+  try {
+    lead.value = await updateLeadOutcome(lead.value.id, value);
+    toast.success(value ? "Outcome recorded." : "Outcome cleared.");
+  } catch (error) {
+    toast.error(apiErrorMessage(error, "Could not update outcome."));
+  } finally {
+    outcomeLoading.value = false;
+  }
 }
 
 // --- Manual editing + version history ---
@@ -824,6 +859,42 @@ async function handleRegenerateProposal() {
             >
               {{ action.label }}
             </Button>
+          </div>
+
+          <!-- Outcome tracking: what actually happened, independent of the
+               status pipeline above. Only meaningful once this was really
+               sent (submitted_at set), regardless of current status. -->
+          <div v-if="lead.submitted_at" class="mt-4 space-y-2.5 border-t border-border pt-4">
+            <button
+              type="button"
+              :disabled="viewedLoading"
+              @click="handleToggleViewed"
+              :class="
+                cn(
+                  'flex w-full items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50',
+                  lead.viewed_at
+                    ? 'border-success/30 bg-success/10 text-success'
+                    : 'border-border-strong text-text-secondary hover:bg-black/5',
+                )
+              "
+            >
+              <Eye v-if="lead.viewed_at" class="h-4 w-4" />
+              <EyeOff v-else class="h-4 w-4" />
+              {{ lead.viewed_at ? "Client viewed this" : "Client viewed this?" }}
+            </button>
+
+            <div>
+              <label class="mb-1 block text-xs font-medium text-text-tertiary">Outcome</label>
+              <select
+                :value="lead.outcome ?? ''"
+                :disabled="outcomeLoading"
+                @change="handleOutcomeChange"
+                class="h-9 w-full rounded-md border border-border-strong bg-white px-2.5 text-sm text-text-primary focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none disabled:opacity-50"
+              >
+                <option value="">Not set yet</option>
+                <option v-for="o in LEAD_OUTCOMES" :key="o.value" :value="o.value">{{ o.label }}</option>
+              </select>
+            </div>
           </div>
 
           <router-link
