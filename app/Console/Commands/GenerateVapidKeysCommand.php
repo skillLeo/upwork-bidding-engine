@@ -22,6 +22,9 @@ class GenerateVapidKeysCommand extends Command
 
     public function handle(WebPushService $push, SettingsService $settings): int
     {
+        // TENANCY: deliberately platform context. VAPID keys identify this
+        // application server to the browser push services — one keypair for
+        // the whole deployment, not one per workspace.
         return $this->asPlatform(fn () => $this->runForTenant($push, $settings));
     }
 

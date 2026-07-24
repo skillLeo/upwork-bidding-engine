@@ -24,6 +24,9 @@ class AiSyncPromptsCommand extends Command
 
     public function handle(SettingsService $settings): int
     {
+        // TENANCY: deliberately platform context. The scoring rubric and the
+        // drafting skill are the product itself, stored as ONE platform-level
+        // row rather than per workspace — no tenant may fork them.
         return $this->asPlatform(fn () => $this->runForTenant($settings));
     }
 
