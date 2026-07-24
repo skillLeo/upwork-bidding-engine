@@ -35,7 +35,7 @@ trait RunsForTenants
 
         // TENANCY: the tenants table is never tenant-scoped — it is the table
         // the scope is derived from.
-        return app(TenantContext::class)->asPlatform(function () use ($slug) {
+        return \App\Tenancy\Tenancy::asPlatform(function () use ($slug) {
             $query = Tenant::query()->orderBy('id');
 
             if (is_string($slug) && $slug !== '') {
@@ -98,7 +98,7 @@ trait RunsForTenants
         $slug = $this->option('tenant') ?: config('tenancy.default_tenant_slug');
 
         // TENANCY: the tenants table is never tenant-scoped.
-        $tenant = app(TenantContext::class)->asPlatform(
+        $tenant = \App\Tenancy\Tenancy::asPlatform(
             fn () => Tenant::where('slug', $slug)->first()
         );
 

@@ -446,7 +446,7 @@ class SettingsService
 
         // TENANCY: deliberately cross-tenant — a platform default changed, so
         // every tenant that inherits it must re-read.
-        app(TenantContext::class)->asPlatform(function () {
+        \App\Tenancy\Tenancy::asPlatform(function () {
             foreach (\App\Models\Tenant::query()->pluck('id') as $id) {
                 Cache::forget($this->cacheKey((int) $id));
             }

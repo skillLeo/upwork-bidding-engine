@@ -69,7 +69,7 @@ trait RunsForTenant
 
         // TENANCY: resolving the tenant to run AS. Reads the tenants table,
         // which is never tenant-scoped.
-        $tenant = $context->asPlatform(fn () => Tenant::find($this->tenantId));
+        $tenant = \App\Tenancy\Tenancy::asPlatform(fn () => Tenant::find($this->tenantId));
 
         if ($tenant === null) {
             report(new \RuntimeException(
