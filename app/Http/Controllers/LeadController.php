@@ -463,32 +463,37 @@ class LeadController extends Controller
     }
 
     /**
-     * Two-click record of whether the client actually opened the proposal
-     * (visible on the job's Upwork page) - a toggle, not a one-way flag, so
-     * a mis-tap is one more tap to undo.
+     * Records how far the proposal got on the client's side, read off Upwork
+     * by hand (there is no API for it). Explicitly nullable: clearing it back
+     * to "not recorded" must stay possible, because null is a real state that
+     * keeps the lead out of the dying-proposals denominator rather than
+     * silently counting as "never opened".
      */
-    public function toggleViewed(Request $request, Lead $lead): JsonResponse
+    public function updateClientView(Request $request, Lead $lead): JsonResponse
     {
-        $lead->update(['viewed_at' => $lead->viewed_at === null ? now() : null]);
+        $validated = $request->validate([
+            'client_view' => ['present', 'nullable', Rule::in(\App\Enums\ClientView::values())],
+        ]);
+
+        $lead->update(['client_view' => $validated['client_view']]);
 
         ActivityLog::record(ActivityType::LeadStatusUpdated, subject: $lead, meta: [
-            'action' => 'viewed_toggled',
-            'viewed' => $lead->viewed_at !== null,
+            'action' => 'client_view_set',
+            'client_view' => $validated['client_view'],
         ], userId: $request->user()?->id);
 
         return response()->json(['data' => new LeadResource($lead->fresh('client'))]);
     }
 
     /**
-     * Records what actually happened after this lead was sent - independent
-     * of `status`, which stays exactly as it is (see LeadOutcome's own
-     * docblock for why the two are kept separate). Two clicks: open the
-     * selector, pick a value.
+     * Records why a sent proposal did NOT land. Nothing here overlaps
+     * `status` (see LeadOutcome's docblock) - status owns Replied and Won,
+     * this owns the four things status cannot say.
      */
     public function updateOutcome(Request $request, Lead $lead): JsonResponse
     {
         $validated = $request->validate([
-            'outcome' => ['nullable', Rule::in(\App\Enums\LeadOutcome::values())],
+            'outcome' => ['present', 'nullable', Rule::in(\App\Enums\LeadOutcome::values())],
         ]);
 
         $lead->update([

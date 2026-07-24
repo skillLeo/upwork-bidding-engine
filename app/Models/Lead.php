@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\ClientView;
 use App\Enums\LeadOutcome;
 use App\Enums\LeadStatus;
 use Database\Factories\LeadFactory;
@@ -16,7 +17,7 @@ use Illuminate\Database\Eloquent\Model;
     'client_country', 'client_spend', 'client_spend_amount', 'client_hire_rate', 'client_hire_rate_pct', 'client_rating', 'client_reviews', 'payment_verified',
     'proposal_count', 'connects_required', 'score', 'boost', 'score_reason', 'sub_scores', 'proposal_text', 'proposal_warnings',
     'notification_skipped_reason', 'notify_error', 'status', 'is_favorite',
-    'client_id', 'posted_at', 'submitted_at', 'viewed_at', 'outcome', 'outcome_at',
+    'client_id', 'posted_at', 'submitted_at', 'client_view', 'outcome', 'outcome_at',
 ])]
 class Lead extends Model
 {
@@ -40,10 +41,10 @@ class Lead extends Model
             'score' => 'integer',
             'boost' => 'boolean',
             'status' => LeadStatus::class,
+            'client_view' => ClientView::class,
             'outcome' => LeadOutcome::class,
             'posted_at' => 'datetime',
             'submitted_at' => 'datetime',
-            'viewed_at' => 'datetime',
             'outcome_at' => 'datetime',
         ];
     }

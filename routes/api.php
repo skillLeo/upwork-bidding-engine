@@ -110,7 +110,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/leads/{lead}/regenerate-score', [LeadController::class, 'regenerateScore']);
     Route::post('/leads/{lead}/regenerate-proposal', [LeadController::class, 'regenerateProposal']);
     Route::post('/leads/{lead}/favorite', [LeadController::class, 'toggleFavorite']);
-    Route::post('/leads/{lead}/viewed', [LeadController::class, 'toggleViewed']);
+    Route::post('/leads/{lead}/client-view', [LeadController::class, 'updateClientView']);
     Route::post('/leads/{lead}/outcome', [LeadController::class, 'updateOutcome']);
     Route::post('/leads/{lead}/rescore', [LeadController::class, 'rescore'])->middleware('role:admin');
     Route::post('/leads/sync-vollna', [LeadController::class, 'syncVollna'])->middleware('role:admin');

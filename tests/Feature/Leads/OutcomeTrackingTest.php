@@ -49,20 +49,58 @@ class OutcomeTrackingTest extends TestCase
         $this->assertNotNull($fresh->fresh()->submitted_at);
     }
 
-    public function test_toggle_viewed_flips_and_unflips(): void
+    public function test_client_view_moves_between_all_three_states_and_back_to_null(): void
+    {
+        $bidder = User::factory()->bidder()->create();
+        $lead = Lead::factory()->sent()->create();
+
+        foreach (['not_viewed', 'viewed', 'shortlisted'] as $state) {
+            $this->actingAs($bidder, 'sanctum')
+                ->postJson("/api/leads/{$lead->id}/client-view", ['client_view' => $state])
+                ->assertOk()
+                ->assertJsonPath('data.client_view', $state);
+        }
+
+        // Clearing back to "not recorded" must stay possible — null is a real
+        // state that keeps the lead out of the dying-proposals denominator.
+        $this->actingAs($bidder, 'sanctum')
+            ->postJson("/api/leads/{$lead->id}/client-view", ['client_view' => null])
+            ->assertOk()
+            ->assertJsonPath('data.client_view', null);
+
+        $this->assertNull($lead->fresh()->client_view);
+    }
+
+    public function test_client_view_rejects_an_invalid_value(): void
     {
         $bidder = User::factory()->bidder()->create();
         $lead = Lead::factory()->sent()->create();
 
         $this->actingAs($bidder, 'sanctum')
-            ->postJson("/api/leads/{$lead->id}/viewed")
-            ->assertOk()
-            ->assertJsonPath('data.viewed_at', fn ($v) => $v !== null);
+            ->postJson("/api/leads/{$lead->id}/client-view", ['client_view' => 'peeked'])
+            ->assertStatus(422);
+    }
 
-        $this->actingAs($bidder, 'sanctum')
-            ->postJson("/api/leads/{$lead->id}/viewed")
-            ->assertOk()
-            ->assertJsonPath('data.viewed_at', null);
+    /**
+     * The whole point of the outcome rework: nothing in LeadOutcome may
+     * duplicate a value `status` already carries, or the two can disagree
+     * (status=Won alongside outcome=hired_other was previously accepted).
+     */
+    public function test_outcome_cannot_express_anything_status_already_says(): void
+    {
+        $bidder = User::factory()->bidder()->create();
+        $lead = Lead::factory()->sent()->create();
+
+        foreach (['replied', 'hired_me', 'won', 'sent'] as $statusWord) {
+            $this->actingAs($bidder, 'sanctum')
+                ->postJson("/api/leads/{$lead->id}/outcome", ['outcome' => $statusWord])
+                ->assertStatus(422);
+        }
+
+        $this->assertSame(
+            ['hired_other', 'closed_no_hire', 'expired', 'unknown'],
+            \App\Enums\LeadOutcome::values(),
+        );
     }
 
     public function test_outcome_is_set_and_can_be_cleared_independent_of_status(): void

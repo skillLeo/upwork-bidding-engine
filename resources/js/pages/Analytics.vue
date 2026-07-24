@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from "vue";
-import { Activity, Award, Eye, Gauge, Send, Sparkles, TicketPercent, Zap } from "@lucide/vue";
+import { Activity, Award, Gauge, Send, Sparkles, TicketPercent, Zap } from "@lucide/vue";
 import { useAnalytics } from "@/composables/useAnalytics";
 import PageContainer from "@/components/layout/PageContainer.vue";
 import Card from "@/components/ui/Card.vue";
@@ -36,12 +36,53 @@ const replyRateRaw = computed(() => summary.value?.reply_rate_raw ?? { n: 0, rat
 const replyRateContested = computed(() => summary.value?.reply_rate_contested ?? { n: 0, rate: null });
 
 const speed = computed(() => analytics.value?.speed ?? { n: 0, median_minutes: null, p90_minutes: null });
+// `recorded` is the denominator that matters. Leads where the client-side
+// state was never filled in are counted in not_recorded and excluded from
+// the buckets — treating them as "not opened" would make a partly-filled
+// field read as a catastrophic title problem.
 const dyingProposals = computed(
-  () => analytics.value?.dying_proposals ?? { never_viewed: 0, viewed_no_reply: 0, viewed_and_replied: 0 },
+  () =>
+    analytics.value?.dying_proposals ?? {
+      not_opened: 0,
+      opened_no_reply: 0,
+      shortlisted_no_reply: 0,
+      replied: 0,
+      not_recorded: 0,
+      recorded: 0,
+      total_sent: 0,
+    },
 );
-const dyingProposalsTotal = computed(
-  () => dyingProposals.value.never_viewed + dyingProposals.value.viewed_no_reply + dyingProposals.value.viewed_and_replied,
-);
+
+const dyingBuckets = computed(() => [
+  {
+    key: "not_opened",
+    label: "Not opened",
+    value: dyingProposals.value.not_opened,
+    hint: "The title, opening line, or profile is losing them",
+    tone: "border-border",
+  },
+  {
+    key: "opened_no_reply",
+    label: "Opened, no reply",
+    value: dyingProposals.value.opened_no_reply,
+    hint: "The letter body and the closing question are losing them",
+    tone: "border-border",
+  },
+  {
+    key: "shortlisted_no_reply",
+    label: "Shortlisted, no reply",
+    value: dyingProposals.value.shortlisted_no_reply,
+    hint: "You were in the running — usually price, portfolio depth, or no follow-up",
+    tone: "border-warning/30 bg-warning/5",
+  },
+  {
+    key: "replied",
+    label: "Replied or won",
+    value: dyingProposals.value.replied,
+    hint: "It landed",
+    tone: "border-success/30 bg-success/5",
+  },
+]);
 
 function formatMinutes(mins) {
   if (mins == null) return "—";
@@ -156,31 +197,29 @@ const calibrationTakeaway = computed(() => {
         <CardTitle>Where proposals are dying</CardTitle>
       </CardHeader>
       <CardContent>
-        <EmptyState v-if="dyingProposalsTotal === 0" title="No sent proposals yet" />
+        <EmptyState v-if="dyingProposals.total_sent === 0" title="No sent proposals yet" />
+        <EmptyState
+          v-else-if="dyingProposals.recorded === 0"
+          title="Nothing recorded yet"
+          :description="`${dyingProposals.not_recorded} sent ${dyingProposals.not_recorded === 1 ? 'proposal has' : 'proposals have'} no client-side state yet. Open a lead and set &quot;On Upwork, the client&quot; to start filling this in.`"
+        />
         <template v-else>
-          <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div class="rounded-md border border-border p-4">
-              <p class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-text-tertiary">
-                <Eye class="h-3.5 w-3.5" /> Never viewed
-              </p>
-              <p class="mt-2 text-2xl font-semibold text-text-primary">{{ dyingProposals.never_viewed }}</p>
-            </div>
-            <div class="rounded-md border border-border p-4">
-              <p class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-text-tertiary">
-                <Eye class="h-3.5 w-3.5" /> Viewed, no reply
-              </p>
-              <p class="mt-2 text-2xl font-semibold text-text-primary">{{ dyingProposals.viewed_no_reply }}</p>
-            </div>
-            <div class="rounded-md border border-success/30 bg-success/5 p-4">
-              <p class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-success">
-                <Eye class="h-3.5 w-3.5" /> Viewed and replied
-              </p>
-              <p class="mt-2 text-2xl font-semibold text-text-primary">{{ dyingProposals.viewed_and_replied }}</p>
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div v-for="b in dyingBuckets" :key="b.key" :class="['rounded-md border p-4', b.tone]">
+              <p class="text-xs font-semibold uppercase tracking-wide text-text-tertiary">{{ b.label }}</p>
+              <p class="mt-2 text-2xl font-semibold text-text-primary">{{ b.value }}</p>
+              <p class="mt-1 text-xs text-text-tertiary">{{ b.hint }}</p>
             </div>
           </div>
           <p class="mt-3 text-xs text-text-tertiary">
-            Never viewed points at the title, opening line, or profile — the client didn't even open it.
-            Viewed but no reply points at the letter body and the closing question.
+            Based on {{ dyingProposals.recorded }} of {{ dyingProposals.total_sent }} sent
+            {{ dyingProposals.total_sent === 1 ? "proposal" : "proposals" }}.
+            <template v-if="dyingProposals.not_recorded > 0">
+              {{ dyingProposals.not_recorded }} still
+              {{ dyingProposals.not_recorded === 1 ? "has" : "have" }} no client-side state recorded and
+              {{ dyingProposals.not_recorded === 1 ? "is" : "are" }} excluded — they are not counted as
+              unopened. Upwork shows this on your proposals list; it can't be read automatically.
+            </template>
           </p>
         </template>
       </CardContent>

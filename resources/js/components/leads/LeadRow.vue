@@ -2,14 +2,15 @@
 import { ref, computed } from "vue";
 import { useRouter } from "vue-router";
 import { toast } from "vue-sonner";
-import { Bookmark, ChevronRight, Copy, Eye, EyeOff, ExternalLink, Loader2, ShieldCheck, Star } from "@lucide/vue";
+import { Bookmark, ChevronRight, Copy, ExternalLink, Loader2, ShieldCheck, Star } from "@lucide/vue";
 import StatusPill from "@/components/ui/StatusPill.vue";
 import Button from "@/components/ui/Button.vue";
 import {
   toggleLeadFavorite,
   updateLeadStatus,
-  toggleLeadViewed,
+  updateLeadClientView,
   updateLeadOutcome,
+  CLIENT_VIEW_STATES,
   LEAD_OUTCOMES,
 } from "@/composables/useLead";
 import { apiErrorMessage } from "@/lib/api-client";
@@ -120,15 +121,17 @@ const quickActions = [
   { status: "archived", label: "Not interested" },
 ];
 
-// Outcome tracking — independent of status, two clicks each.
+// Post-send tracking. Neither field repeats the status pills — status owns
+// Replied and Won; these record what only Upwork can tell you.
 const viewedLoading = ref(false);
 const outcomeLoading = ref(false);
 
-async function handleToggleViewed() {
+async function handleClientViewChange(event) {
+  const value = event.target.value || null;
   viewedLoading.value = true;
   try {
-    const updated = await toggleLeadViewed(props.lead.id);
-    props.lead.viewed_at = updated.viewed_at;
+    const updated = await updateLeadClientView(props.lead.id, value);
+    props.lead.client_view = updated.client_view;
   } catch (error) {
     toast.error(apiErrorMessage(error, "Could not update."));
   } finally {
@@ -371,32 +374,26 @@ function handleRowKeydown(event) {
     <!-- Outcome tracking: independent of status, only meaningful once this
          was really sent (submitted_at set), regardless of current status. -->
     <div v-if="lead.submitted_at" class="flex flex-wrap items-center gap-2 pt-0.5">
-      <button
-        type="button"
+      <select
+        :value="lead.client_view ?? ''"
         :disabled="viewedLoading"
-        @click="handleToggleViewed"
-        :class="
-          cn(
-            'flex items-center gap-1.5 rounded-pill border px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50',
-            lead.viewed_at
-              ? 'border-success/30 bg-success/10 text-success'
-              : 'border-border-strong text-text-secondary hover:bg-black/5',
-          )
-        "
+        @change="handleClientViewChange"
+        @click.stop
+        class="h-7 rounded-pill border border-border-strong bg-white px-2.5 text-xs font-medium text-text-secondary focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none disabled:opacity-50"
       >
-        <Eye v-if="lead.viewed_at" class="h-3 w-3" />
-        <EyeOff v-else class="h-3 w-3" />
-        {{ lead.viewed_at ? "Viewed" : "Viewed?" }}
-      </button>
+        <option value="">Client: haven't checked</option>
+        <option v-for="c in CLIENT_VIEW_STATES" :key="c.value" :value="c.value">Client: {{ c.label }}</option>
+      </select>
 
       <select
+        v-if="lead.status === 'sent'"
         :value="lead.outcome ?? ''"
         :disabled="outcomeLoading"
         @change="handleOutcomeChange"
         @click.stop
         class="h-7 rounded-pill border border-border-strong bg-white px-2.5 text-xs font-medium text-text-secondary focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none disabled:opacity-50"
       >
-        <option value="">Outcome: not set</option>
+        <option value="">Still waiting</option>
         <option v-for="o in LEAD_OUTCOMES" :key="o.value" :value="o.value">{{ o.label }}</option>
       </select>
     </div>

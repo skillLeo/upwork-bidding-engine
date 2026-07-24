@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\ClientView;
 use App\Enums\LeadOutcome;
 use App\Enums\LeadStatus;
 use App\Models\ActivityLog;
@@ -57,7 +58,7 @@ class AnalyticsService
         // this denominator. The numerator (replied+won) is unchanged and is
         // already a subset of "contested" by definition - a lead can't be
         // status Replied/Won while also being a confirmed no-reply dead end.
-        $deadEndOutcomes = [LeadOutcome::ClosedNoHire->value, LeadOutcome::Expired->value, LeadOutcome::Unknown->value];
+        $deadEndOutcomes = LeadOutcome::deadEndValues();
         $contestedSent = Lead::query()->whereIn('status', $sentStatuses)
             ->where(fn ($q) => $q->whereNull('outcome')->orWhereNotIn('outcome', $deadEndOutcomes))
             ->count();
@@ -114,26 +115,58 @@ class AnalyticsService
     }
 
     /**
-     * Splits sent-or-beyond leads into three buckets so a low reply rate
-     * points at a specific fix: never viewed points at the title/opening
-     * line/profile (the client didn't even open it), viewed-but-no-reply
-     * points at the letter body and the closing question.
+     * Splits sent proposals by how far they got on the client's side, so a
+     * low reply rate points at a specific fix rather than a vague one:
      *
-     * @return array{never_viewed: int, viewed_no_reply: int, viewed_and_replied: int}
+     *   not_opened           -> the title, the opening line, or the profile
+     *   opened_no_reply      -> the letter body and the closing question
+     *   shortlisted_no_reply -> you were in the running; price, portfolio
+     *                           depth, or a missing follow-up
+     *   replied              -> it landed
+     *
+     * client_view is filled in by hand off Upwork, so it is often partly
+     * complete. NULL means "not recorded", NOT "the client never opened it";
+     * counting untouched leads as not-opened would make a half-filled field
+     * read as a catastrophic title problem. Those leads are reported
+     * separately in `not_recorded` and excluded from every bucket above, so
+     * partial data gives a usable signal instead of a misleading one.
+     *
+     * `replied` is keyed off status, not client_view: a client who replied
+     * demonstrably opened it, so that is a fact rather than a guess, and it
+     * counts even when client_view was never touched.
+     *
+     * @return array{not_opened: int, opened_no_reply: int, shortlisted_no_reply: int, replied: int, not_recorded: int, recorded: int, total_sent: int}
      */
     public function dyingProposals(): array
     {
         $sentStatuses = [LeadStatus::Sent->value, LeadStatus::Replied->value, LeadStatus::Won->value];
-        $repliedOutcomes = [LeadOutcome::Replied->value, LeadOutcome::HiredMe->value];
+        $repliedStatuses = [LeadStatus::Replied->value, LeadStatus::Won->value];
 
         $base = fn () => Lead::query()->whereIn('status', $sentStatuses);
 
+        // Awaiting a reply AND the client-side state was actually recorded.
+        $pending = fn () => Lead::query()
+            ->where('status', LeadStatus::Sent->value)
+            ->whereNotNull('client_view');
+
+        $replied = $base()->whereIn('status', $repliedStatuses)->count();
+        $notOpened = $pending()->where('client_view', ClientView::NotViewed->value)->count();
+        $openedNoReply = $pending()->where('client_view', ClientView::Viewed->value)->count();
+        $shortlistedNoReply = $pending()->where('client_view', ClientView::Shortlisted->value)->count();
+
+        $notRecorded = $base()->where('status', LeadStatus::Sent->value)->whereNull('client_view')->count();
+
         return [
-            'never_viewed' => $base()->whereNull('viewed_at')->count(),
-            'viewed_no_reply' => $base()->whereNotNull('viewed_at')
-                ->where(fn ($q) => $q->whereNull('outcome')->orWhereNotIn('outcome', $repliedOutcomes))
-                ->count(),
-            'viewed_and_replied' => $base()->whereNotNull('viewed_at')->whereIn('outcome', $repliedOutcomes)->count(),
+            'not_opened' => $notOpened,
+            'opened_no_reply' => $openedNoReply,
+            'shortlisted_no_reply' => $shortlistedNoReply,
+            'replied' => $replied,
+            // Surfaced, not hidden: if this dwarfs the buckets above, the
+            // panel is reading a field nobody is filling in and should be
+            // treated as noise until it is.
+            'not_recorded' => $notRecorded,
+            'recorded' => $notOpened + $openedNoReply + $shortlistedNoReply + $replied,
+            'total_sent' => $base()->count(),
         ];
     }
 

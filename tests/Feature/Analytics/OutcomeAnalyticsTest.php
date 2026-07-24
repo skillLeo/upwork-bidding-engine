@@ -72,15 +72,58 @@ class OutcomeAnalyticsTest extends TestCase
     {
         $admin = User::factory()->admin()->create();
 
-        Lead::factory()->sent()->create(['viewed_at' => null]); // never viewed
-        Lead::factory()->sent()->create(['viewed_at' => now(), 'outcome' => null]); // viewed, no reply yet
-        Lead::factory()->sent()->create(['viewed_at' => now(), 'outcome' => 'closed_no_hire']); // viewed, dead end
-        Lead::factory()->replied()->create(['viewed_at' => now(), 'outcome' => 'replied']); // viewed + replied
+        Lead::factory()->sent()->create(['client_view' => 'not_viewed']);
+        Lead::factory()->sent()->create(['client_view' => 'viewed']);
+        Lead::factory()->sent()->create(['client_view' => 'viewed', 'outcome' => 'closed_no_hire']);
+        Lead::factory()->sent()->create(['client_view' => 'shortlisted']);
+        Lead::factory()->replied()->create(['client_view' => 'viewed']);
 
-        $res = $this->actingAs($admin, 'sanctum')->getJson('/api/analytics')->assertOk();
+        $d = $this->actingAs($admin, 'sanctum')->getJson('/api/analytics')->assertOk()->json('data.dying_proposals');
 
-        $this->assertSame(1, $res->json('data.dying_proposals.never_viewed'));
-        $this->assertSame(2, $res->json('data.dying_proposals.viewed_no_reply'));
-        $this->assertSame(1, $res->json('data.dying_proposals.viewed_and_replied'));
+        $this->assertSame(1, $d['not_opened']);
+        $this->assertSame(2, $d['opened_no_reply']);
+        $this->assertSame(1, $d['shortlisted_no_reply']);
+        $this->assertSame(1, $d['replied']);
+        $this->assertSame(0, $d['not_recorded']);
+        $this->assertSame(5, $d['recorded']);
+        $this->assertSame(5, $d['total_sent']);
+    }
+
+    /**
+     * The correction that matters most: a blank client_view means "I have not
+     * checked Upwork yet", NOT "the client never opened it". Counting those as
+     * not_opened would make a partly-filled field read as a catastrophic title
+     * problem — misleading analytics, which is worse than none.
+     */
+    public function test_leads_with_no_recorded_client_view_are_excluded_not_counted_as_unopened(): void
+    {
+        $admin = User::factory()->admin()->create();
+
+        Lead::factory()->count(9)->sent()->create(['client_view' => null]);
+        Lead::factory()->sent()->create(['client_view' => 'not_viewed']);
+
+        $d = $this->actingAs($admin, 'sanctum')->getJson('/api/analytics')->assertOk()->json('data.dying_proposals');
+
+        $this->assertSame(1, $d['not_opened'], 'only the one actually recorded as unopened');
+        $this->assertSame(9, $d['not_recorded']);
+        $this->assertSame(1, $d['recorded']);
+        $this->assertSame(10, $d['total_sent']);
+    }
+
+    /**
+     * A reply is hard evidence the client opened it, so it counts even when
+     * the manual field was never touched — real signal is not thrown away.
+     */
+    public function test_a_reply_counts_as_landed_even_with_no_recorded_client_view(): void
+    {
+        $admin = User::factory()->admin()->create();
+
+        Lead::factory()->replied()->create(['client_view' => null]);
+        Lead::factory()->won()->create(['client_view' => null]);
+
+        $d = $this->actingAs($admin, 'sanctum')->getJson('/api/analytics')->assertOk()->json('data.dying_proposals');
+
+        $this->assertSame(2, $d['replied']);
+        $this->assertSame(0, $d['not_recorded'], 'not_recorded only ever covers leads still awaiting a reply');
     }
 }

@@ -47,7 +47,7 @@ class LeadResource extends JsonResource
             'status' => $this->status->value,
             'is_favorite' => (bool) $this->is_favorite,
             'submitted_at' => $this->submitted_at?->toIso8601String(),
-            'viewed_at' => $this->viewed_at?->toIso8601String(),
+            'client_view' => $this->client_view?->value,
             'outcome' => $this->outcome?->value,
             'outcome_at' => $this->outcome_at?->toIso8601String(),
             'client_id' => $this->client_id,

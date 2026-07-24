@@ -43,8 +43,10 @@ export async function toggleLeadFavorite(id) {
   return res.data.data;
 }
 
-export async function toggleLeadViewed(id) {
-  const res = await apiClient.post(`/leads/${id}/viewed`);
+// Tri-state, and null is a real value meaning "not recorded" - passing it
+// clears the field rather than being a no-op.
+export async function updateLeadClientView(id, clientView) {
+  const res = await apiClient.post(`/leads/${id}/client-view`, { client_view: clientView });
   return res.data.data;
 }
 
@@ -53,13 +55,22 @@ export async function updateLeadOutcome(id, outcome) {
   return res.data.data;
 }
 
+// Upwork shows this per proposal but exposes no API for it, so it is typed
+// in by hand. "" (null server-side) stays distinct from "not_viewed".
+export const CLIENT_VIEW_STATES = [
+  { value: "not_viewed", label: "Not opened" },
+  { value: "viewed", label: "Opened" },
+  { value: "shortlisted", label: "Shortlisted" },
+];
+
+// Only reasons a proposal did NOT land. Replied and Won are deliberately
+// absent - `status` already owns those, and duplicating them here is what
+// let a lead read as Won and "hired someone else" simultaneously.
 export const LEAD_OUTCOMES = [
-  { value: "replied", label: "Replied" },
-  { value: "hired_me", label: "Hired me" },
-  { value: "hired_other", label: "Hired someone else" },
-  { value: "closed_no_hire", label: "Closed, nobody hired" },
-  { value: "expired", label: "Expired" },
-  { value: "unknown", label: "Unknown" },
+  { value: "hired_other", label: "Client hired someone else" },
+  { value: "closed_no_hire", label: "Job closed, nobody hired" },
+  { value: "expired", label: "Posting expired" },
+  { value: "unknown", label: "Never found out" },
 ];
 
 export async function regenerateLeadScore(id) {

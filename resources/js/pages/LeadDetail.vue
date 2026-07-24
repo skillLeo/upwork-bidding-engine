@@ -7,8 +7,6 @@ import {
   ArrowLeft,
   Coins,
   Copy,
-  Eye,
-  EyeOff,
   ExternalLink,
   Globe2,
   History,
@@ -34,8 +32,9 @@ import {
   fetchProposalVersions,
   aiEditProposal,
   acceptAiEditProposal,
-  toggleLeadViewed,
+  updateLeadClientView,
   updateLeadOutcome,
+  CLIENT_VIEW_STATES,
   LEAD_OUTCOMES,
 } from "@/composables/useLead";
 import Textarea from "@/components/ui/Textarea.vue";
@@ -135,15 +134,17 @@ async function handleCopy() {
   toast.success("Proposal copied to clipboard.");
 }
 
-// Outcome tracking — independent of status, two clicks each.
+// Post-send tracking. Two separate questions, no overlap with status:
+// how far it got on the client's side, and (if it didn't land) why.
 const viewedLoading = ref(false);
 const outcomeLoading = ref(false);
 
-async function handleToggleViewed() {
-  if (!lead.value || viewedLoading.value) return;
+async function handleClientViewChange(event) {
+  if (!lead.value) return;
+  const value = event.target.value || null;
   viewedLoading.value = true;
   try {
-    lead.value = await toggleLeadViewed(lead.value.id);
+    lead.value = await updateLeadClientView(lead.value.id, value);
   } catch (error) {
     toast.error(apiErrorMessage(error, "Could not update."));
   } finally {
@@ -861,39 +862,45 @@ async function handleRegenerateProposal() {
             </Button>
           </div>
 
-          <!-- Outcome tracking: what actually happened, independent of the
-               status pipeline above. Only meaningful once this was really
-               sent (submitted_at set), regardless of current status. -->
-          <div v-if="lead.submitted_at" class="mt-4 space-y-2.5 border-t border-border pt-4">
-            <button
-              type="button"
-              :disabled="viewedLoading"
-              @click="handleToggleViewed"
-              :class="
-                cn(
-                  'flex w-full items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50',
-                  lead.viewed_at
-                    ? 'border-success/30 bg-success/10 text-success'
-                    : 'border-border-strong text-text-secondary hover:bg-black/5',
-                )
-              "
-            >
-              <Eye v-if="lead.viewed_at" class="h-4 w-4" />
-              <EyeOff v-else class="h-4 w-4" />
-              {{ lead.viewed_at ? "Client viewed this" : "Client viewed this?" }}
-            </button>
-
+          <!-- Post-send tracking. Neither field repeats the status buttons
+               above: status owns Replied and Won, these two record what
+               only Upwork can tell you. Both are typed in by hand. -->
+          <div v-if="lead.submitted_at" class="mt-4 space-y-3 border-t border-border pt-4">
             <div>
-              <label class="mb-1 block text-xs font-medium text-text-tertiary">Outcome</label>
+              <label class="mb-1 block text-xs font-medium text-text-tertiary">
+                On Upwork, the client
+              </label>
+              <select
+                :value="lead.client_view ?? ''"
+                :disabled="viewedLoading"
+                @change="handleClientViewChange"
+                class="h-9 w-full rounded-md border border-border-strong bg-white px-2.5 text-sm text-text-primary focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none disabled:opacity-50"
+              >
+                <option value="">Haven't checked</option>
+                <option v-for="c in CLIENT_VIEW_STATES" :key="c.value" :value="c.value">{{ c.label }}</option>
+              </select>
+              <p class="mt-1 text-xs text-text-tertiary">
+                Read off your Upwork proposals list. Leaving this on "Haven't checked" keeps the
+                lead out of the Analytics breakdown rather than counting it as never opened.
+              </p>
+            </div>
+
+            <div v-if="lead.status === 'sent'">
+              <label class="mb-1 block text-xs font-medium text-text-tertiary">
+                If it didn't land, why
+              </label>
               <select
                 :value="lead.outcome ?? ''"
                 :disabled="outcomeLoading"
                 @change="handleOutcomeChange"
                 class="h-9 w-full rounded-md border border-border-strong bg-white px-2.5 text-sm text-text-primary focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none disabled:opacity-50"
               >
-                <option value="">Not set yet</option>
+                <option value="">Still waiting</option>
                 <option v-for="o in LEAD_OUTCOMES" :key="o.value" :value="o.value">{{ o.label }}</option>
               </select>
+              <p class="mt-1 text-xs text-text-tertiary">
+                Marking a job as closed or expired stops it counting against your reply rate.
+              </p>
             </div>
           </div>
 
