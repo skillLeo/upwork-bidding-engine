@@ -606,7 +606,7 @@ async function handleRegenerateProposal() {
             </div>
             <div v-if="!editing" class="flex items-center gap-2">
               <Button
-                v-if="auth.can('proposals.rewrite')"
+                v-if="auth.can('proposals.ai_rewrite')"
                 variant="secondary"
                 size="sm"
                 :disabled="regenLoading !== null"
