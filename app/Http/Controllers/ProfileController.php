@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Enums\ActivityType;
+use App\Enums\AuthEventType;
 use App\Http\Resources\UserResource;
 use App\Models\ActivityLog;
+use App\Models\AuthEvent;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -75,6 +77,8 @@ class ProfileController extends Controller
             'action' => 'password_changed',
         ]);
 
+        AuthEvent::record(AuthEventType::PasswordChanged, user: $user, request: $request);
+
         return response()->json(['data' => ['message' => 'Password updated.']]);
     }
 
@@ -120,6 +124,12 @@ class ProfileController extends Controller
             'action' => 'two_factor_toggled',
             'enabled' => $validated['enabled'],
         ]);
+
+        AuthEvent::record(
+            $validated['enabled'] ? AuthEventType::TwoFactorEnabled : AuthEventType::TwoFactorDisabled,
+            user: $user,
+            request: $request,
+        );
 
         return response()->json(['data' => new UserResource($user)]);
     }

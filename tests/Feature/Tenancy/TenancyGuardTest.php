@@ -60,7 +60,10 @@ class TenancyGuardTest extends TestCase
         'users' => 'a user can belong to several workspaces (tenant_users is the link)',
         'migrations' => 'framework',
         'password_reset_tokens' => 'framework auth, keyed by email',
-        'personal_access_tokens' => 'framework auth; gains tenant_id in P3',
+        'personal_access_tokens' => 'framework auth; tenant_id records issuing workspace only (P3)',
+        'auth_events' => 'security audit log — deliberately unscoped: a failed login has no tenant, '
+            .'and scoping would hide exactly the rows an investigation needs. tenant_id is recorded '
+            .'when known and filtered explicitly at query sites. See AuthEvent.',
         'sessions' => 'framework',
         'cache' => 'framework',
         'cache_locks' => 'framework',

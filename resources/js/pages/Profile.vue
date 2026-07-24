@@ -3,6 +3,7 @@ import PageContainer from "@/components/layout/PageContainer.vue";
 import ProfileBasicInfoSection from "@/components/profile/ProfileBasicInfoSection.vue";
 import ProfilePasswordSection from "@/components/profile/ProfilePasswordSection.vue";
 import ProfileSecuritySection from "@/components/profile/ProfileSecuritySection.vue";
+import ProfileSessionsSection from "@/components/profile/ProfileSessionsSection.vue";
 </script>
 
 <template>
@@ -14,5 +15,6 @@ import ProfileSecuritySection from "@/components/profile/ProfileSecuritySection.
     <ProfileBasicInfoSection />
     <ProfilePasswordSection />
     <ProfileSecuritySection />
+    <ProfileSessionsSection />
   </PageContainer>
 </template>

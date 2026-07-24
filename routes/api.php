@@ -9,6 +9,7 @@ use App\Http\Controllers\HealthPingController;
 use App\Http\Controllers\LeadController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SavedFilterController;
+use App\Http\Controllers\SessionController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\VollnaWebhookController;
 use App\Http\Middleware\VerifyVollnaSecret;
@@ -72,9 +73,17 @@ Route::post('/auth/dev-login', [AuthController::class, 'devLogin'])
 Route::post('/auth/verify-otp', [AuthController::class, 'verifyOtp'])
     ->middleware('throttle:otp');
 Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])
-    ->middleware('throttle:login');
+    ->middleware('throttle:password-reset');
 Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])
     ->middleware('throttle:login');
+
+// The "this wasn't me" link in the new-device email. Unauthenticated by
+// necessity — a mail client has no session — so the `signed` middleware is
+// what makes it safe: Laravel verifies the HMAC and the 7-day expiry, and a
+// forged or replayed link is rejected before this ever runs.
+Route::get('/auth/revoke-all/{user}', [SessionController::class, 'revokeAllFromEmail'])
+    ->middleware(['signed', 'throttle:webhooks'])
+    ->name('auth.revoke-all');
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
@@ -90,6 +99,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/profile/password', [ProfileController::class, 'updatePassword']);
     Route::post('/profile/avatar', [ProfileController::class, 'uploadAvatar']);
     Route::put('/profile/two-factor', [ProfileController::class, 'toggleTwoFactor']);
+
+    // Devices and sessions — always scoped to the caller's own account.
+    Route::get('/profile/sessions', [SessionController::class, 'index']);
+    Route::delete('/profile/sessions/others', [SessionController::class, 'destroyOthers']);
+    Route::delete('/profile/sessions/{token}', [SessionController::class, 'destroy']);
 
     /*
     |----------------------------------------------------------------------

@@ -50,7 +50,11 @@ return [
     |
     */
 
-    'expiration' => null,
+    // 30 days, absolute, from issue. Previously null — tokens never expired
+    // server-side, so a leaked token was valid forever. Idle expiry (unused
+    // for 14 days) is separate and enforced at use by EnforceTokenFreshness,
+    // because Sanctum has no concept of it.
+    'expiration' => 60 * 24 * 30,
 
     /*
     |--------------------------------------------------------------------------

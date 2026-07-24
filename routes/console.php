@@ -101,3 +101,13 @@ Schedule::call(fn () => Cache::forever('cron:last_tick', now()->toIso8601String(
 Schedule::call(fn () => Artisan::call('ops:heartbeat'))
     ->everyMinute()
     ->name('external-heartbeat');
+
+// Housekeeping only, NOT enforcement: both expiry rules (absolute via
+// Sanctum, idle via TokenFreshness) are applied at the moment a token
+// is used, so if this cron dies nothing becomes less secure — it just leaves
+// dead rows in the table. That distinction matters on this host, where every
+// scheduled task rides one cron entry that has died before.
+Schedule::call(fn () => Artisan::call('auth:prune-tokens'))
+    ->daily()
+    ->name('prune-expired-tokens')
+    ->withoutOverlapping(30);

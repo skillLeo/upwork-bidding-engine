@@ -48,12 +48,22 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(60)->by($request->ip());
         });
 
-        // Password guessing: keyed on IP + the submitted email so one
-        // attacker can't burn through many accounts by spreading requests
-        // across emails, and one email can't be hammered from many IPs
-        // without also hitting the IP-only webhooks-style limit elsewhere.
+        // A COARSE IP backstop only. The real per-account rule (5 attempts,
+        // then exponential backoff to a 15-minute lock) lives in
+        // App\Services\Auth\LoginThrottle, which is the authority. This one
+        // exists purely to blunt a single IP spraying many addresses — set
+        // wide enough that it never fires before LoginThrottle does, because
+        // a limiter that trips first would mask the real lockout and its
+        // clearer message.
         RateLimiter::for('login', function (Request $request) {
-            return Limit::perMinute(6)->by($request->ip().'|'.$request->input('email'));
+            return Limit::perMinute(30)->by($request->ip());
+        });
+
+        // Password reset request: 3 per email per hour. Keyed on the email
+        // rather than the IP because the abuse this stops is mail-bombing one
+        // person's inbox, which an attacker would happily do from many IPs.
+        RateLimiter::for('password-reset', function (Request $request) {
+            return Limit::perHour(3)->by(\Illuminate\Support\Str::lower((string) $request->input('email')));
         });
 
         // A 6-digit OTP is only ~1M possibilities - this has to be tight
@@ -63,6 +73,16 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('otp', function (Request $request) {
             return Limit::perMinute(5)->by($request->ip().'|'.$request->input('challenge'));
         });
+
+        // Idle-token expiry, enforced as part of token VALIDATION rather
+        // than as middleware. Sanctum stamps last_used_at = now() while
+        // authenticating, before any middleware runs, so a middleware could
+        // never observe a stale timestamp. This callback runs inside
+        // isValidAccessToken(), i.e. before that stamp. See TokenFreshness.
+        \Laravel\Sanctum\Sanctum::authenticateAccessTokensUsing(
+            fn ($accessToken, bool $isValid) => app(\App\Services\Auth\TokenFreshness::class)
+                ->enforce($accessToken, $isValid)
+        );
 
         $this->configureDynamicMail();
 
