@@ -21,7 +21,10 @@ use Spatie\Permission\Traits\HasRoles;
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasApiTokens, HasFactory, HasRoles, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable;
+    use HasRoles {
+        hasPermissionTo as protected spatieHasPermissionTo;
+    }
 
     /**
      * Spatie's HasRoles defaults to the 'web' guard; our API auth is the
@@ -53,6 +56,54 @@ class User extends Authenticatable
     public function isBidder(): bool
     {
         return $this->role === UserRole::Bidder;
+    }
+
+    /**
+     * Deny-aware permission check. Spatie's Gate::before delegates every
+     * ->can() to checkPermissionTo(), which lands here — so intercepting AT
+     * THE MODEL is ordering-proof, unlike a second Gate::before (package
+     * providers boot first, so Spatie's "granted" would win before an app
+     * hook ever ran; learned by failing test). A per-user deny row beats any
+     * role or direct grant; the workspace owner is exempt, which is the lock
+     * that keeps the repair path open.
+     */
+    public function hasPermissionTo($permission, $guardName = null): bool
+    {
+        $name = \is_string($permission)
+            ? $permission
+            : ($permission->name ?? (string) $permission);
+
+        $tenant = \App\Tenancy\Tenancy::current();
+
+        if ($tenant !== null
+            && $tenant->owner_user_id !== $this->id
+            && in_array($name, \App\Models\PermissionDeny::forUser($this->id), true)) {
+            return false;
+        }
+
+        return $this->spatieHasPermissionTo($permission, $guardName);
+    }
+
+    /**
+     * Role grants + direct grants, minus this user's denies for the current
+     * tenant (owner exempt). This is what the frontend's can() helper runs
+     * on, and it must agree exactly with the server-side Gate resolution.
+     *
+     * @return array<int, string>
+     */
+    public function effectivePermissions(): array
+    {
+        $granted = $this->getAllPermissions()->pluck('name')->values()->all();
+
+        $tenant = \App\Tenancy\Tenancy::current();
+
+        if ($tenant === null || $tenant->owner_user_id === $this->id) {
+            return $granted;
+        }
+
+        $denied = \App\Models\PermissionDeny::forUser($this->id);
+
+        return array_values(array_diff($granted, $denied));
     }
 
     public function platformRole(): ?PlatformRole

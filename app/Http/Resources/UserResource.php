@@ -26,7 +26,10 @@ class UserResource extends JsonResource
             // HIDE actions the user can't perform — hide, not disable, so a
             // button that can never work is never shown.
             'tenant_role' => $this->getRoleNames()->first(),
-            'permissions' => $this->getAllPermissions()->pluck('name')->values(),
+            // EFFECTIVE permissions: role grants + per-user direct grants,
+            // MINUS per-user denies (the Gate::before hook enforces the same
+            // subtraction server-side). The owner is exempt from denies.
+            'permissions' => $this->effectivePermissions(),
             'platform_role' => $this->platform_role,
             'avatar_url' => $this->avatar_path ? Storage::disk('public')->url($this->avatar_path) : null,
             'two_factor_enabled' => (bool) $this->two_factor_enabled,

@@ -120,24 +120,24 @@ Route::middleware('auth:sanctum')->group(function () {
     | is admin-only (it re-spends the AI call).
     |----------------------------------------------------------------------
     */
-    Route::get('/leads', [LeadController::class, 'index']);
-    Route::post('/leads/bulk-status', [LeadController::class, 'bulkStatus']);
-    Route::post('/leads/bulk-favorite', [LeadController::class, 'bulkFavorite']);
-    Route::get('/leads/{lead}', [LeadController::class, 'show']);
+    Route::get('/leads', [LeadController::class, 'index'])->middleware('permission:leads.view');
+    Route::post('/leads/bulk-status', [LeadController::class, 'bulkStatus'])->middleware('permission:leads.bulk');
+    Route::post('/leads/bulk-favorite', [LeadController::class, 'bulkFavorite'])->middleware('permission:leads.bulk');
+    Route::get('/leads/{lead}', [LeadController::class, 'show'])->middleware('permission:leads.view');
     Route::post('/leads/{lead}/status', [LeadController::class, 'updateStatus']);
     Route::put('/leads/{lead}/proposal', [LeadController::class, 'updateProposal']);
-    Route::get('/leads/{lead}/proposal-versions', [LeadController::class, 'proposalVersions']);
+    Route::get('/leads/{lead}/proposal-versions', [LeadController::class, 'proposalVersions'])->middleware('permission:proposals.versions_view');
     Route::post('/leads/{lead}/proposal/ai-edit', [LeadController::class, 'aiEditProposal']);
     Route::post('/leads/{lead}/proposal/ai-edit/accept', [LeadController::class, 'acceptAiEditProposal']);
-    Route::post('/leads/{lead}/regenerate-score', [LeadController::class, 'regenerateScore']);
+    Route::post('/leads/{lead}/regenerate-score', [LeadController::class, 'regenerateScore'])->middleware('permission:leads.rescore');
     Route::post('/leads/{lead}/regenerate-proposal', [LeadController::class, 'regenerateProposal']);
-    Route::post('/leads/{lead}/favorite', [LeadController::class, 'toggleFavorite']);
-    Route::post('/leads/{lead}/client-view', [LeadController::class, 'updateClientView']);
-    Route::post('/leads/{lead}/outcome', [LeadController::class, 'updateOutcome']);
-    // rescore authorizes via LeadPolicy inside the controller (it re-spends
-    // an AI call). sync-vollna can prune leads, so it needs leads.delete.
-    Route::post('/leads/{lead}/rescore', [LeadController::class, 'rescore']);
-    Route::post('/leads/sync-vollna', [LeadController::class, 'syncVollna'])->middleware('permission:leads.delete');
+    Route::post('/leads/{lead}/favorite', [LeadController::class, 'toggleFavorite'])->middleware('permission:leads.favorite');
+    Route::post('/leads/{lead}/client-view', [LeadController::class, 'updateClientView'])->middleware('permission:leads.set_client_view');
+    Route::post('/leads/{lead}/outcome', [LeadController::class, 'updateOutcome'])->middleware('permission:leads.set_outcome');
+    // rescore also authorizes via LeadPolicy; sync now has its own permission
+    // rather than piggybacking on leads.delete.
+    Route::post('/leads/{lead}/rescore', [LeadController::class, 'rescore'])->middleware('permission:leads.rescore');
+    Route::post('/leads/sync-vollna', [LeadController::class, 'syncVollna'])->middleware('permission:leads.sync_vollna');
 
     /*
     |----------------------------------------------------------------------
@@ -150,9 +150,11 @@ Route::middleware('auth:sanctum')->group(function () {
     | In-app notifications (the bell) — account-wide, both roles.
     |----------------------------------------------------------------------
     */
-    Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'index']);
-    Route::post('/notifications/read-all', [\App\Http\Controllers\NotificationController::class, 'markAllRead']);
-    Route::post('/notifications/{notification}/read', [\App\Http\Controllers\NotificationController::class, 'markRead']);
+    Route::middleware('permission:notifications.view')->group(function () {
+        Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'index']);
+        Route::post('/notifications/read-all', [\App\Http\Controllers\NotificationController::class, 'markAllRead']);
+        Route::post('/notifications/{notification}/read', [\App\Http\Controllers\NotificationController::class, 'markRead']);
+    });
 
     // Web Push (lock-screen / closed-browser notifications).
     Route::get('/push/vapid-key', [\App\Http\Controllers\PushController::class, 'vapidKey']);
@@ -169,39 +171,58 @@ Route::middleware('auth:sanctum')->group(function () {
     | Clients / conversation memory
     |----------------------------------------------------------------------
     */
-    Route::get('/clients/{client}', [ClientController::class, 'show']);
-    Route::post('/clients/{client}/draft-reply', [ClientController::class, 'draftReply']);
+    Route::get('/clients/{client}', [ClientController::class, 'show'])->middleware('permission:clients.view');
+    Route::post('/clients/{client}/draft-reply', [ClientController::class, 'draftReply'])->middleware('permission:clients.ai_draft_reply');
 
     /*
     |----------------------------------------------------------------------
-    | Settings. GET is settings.view (a bidder can see rules), but the
-    | controller OMITS every secret field entirely for anyone without
-    | settings.edit_secrets — absent from the body, not masked in it.
-    | Writes and secret-specific endpoints require the tighter permissions.
+    | Settings — ULTRA-GRANULAR. GET needs only settings.view; the payload
+    | omits every secret key the caller doesn't hold setting.{key} for.
+    | Writes are checked PER KEY inside store(): posting a key without its
+    | own setting.{key} permission is a 403 naming the key.
     |----------------------------------------------------------------------
     */
     Route::middleware('permission:settings.view')->group(function () {
         Route::get('/settings', [SettingsController::class, 'index']);
-        Route::get('/diagnostics', DiagnosticsController::class);
+        Route::post('/settings', [SettingsController::class, 'store']);
     });
 
-    Route::middleware('permission:settings.edit_rules')->group(function () {
-        // store() enforces per-key: a rule key needs edit_rules, a secret key
-        // needs edit_secrets, checked inside the controller.
-        Route::post('/settings', [SettingsController::class, 'store']);
+    Route::get('/diagnostics', DiagnosticsController::class)
+        ->middleware('permission:diagnostics.view');
+
+    Route::middleware('permission:setting.app_logo_path')->group(function () {
         Route::post('/settings/logo', [SettingsController::class, 'uploadLogo']);
         Route::delete('/settings/logo', [SettingsController::class, 'removeLogo']);
     });
 
-    Route::middleware('permission:settings.edit_secrets')->group(function () {
+    // The agent token is one specific credential, so its reveal/regenerate
+    // hang off that key's own permission.
+    Route::middleware('permission:setting.agent_api_token')->group(function () {
         Route::get('/settings/agent-token', [SettingsController::class, 'revealAgentToken']);
         Route::post('/settings/agent-token/regenerate', [SettingsController::class, 'regenerateAgentToken']);
-        Route::post('/settings/test/{service}', [SettingsController::class, 'testConnection']);
-        Route::get('/ai-usage', \App\Http\Controllers\AiUsageController::class);
     });
+
+    Route::post('/settings/test/{service}', [SettingsController::class, 'testConnection'])
+        ->middleware('permission:settings.test_connections');
+
+    Route::get('/ai-usage', \App\Http\Controllers\AiUsageController::class)
+        ->middleware('permission:ai_usage.view');
 
     Route::middleware('permission:analytics.view')->group(function () {
         Route::get('/analytics', [AnalyticsController::class, 'index']);
+    });
+
+    /*
+    |----------------------------------------------------------------------
+    | Permission editing — roles' grants and per-user overrides. Gated by
+    | permissions.edit, itself a permission the owner can hand out or
+    | revoke. The owner role and the owner user are untouchable regardless.
+    |----------------------------------------------------------------------
+    */
+    Route::middleware('permission:permissions.edit')->group(function () {
+        Route::put('/roles/{role}/permissions', [\App\Http\Controllers\PermissionEditorController::class, 'updateRole']);
+        Route::get('/members/{user}/overrides', [\App\Http\Controllers\PermissionEditorController::class, 'showOverrides']);
+        Route::put('/members/{user}/overrides', [\App\Http\Controllers\PermissionEditorController::class, 'updateOverrides']);
     });
 
     /*

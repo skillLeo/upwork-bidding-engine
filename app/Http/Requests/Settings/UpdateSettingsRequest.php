@@ -14,10 +14,10 @@ class UpdateSettingsRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        // Route middleware already required settings.edit_rules to reach here;
-        // the store() method applies the tighter per-key secret check. This
-        // just confirms the base capability rather than an inline role name.
-        return (bool) $this->user()?->can(\App\Authorization\Permissions::SETTINGS_EDIT_RULES);
+        // The real gate is PER KEY in SettingsController::store() — every
+        // posted key requires its own setting.{key} permission. This only
+        // confirms the caller may see Settings at all.
+        return (bool) $this->user()?->can(\App\Authorization\Permissions::SETTINGS_VIEW);
     }
 
     /**

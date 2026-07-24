@@ -155,7 +155,12 @@ class LeadController extends Controller
             return $parsed['chips'];
         }
 
-        $aiCriteria = $this->tryAiSearchFallback($search);
+        // The AI fallback is its own permission (it spends an agent call).
+        // Lacking it degrades gracefully to the plain keyword LIKE below —
+        // search never errors, it just doesn't get the expensive parse.
+        $aiCriteria = request()->user()?->can(\App\Authorization\Permissions::LEADS_AI_SEARCH)
+            ? $this->tryAiSearchFallback($search)
+            : null;
 
         if ($aiCriteria !== null) {
             $this->applyNlCriteria($query, $aiCriteria);
@@ -686,7 +691,7 @@ class LeadController extends Controller
      */
     public function aiEditProposal(Request $request, Lead $lead, \App\Services\Ai\ProposalEditor $editor): JsonResponse
     {
-        $this->authorize('rewriteProposal', $lead);
+        $this->authorize('aiEditProposal', $lead);
         $validated = $request->validate([
             'instruction' => ['required', 'string', 'max:1000'],
             'selection_start' => ['nullable', 'integer', 'min:0', 'required_with:selection_end'],

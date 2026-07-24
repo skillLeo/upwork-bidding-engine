@@ -74,6 +74,11 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(5)->by($request->ip().'|'.$request->input('challenge'));
         });
 
+        // Per-user permission DENIES are enforced in User::hasPermissionTo()
+        // (see the comment there for why NOT a Gate::before: Spatie's own
+        // before hook registers first and would win). Nothing to register
+        // here — noted so nobody re-adds a second, dead hook.
+
         // Idle-token expiry, enforced as part of token VALIDATION rather
         // than as middleware. Sanctum stamps last_used_at = now() while
         // authenticating, before any middleware runs, so a middleware could

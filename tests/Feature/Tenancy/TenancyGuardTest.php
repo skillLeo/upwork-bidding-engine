@@ -80,6 +80,8 @@ class TenancyGuardTest extends TestCase
         'model_has_permissions' => 'Spatie pivot, tenant_id is the team key',
         'role_has_permissions' => 'Spatie pivot',
         'app_notification_reads' => 'per-user read state; keyed by (notification, user), the notification carries the scope',
+        'permission_denies' => 'per-user permission denies; composite (tenant,user,permission) key written explicitly, '
+            .'and read inside Gate::before where the global scope would throw. See PermissionDeny.',
     ];
 
     /**

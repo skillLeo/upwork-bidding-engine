@@ -1,7 +1,8 @@
 <script setup>
 import { onMounted, ref } from "vue";
 import { toast } from "vue-sonner";
-import { UserPlus, Trash2, RefreshCw } from "@lucide/vue";
+import { UserPlus, Trash2, RefreshCw, SlidersHorizontal } from "@lucide/vue";
+import MemberOverridesPanel from "@/components/settings/MemberOverridesPanel.vue";
 import Card from "@/components/ui/Card.vue";
 import CardHeader from "@/components/ui/CardHeader.vue";
 import CardTitle from "@/components/ui/CardTitle.vue";
@@ -31,6 +32,7 @@ const inviteEmail = ref("");
 const inviteRole = ref("bidder");
 const inviting = ref(false);
 const busyId = ref(null);
+const overridesFor = ref(null); // member whose personal-permissions panel is open
 
 // Only an owner may grant the owner role.
 const roleChoices = () => (auth.tenantRole === "owner" ? ROLE_OPTIONS : ROLE_OPTIONS.filter((r) => r.value !== "owner"));
@@ -150,7 +152,8 @@ onMounted(load);
         </div>
         <template v-else>
           <ul class="divide-y divide-border">
-            <li v-for="m in members" :key="m.id" class="flex items-center justify-between gap-3 px-5 py-3">
+            <template v-for="m in members" :key="m.id">
+            <li class="flex items-center justify-between gap-3 px-5 py-3">
               <div class="min-w-0">
                 <p class="truncate text-sm font-medium text-text-primary">
                   {{ m.name }}
@@ -162,6 +165,15 @@ onMounted(load);
                 </p>
               </div>
               <div class="flex items-center gap-2">
+                <Button
+                  v-if="!m.is_owner && auth.can('permissions.edit')"
+                  variant="ghost"
+                  size="sm"
+                  :title="`Personal permission exceptions for ${m.name}`"
+                  @click="overridesFor = overridesFor?.id === m.id ? null : m"
+                >
+                  <SlidersHorizontal class="h-3.5 w-3.5" /> Permissions
+                </Button>
                 <select
                   :value="m.role"
                   :disabled="m.is_owner || busyId === m.id || !auth.can('members.assign_role')"
@@ -181,6 +193,10 @@ onMounted(load);
                 </Button>
               </div>
             </li>
+            <li v-if="overridesFor?.id === m.id" class="px-5 py-3">
+              <MemberOverridesPanel :member="overridesFor" @close="overridesFor = null" />
+            </li>
+            </template>
           </ul>
 
           <div v-if="invitations.length" class="border-t border-border">

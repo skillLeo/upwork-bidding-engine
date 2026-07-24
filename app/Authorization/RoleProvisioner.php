@@ -9,24 +9,32 @@ use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
 /**
- * Creates the four fixed roles and their permission grants for a tenant.
+ * Creates the four base roles for a tenant and keeps the permission rows in
+ * step with the code vocabulary.
  *
- * Called on tenant creation (and by the data migration for the existing
- * workspace). Idempotent — re-running heals a workspace whose roles drift
- * from the code definition rather than duplicating them, which also makes it
- * safe to re-run after the permission list changes in a future release.
+ * SEMANTICS CHANGED with the editable-permissions decision, and the change
+ * is the whole point:
  *
- * Spatie's team id comes from TenantTeamResolver, which reads TenantContext
- * — the SAME singleton the query scope reads from. So binding the tenant via
- * Tenancy::runAs() scopes both the ordinary queries and Spatie at once, with
- * no second mechanism to keep in sync and nothing to leak afterward.
+ *   OWNER      — re-synced to ALL permissions on every provision. Locked.
+ *                When a release adds new permissions, the owner has them
+ *                immediately, so nothing in the product is ever unreachable.
+ *
+ *   OTHER ROLES — seeded with their code DEFAULTS only when the role does
+ *                not exist yet. After that they are never touched here:
+ *                whatever a workspace has edited them to through the Roles
+ *                matrix survives every deploy. New permissions from a later
+ *                release are simply NOT granted to them until someone with
+ *                permissions.edit turns them on — deny-by-default is the
+ *                safe direction, and the always-full owner is the recovery
+ *                path.
  */
 class RoleProvisioner
 {
     /**
-     * Permissions are global in Spatie (not team-scoped); only the
-     * role↔permission and user↔role links are scoped by tenant. So the
-     * permission rows exist once, created here.
+     * Permission rows are global in Spatie (not team-scoped); only the
+     * role↔permission and user↔permission links carry a tenant. Includes the
+     * setting.{key} permissions derived from the settings schema, so a new
+     * settings key automatically gets its permission on the next provision.
      */
     public function ensureGlobalPermissions(): void
     {
@@ -43,10 +51,24 @@ class RoleProvisioner
 
         Tenancy::runAs($tenant, function () {
             foreach (TenantRole::cases() as $roleEnum) {
-                $role = Role::findOrCreate($roleEnum->value, 'web');
-                // syncPermissions, not give, so a permission removed from the
-                // code definition is actually removed on the next run.
-                $role->syncPermissions($roleEnum->permissions());
+                $existing = Role::where('name', $roleEnum->value)->first();
+
+                if ($roleEnum === TenantRole::Owner) {
+                    // Always everything, even when the role already exists —
+                    // this is the lock and the recovery path in one.
+                    $role = $existing ?? Role::findOrCreate($roleEnum->value, 'web');
+                    $role->syncPermissions(Permissions::all());
+
+                    continue;
+                }
+
+                if ($existing !== null) {
+                    // A workspace's edits are its own. Never overwritten.
+                    continue;
+                }
+
+                Role::findOrCreate($roleEnum->value, 'web')
+                    ->syncPermissions($roleEnum->defaultPermissions());
             }
         });
 
@@ -54,8 +76,9 @@ class RoleProvisioner
     }
 
     /**
-     * Provision every existing tenant — used by the data migration and safe
-     * to run whenever the role definitions change.
+     * Provision every existing tenant — used by migrations and safe to run
+     * whenever the vocabulary grows (owner picks up the new permissions,
+     * custom role edits are left alone).
      */
     public function provisionAll(): void
     {

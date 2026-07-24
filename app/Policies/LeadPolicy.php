@@ -44,11 +44,16 @@ class LeadPolicy
 
     public function editProposal(User $user, Lead $lead): bool
     {
-        return $user->can(Permissions::PROPOSALS_EDIT);
+        return $user->can(Permissions::PROPOSALS_EDIT_MANUAL);
+    }
+
+    public function aiEditProposal(User $user, Lead $lead): bool
+    {
+        return $user->can(Permissions::PROPOSALS_AI_EDIT);
     }
 
     public function rewriteProposal(User $user, Lead $lead): bool
     {
-        return $user->can(Permissions::PROPOSALS_REWRITE);
+        return $user->can(Permissions::PROPOSALS_AI_REWRITE);
     }
 }

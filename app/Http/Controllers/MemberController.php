@@ -167,24 +167,51 @@ class MemberController extends Controller
     }
 
     /**
-     * The read-only Roles matrix: every role, every permission, and which
-     * cells are checked. Read-only by design — custom roles are a paid
-     * feature for the day a customer asks, not a builder shipped up front.
+     * The Roles matrix — EDITABLE since the 2026-07-24 product decision
+     * (checkboxes for anyone holding permissions.edit; PermissionEditor
+     * handles the writes). Grants come from the DATABASE, not the code
+     * defaults, because each workspace can have edited its roles. Owner is
+     * reported locked: always every permission, never editable.
      */
-    public function rolesMatrix(): JsonResponse
+    public function rolesMatrix(Request $request): JsonResponse
     {
-        $permissions = Permissions::all();
+        // Grouped catalog: feature permissions by their prefix, and the
+        // per-settings-key permissions by that key's settings GROUP, so the
+        // matrix reads as "Leads / Proposals / ... / Setting keys: vollna".
+        $catalog = [];
 
-        $roles = array_map(fn (TenantRole $role) => [
-            'value' => $role->value,
-            'label' => $role->label(),
-            'description' => $role->description(),
-            'granted' => array_values(array_intersect($permissions, $role->permissions())),
-        ], TenantRole::cases());
+        foreach (Permissions::features() as $permission) {
+            [$group] = explode('.', $permission, 2);
+            $catalog[$group][] = $permission;
+        }
+
+        foreach (\App\Services\SettingsService::SCHEMA as $key => $meta) {
+            $catalog['setting keys: '.$meta['group']][] = Permissions::forSettingKey($key);
+        }
+
+        $roles = array_map(function (TenantRole $roleEnum) {
+            $locked = $roleEnum === TenantRole::Owner;
+
+            // TENANCY: Spatie's Role query is team-scoped through
+            // TenantTeamResolver, so this reads the CURRENT tenant's copy.
+            $granted = $locked
+                ? Permissions::all()
+                : (\Spatie\Permission\Models\Role::where('name', $roleEnum->value)->first()
+                    ?->permissions->pluck('name')->values()->all() ?? []);
+
+            return [
+                'value' => $roleEnum->value,
+                'label' => $roleEnum->label(),
+                'description' => $roleEnum->description(),
+                'locked' => $locked,
+                'granted' => $granted,
+            ];
+        }, TenantRole::cases());
 
         return response()->json(['data' => [
-            'permissions' => $permissions,
+            'groups' => $catalog,
             'roles' => $roles,
+            'can_edit' => (bool) $request->user()?->can(Permissions::PERMISSIONS_EDIT),
         ]]);
     }
 }
