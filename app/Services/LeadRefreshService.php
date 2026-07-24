@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\ActivityType;
+use App\Enums\LeadOutcome;
 use App\Enums\LeadStatus;
 use App\Models\ActivityLog;
 use App\Models\AiCall;
@@ -59,6 +60,8 @@ class LeadRefreshService
             // its status — re-scoring must never demote or resurrect it.
             if (in_array($lead->status, [LeadStatus::New, LeadStatus::Scoring, LeadStatus::NeedsReview], true)) {
                 $updates['status'] = $result['bid'] ? LeadStatus::Ready : LeadStatus::Archived;
+                $updates['outcome'] = $result['bid'] ? null : LeadOutcome::AutoFiltered;
+                $updates['outcome_at'] = $result['bid'] ? null : now();
             }
 
             $lead->update($updates);

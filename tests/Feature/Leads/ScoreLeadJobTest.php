@@ -70,6 +70,10 @@ class ScoreLeadJobTest extends TestCase
         $lead->refresh();
         $this->assertEquals(LeadStatus::Archived, $lead->status);
         $this->assertStringContainsString('max_proposals', (string) $lead->score_reason);
+        // Stamped so the Archived pile stays readable: this one the engine
+        // rejected, it was not a person choosing to skip it.
+        $this->assertEquals(\App\Enums\LeadOutcome::AutoFiltered, $lead->outcome);
+        $this->assertNotNull($lead->outcome_at);
 
         Http::assertNothingSent();
     }

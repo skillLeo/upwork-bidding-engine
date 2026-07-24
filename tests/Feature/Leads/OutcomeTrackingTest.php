@@ -82,37 +82,70 @@ class OutcomeTrackingTest extends TestCase
     }
 
     /**
-     * The whole point of the outcome rework: nothing in LeadOutcome may
-     * duplicate a value `status` already carries, or the two can disagree
-     * (status=Won alongside outcome=hired_other was previously accepted).
+     * Nothing in LeadOutcome may duplicate a value `status` already carries,
+     * so the two can never disagree (status=Won + outcome=hired_other used to
+     * be accepted). Status words are not valid reasons.
      */
-    public function test_outcome_cannot_express_anything_status_already_says(): void
+    public function test_a_reason_can_never_be_a_status_word(): void
     {
         $bidder = User::factory()->bidder()->create();
-        $lead = Lead::factory()->sent()->create();
+        $lead = Lead::factory()->lost()->create();
 
-        foreach (['replied', 'hired_me', 'won', 'sent'] as $statusWord) {
+        foreach (['replied', 'hired_me', 'won', 'sent', 'lost', 'archived'] as $statusWord) {
             $this->actingAs($bidder, 'sanctum')
                 ->postJson("/api/leads/{$lead->id}/outcome", ['outcome' => $statusWord])
                 ->assertStatus(422);
         }
-
-        $this->assertSame(
-            ['hired_other', 'closed_no_hire', 'expired', 'unknown'],
-            \App\Enums\LeadOutcome::values(),
-        );
     }
 
-    public function test_outcome_is_set_and_can_be_cleared_independent_of_status(): void
+    /**
+     * The reason must match the branch the lead ended on. A Lost lead takes a
+     * post-bid reason; a pre-bid reason on it is a 422 (and vice versa), so
+     * status and reason cannot be made to contradict from either side.
+     */
+    public function test_a_reason_from_the_wrong_branch_is_rejected(): void
     {
         $bidder = User::factory()->bidder()->create();
-        $lead = Lead::factory()->sent()->create();
+        $lost = Lead::factory()->lost()->create();
+        $archived = Lead::factory()->create(['status' => 'archived']);
+
+        // pre-bid reason on a lost (bid) lead — nonsense
+        $this->actingAs($bidder, 'sanctum')
+            ->postJson("/api/leads/{$lost->id}/outcome", ['outcome' => 'no_connects'])
+            ->assertStatus(422);
+
+        // post-bid reason on an archived (never-bid) lead — nonsense
+        $this->actingAs($bidder, 'sanctum')
+            ->postJson("/api/leads/{$archived->id}/outcome", ['outcome' => 'no_response'])
+            ->assertStatus(422);
+    }
+
+    public function test_a_live_lead_accepts_no_reason_at_all(): void
+    {
+        $bidder = User::factory()->bidder()->create();
+        $sent = Lead::factory()->sent()->create();
+
+        // Nothing to explain yet — only clearing to null is legal.
+        $this->actingAs($bidder, 'sanctum')
+            ->postJson("/api/leads/{$sent->id}/outcome", ['outcome' => 'no_response'])
+            ->assertStatus(422);
 
         $this->actingAs($bidder, 'sanctum')
-            ->postJson("/api/leads/{$lead->id}/outcome", ['outcome' => 'closed_no_hire'])
+            ->postJson("/api/leads/{$sent->id}/outcome", ['outcome' => null])
             ->assertOk()
-            ->assertJsonPath('data.outcome', 'closed_no_hire')
-            ->assertJsonPath('data.status', 'sent'); // status untouched
+            ->assertJsonPath('data.outcome', null);
+    }
+
+    public function test_a_lost_lead_records_and_clears_its_reason_without_touching_status(): void
+    {
+        $bidder = User::factory()->bidder()->create();
+        $lead = Lead::factory()->lost()->create();
+
+        $this->actingAs($bidder, 'sanctum')
+            ->postJson("/api/leads/{$lead->id}/outcome", ['outcome' => 'no_response'])
+            ->assertOk()
+            ->assertJsonPath('data.outcome', 'no_response')
+            ->assertJsonPath('data.status', 'lost');
 
         $this->assertNotNull($lead->fresh()->outcome_at);
 
@@ -124,14 +157,22 @@ class OutcomeTrackingTest extends TestCase
         $this->assertNull($lead->fresh()->outcome_at);
     }
 
-    public function test_outcome_rejects_an_invalid_value(): void
+    /**
+     * Moving a lead off the branch its reason belongs to must clear the reason
+     * rather than leave "no response" sitting on a won lead.
+     */
+    public function test_moving_off_a_branch_clears_a_now_invalid_reason(): void
     {
         $bidder = User::factory()->bidder()->create();
-        $lead = Lead::factory()->sent()->create();
+        $lead = Lead::factory()->lost()->create(['outcome' => 'no_response', 'outcome_at' => now()]);
 
         $this->actingAs($bidder, 'sanctum')
-            ->postJson("/api/leads/{$lead->id}/outcome", ['outcome' => 'made_up_value'])
-            ->assertStatus(422);
+            ->postJson("/api/leads/{$lead->id}/status", ['status' => 'won'])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'won')
+            ->assertJsonPath('data.outcome', null);
+
+        $this->assertNull($lead->fresh()->outcome_at);
     }
 
     public function test_backfill_command_sources_only_from_a_real_activity_log_entry(): void

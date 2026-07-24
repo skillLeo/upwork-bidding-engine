@@ -11,7 +11,8 @@ import {
   updateLeadClientView,
   updateLeadOutcome,
   CLIENT_VIEW_STATES,
-  LEAD_OUTCOMES,
+  reasonsForStatus,
+  reasonLabel,
 } from "@/composables/useLead";
 import { apiErrorMessage } from "@/lib/api-client";
 import { cn, scoreTier, compactAge, urgencyTier } from "@/lib/utils";
@@ -118,6 +119,7 @@ const quickActions = [
   { status: "sent", label: "Sent" },
   { status: "replied", label: "Replied" },
   { status: "won", label: "Won" },
+  { status: "lost", label: "Lost" },
   { status: "archived", label: "Not interested" },
 ];
 
@@ -125,6 +127,8 @@ const quickActions = [
 // Replied and Won; these record what only Upwork can tell you.
 const viewedLoading = ref(false);
 const outcomeLoading = ref(false);
+
+const reasonOptions = computed(() => reasonsForStatus(props.lead.status));
 
 async function handleClientViewChange(event) {
   const value = event.target.value || null;
@@ -385,16 +389,22 @@ function handleRowKeydown(event) {
         <option v-for="c in CLIENT_VIEW_STATES" :key="c.value" :value="c.value">Client: {{ c.label }}</option>
       </select>
 
+      <span
+        v-if="lead.outcome === 'auto_filtered'"
+        class="rounded-pill border border-border px-2.5 py-1 text-xs font-medium text-text-tertiary"
+      >
+        {{ reasonLabel(lead.outcome) }}
+      </span>
       <select
-        v-if="lead.status === 'sent'"
+        v-else-if="reasonOptions.length > 0"
         :value="lead.outcome ?? ''"
         :disabled="outcomeLoading"
         @change="handleOutcomeChange"
         @click.stop
         class="h-7 rounded-pill border border-border-strong bg-white px-2.5 text-xs font-medium text-text-secondary focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none disabled:opacity-50"
       >
-        <option value="">Still waiting</option>
-        <option v-for="o in LEAD_OUTCOMES" :key="o.value" :value="o.value">{{ o.label }}</option>
+        <option value="">Reason: not recorded</option>
+        <option v-for="o in reasonOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
       </select>
     </div>
 

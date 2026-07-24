@@ -63,15 +63,41 @@ export const CLIENT_VIEW_STATES = [
   { value: "shortlisted", label: "Shortlisted" },
 ];
 
-// Only reasons a proposal did NOT land. Replied and Won are deliberately
-// absent - `status` already owns those, and duplicating them here is what
-// let a lead read as Won and "hired someone else" simultaneously.
-export const LEAD_OUTCOMES = [
+// WHY a lead ended. `status` owns HOW (won / lost / archived), so nothing
+// here repeats a status word. The two sets never mix: a Lost lead can only
+// take a post-bid reason, an Archived one only a pre-bid reason. The server
+// enforces the same split, so a mismatched pair is a 422, not a silent
+// contradiction.
+export const LOST_REASONS = [
+  { value: "no_response", label: "No response" },
   { value: "hired_other", label: "Client hired someone else" },
   { value: "closed_no_hire", label: "Job closed, nobody hired" },
   { value: "expired", label: "Posting expired" },
   { value: "unknown", label: "Never found out" },
 ];
+
+// "auto_filtered" is absent on purpose — the engine writes it when a lead
+// fails the hard filters or the score cutoff. Offering it would let a
+// deliberate skip be mislabelled as an automatic one.
+export const ARCHIVE_REASONS = [
+  { value: "not_relevant", label: "Not relevant, skipped it" },
+  { value: "no_connects", label: "No Connects available" },
+  { value: "too_late", label: "Too late / too many proposals" },
+];
+
+// Read-only label for a reason the engine set itself.
+export const ENGINE_REASON_LABEL = "Filtered out by the engine";
+
+export function reasonsForStatus(status) {
+  if (status === "lost") return LOST_REASONS;
+  if (status === "archived") return ARCHIVE_REASONS;
+  return [];
+}
+
+export function reasonLabel(value) {
+  if (value === "auto_filtered") return ENGINE_REASON_LABEL;
+  return [...LOST_REASONS, ...ARCHIVE_REASONS].find((r) => r.value === value)?.label ?? value;
+}
 
 export async function regenerateLeadScore(id) {
   // Synchronous rubric re-score (~3-5s) — generous timeout for cold runs.

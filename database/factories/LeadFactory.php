@@ -139,6 +139,14 @@ class LeadFactory extends Factory
         ]);
     }
 
+    /** Bid, and it is over without a contract — still a sent proposal. */
+    public function lost(?int $score = null): static
+    {
+        return $this->sent($score)->state(fn (array $attributes) => [
+            'status' => LeadStatus::Lost,
+        ]);
+    }
+
     public function archived(?string $reason = null): static
     {
         return $this->state(fn (array $attributes) => [

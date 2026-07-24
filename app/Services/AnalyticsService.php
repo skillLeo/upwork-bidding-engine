@@ -38,13 +38,17 @@ class AnalyticsService
             $byStatus[$status->value] = (int) ($counts[$status->value] ?? 0);
         }
 
-        $sent = $byStatus['sent'] + $byStatus['replied'] + $byStatus['won'];
+        // Lost counts here: Connects were spent and a proposal went out, so
+        // it belongs in every "of the proposals I sent" denominator. Leaving
+        // it out would quietly inflate the reply and win rates as soon as
+        // dead leads start being closed off honestly.
+        $sent = array_sum(array_map(fn (LeadStatus $s) => $byStatus[$s->value], LeadStatus::sentOrBeyond()));
         $repliedOrWon = $byStatus['replied'] + $byStatus['won'];
         $won = $byStatus['won'];
 
         $avgScore = (float) (Lead::query()->whereNotNull('score')->avg('score') ?? 0);
 
-        $sentStatuses = [LeadStatus::Sent, LeadStatus::Replied, LeadStatus::Won];
+        $sentStatuses = LeadStatus::sentOrBeyond();
         $knownConnects = (int) (Lead::query()->whereIn('status', $sentStatuses)->sum('connects_required'));
         $sentWithoutKnownConnects = Lead::query()->whereIn('status', $sentStatuses)->whereNull('connects_required')->count();
 
@@ -139,7 +143,7 @@ class AnalyticsService
      */
     public function dyingProposals(): array
     {
-        $sentStatuses = [LeadStatus::Sent->value, LeadStatus::Replied->value, LeadStatus::Won->value];
+        $sentStatuses = array_column(LeadStatus::sentOrBeyond(), 'value');
         $repliedStatuses = [LeadStatus::Replied->value, LeadStatus::Won->value];
 
         $base = fn () => Lead::query()->whereIn('status', $sentStatuses);
@@ -278,7 +282,7 @@ class AnalyticsService
      */
     public function scoreCalibration(): array
     {
-        $sentStatuses = [LeadStatus::Sent->value, LeadStatus::Replied->value, LeadStatus::Won->value];
+        $sentStatuses = array_column(LeadStatus::sentOrBeyond(), 'value');
         $repliedStatuses = [LeadStatus::Replied->value, LeadStatus::Won->value];
 
         $rows = Lead::query()

@@ -35,6 +35,8 @@ class PruneOldLeadsCommandTest extends TestCase
         $sent = Lead::factory()->sent()->create(['posted_at' => now()->subDays(10)]);
         $replied = Lead::factory()->replied()->create(['posted_at' => now()->subDays(10)]);
         $won = Lead::factory()->won()->create(['posted_at' => now()->subDays(10)]);
+        // Connects were spent on a lost lead too — it is a permanent record.
+        $lost = Lead::factory()->lost()->create(['posted_at' => now()->subDays(10)]);
         $favorited = Lead::factory()->create(['posted_at' => now()->subDays(10), 'is_favorite' => true]);
 
         $this->artisan('leads:prune', ['--hours' => 2])->assertSuccessful();
@@ -42,6 +44,7 @@ class PruneOldLeadsCommandTest extends TestCase
         $this->assertDatabaseHas('leads', ['id' => $sent->id]);
         $this->assertDatabaseHas('leads', ['id' => $replied->id]);
         $this->assertDatabaseHas('leads', ['id' => $won->id]);
+        $this->assertDatabaseHas('leads', ['id' => $lost->id]);
         $this->assertDatabaseHas('leads', ['id' => $favorited->id]);
     }
 

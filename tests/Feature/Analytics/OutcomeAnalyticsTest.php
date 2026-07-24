@@ -51,12 +51,52 @@ class OutcomeAnalyticsTest extends TestCase
         $this->assertSame(0, $res->json('data.speed.n'));
     }
 
+    /**
+     * A Lost lead consumed Connects and a proposal went out, so it must sit in
+     * every "of the proposals I sent" denominator. Leaving it out would
+     * quietly inflate the reply and win rates the moment dead leads start
+     * being closed off honestly — the exact opposite of what the status is for.
+     */
+    public function test_lost_leads_count_as_sent_in_every_denominator(): void
+    {
+        $admin = User::factory()->admin()->create();
+
+        Lead::factory()->count(2)->won()->create();
+        Lead::factory()->count(6)->lost()->create();
+
+        $summary = $this->actingAs($admin, 'sanctum')->getJson('/api/analytics')->assertOk()->json('data.summary');
+
+        $this->assertSame(8, $summary['proposals_sent'], 'lost leads were still sent');
+        $this->assertSame(8, $summary['reply_rate_raw']['n']);
+        $this->assertEqualsWithDelta(25.0, $summary['win_rate'], 0.01, '2 of 8, not 2 of 2');
+    }
+
+    /**
+     * A lost lead marked "job closed, nobody hired" is not a personal failure
+     * and must drop out of the contested denominator, while a plain
+     * unexplained loss stays in.
+     */
+    public function test_a_lost_lead_marked_no_hire_leaves_the_contested_denominator(): void
+    {
+        $admin = User::factory()->admin()->create();
+
+        Lead::factory()->count(2)->replied()->create();
+        Lead::factory()->count(3)->lost()->create(['outcome' => 'closed_no_hire']);
+        Lead::factory()->count(3)->lost()->create(['outcome' => 'no_response']);
+
+        $summary = $this->actingAs($admin, 'sanctum')->getJson('/api/analytics')->assertOk()->json('data.summary');
+
+        $this->assertSame(8, $summary['reply_rate_raw']['n']);
+        $this->assertSame(5, $summary['reply_rate_contested']['n'], 'the 3 no-hire jobs drop out; no_response stays in');
+        $this->assertEqualsWithDelta(40.0, $summary['reply_rate_contested']['rate'], 0.01);
+    }
+
     public function test_contested_reply_rate_excludes_dead_end_outcomes_but_not_null_or_replies(): void
     {
         $admin = User::factory()->admin()->create();
 
         Lead::factory()->count(2)->replied()->create(); // real replies
-        Lead::factory()->count(3)->sent()->create(['outcome' => 'closed_no_hire']); // dead end
+        Lead::factory()->count(3)->lost()->create(['outcome' => 'closed_no_hire']); // dead end
         Lead::factory()->count(3)->sent()->create(); // outcome null - still contested
 
         $res = $this->actingAs($admin, 'sanctum')->getJson('/api/analytics')->assertOk();

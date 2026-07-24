@@ -16,6 +16,7 @@ const statusOptions = [
   { value: "sent", label: "Sent" },
   { value: "replied", label: "Replied" },
   { value: "won", label: "Won" },
+  { value: "lost", label: "Lost" },
   { value: "archived", label: "Archived" },
 ];
 

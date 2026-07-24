@@ -23,7 +23,7 @@ class BackfillSubmittedAtCommand extends Command
     public function handle(): int
     {
         $candidates = Lead::query()
-            ->whereIn('status', [LeadStatus::Sent, LeadStatus::Replied, LeadStatus::Won])
+            ->whereIn('status', LeadStatus::sentOrBeyond())
             ->whereNull('submitted_at')
             ->get(['id']);
 

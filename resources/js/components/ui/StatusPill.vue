@@ -12,6 +12,7 @@ const statusLabels = {
   sent: "Sent",
   replied: "Replied",
   won: "Won",
+  lost: "Lost",
   archived: "Archived",
 };
 
@@ -23,6 +24,7 @@ const statusTones = {
   sent: "info",
   replied: "warning",
   won: "success",
+  lost: "neutral",
   archived: "neutral",
 };
 

@@ -410,7 +410,19 @@ class LeadController extends Controller
         $oldStatus = $lead->status;
         $newStatus = LeadStatus::from($request->validated('status'));
 
-        $lead->update(['status' => $newStatus]);
+        $updates = ['status' => $newStatus];
+
+        // A reason belongs to the branch it was recorded on. Moving a lead
+        // out of that branch (Lost -> Won, or Archived -> Sent) must clear it
+        // rather than leave "no response" sitting on a won lead. This is the
+        // same contradiction the outcome rework exists to prevent, just
+        // reached from the status side.
+        if ($lead->outcome !== null && ! in_array($lead->outcome->value, \App\Enums\LeadOutcome::valuesForStatus($newStatus), true)) {
+            $updates['outcome'] = null;
+            $updates['outcome_at'] = null;
+        }
+
+        $lead->update($updates);
 
         ActivityLog::record(ActivityType::LeadStatusUpdated, subject: $lead, meta: [
             'from' => $oldStatus->value,
@@ -430,7 +442,7 @@ class LeadController extends Controller
         // First forward transition past "ready" is what turns a lead into a real
         // client relationship — provision the Client record here if missing so
         // Client Memory has somewhere to attach the conversation.
-        if (! $lead->client_id && in_array($newStatus, [LeadStatus::Sent, LeadStatus::Replied, LeadStatus::Won], true)) {
+        if (! $lead->client_id && in_array($newStatus, LeadStatus::sentOrBeyond(), true)) {
             $client = Client::create([
                 'name' => $lead->title,
                 'lead_id' => $lead->id,
@@ -486,15 +498,19 @@ class LeadController extends Controller
     }
 
     /**
-     * Records why a sent proposal did NOT land. Nothing here overlaps
-     * `status` (see LeadOutcome's docblock) - status owns Replied and Won,
-     * this owns the four things status cannot say.
+     * Records WHY a lead ended. Status owns HOW (won / lost / archived);
+     * this owns why, and the accepted values are scoped to the lead's
+     * current status - a Lost lead can only take a post-bid reason, an
+     * Archived lead only a pre-bid one. Anything else is a 422, so the two
+     * fields cannot be made to contradict each other from either side.
      */
     public function updateOutcome(Request $request, Lead $lead): JsonResponse
     {
+        $allowed = \App\Enums\LeadOutcome::valuesForStatus($lead->status);
+
         $validated = $request->validate([
-            'outcome' => ['present', 'nullable', Rule::in(\App\Enums\LeadOutcome::values())],
-        ]);
+            'outcome' => ['present', 'nullable', Rule::in($allowed)],
+        ], [], ['outcome' => 'reason']);
 
         $lead->update([
             'outcome' => $validated['outcome'],

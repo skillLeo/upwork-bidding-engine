@@ -35,7 +35,8 @@ import {
   updateLeadClientView,
   updateLeadOutcome,
   CLIENT_VIEW_STATES,
-  LEAD_OUTCOMES,
+  reasonsForStatus,
+  ENGINE_REASON_LABEL,
 } from "@/composables/useLead";
 import Textarea from "@/components/ui/Textarea.vue";
 import Input from "@/components/ui/Input.vue";
@@ -56,11 +57,14 @@ import { apiErrorMessage } from "@/lib/api-client";
 const route = useRoute();
 const router = useRouter();
 
+// Every lead ends somewhere: Won, Lost (bid, didn't get it) or Archived
+// (never bid). Nothing is left sitting on Sent forever.
 const statusActions = [
   { status: "sent", label: "Mark Sent" },
   { status: "replied", label: "Mark Replied" },
   { status: "won", label: "Mark Won" },
-  { status: "archived", label: "Archive" },
+  { status: "lost", label: "Mark Lost" },
+  { status: "archived", label: "Archive (never bid)" },
 ];
 
 const filterId = computed(() => route.query.filter ?? null);
@@ -138,6 +142,11 @@ async function handleCopy() {
 // how far it got on the client's side, and (if it didn't land) why.
 const viewedLoading = ref(false);
 const outcomeLoading = ref(false);
+
+// Which reasons are even askable depends on how the lead ended, so the
+// dropdown is never a list of mostly-irrelevant options.
+const reasonOptions = computed(() => reasonsForStatus(lead.value?.status));
+const engineFiltered = computed(() => lead.value?.outcome === "auto_filtered");
 
 async function handleClientViewChange(event) {
   if (!lead.value) return;
@@ -885,23 +894,31 @@ async function handleRegenerateProposal() {
               </p>
             </div>
 
-            <div v-if="lead.status === 'sent'">
-              <label class="mb-1 block text-xs font-medium text-text-tertiary">
-                If it didn't land, why
-              </label>
-              <select
-                :value="lead.outcome ?? ''"
-                :disabled="outcomeLoading"
-                @change="handleOutcomeChange"
-                class="h-9 w-full rounded-md border border-border-strong bg-white px-2.5 text-sm text-text-primary focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none disabled:opacity-50"
-              >
-                <option value="">Still waiting</option>
-                <option v-for="o in LEAD_OUTCOMES" :key="o.value" :value="o.value">{{ o.label }}</option>
-              </select>
-              <p class="mt-1 text-xs text-text-tertiary">
-                Marking a job as closed or expired stops it counting against your reply rate.
-              </p>
-            </div>
+          </div>
+
+          <!-- Why it ended. Only asked once the lead HAS ended, and the
+               options depend on which way — a lost bid and a lead you never
+               bid on have nothing in common to explain. -->
+          <div v-if="reasonOptions.length > 0" class="mt-4 border-t border-border pt-4">
+            <label class="mb-1 block text-xs font-medium text-text-tertiary">
+              {{ lead.status === "lost" ? "Why it didn't land" : "Why you skipped it" }}
+            </label>
+            <p v-if="engineFiltered" class="rounded-md border border-border bg-surface-subtle px-2.5 py-2 text-sm text-text-secondary">
+              {{ ENGINE_REASON_LABEL }} — {{ lead.score_reason || "below the score cutoff or a hard filter" }}
+            </p>
+            <select
+              v-else
+              :value="lead.outcome ?? ''"
+              :disabled="outcomeLoading"
+              @change="handleOutcomeChange"
+              class="h-9 w-full rounded-md border border-border-strong bg-white px-2.5 text-sm text-text-primary focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none disabled:opacity-50"
+            >
+              <option value="">Not recorded</option>
+              <option v-for="o in reasonOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
+            </select>
+            <p v-if="!engineFiltered && lead.status === 'lost'" class="mt-1 text-xs text-text-tertiary">
+              "Job closed" and "Posting expired" stop this counting against your reply rate — nobody won it.
+            </p>
           </div>
 
           <router-link

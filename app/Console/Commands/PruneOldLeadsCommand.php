@@ -25,7 +25,11 @@ class PruneOldLeadsCommand extends Command
 
     protected $description = 'Permanently delete stale unactioned leads and block them from ever being re-synced';
 
-    protected const PROTECTED_STATUSES = [LeadStatus::Sent, LeadStatus::Replied, LeadStatus::Won];
+    /** Connects were spent on every one of these — they are permanent records, never pruned. */
+    protected static function protectedStatuses(): array
+    {
+        return LeadStatus::sentOrBeyond();
+    }
 
     public function handle(): int
     {
@@ -35,7 +39,7 @@ class PruneOldLeadsCommand extends Command
         $query = Lead::query()
             ->whereNotNull('posted_at')
             ->where('posted_at', '<', $cutoff)
-            ->whereNotIn('status', array_map(fn ($s) => $s->value, self::PROTECTED_STATUSES))
+            ->whereNotIn('status', array_map(fn ($s) => $s->value, self::protectedStatuses()))
             ->where('is_favorite', false);
 
         $total = $query->count();

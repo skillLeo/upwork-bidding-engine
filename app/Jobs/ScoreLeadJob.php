@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Enums\ActivityType;
+use App\Enums\LeadOutcome;
 use App\Enums\LeadStatus;
 use App\Models\ActivityLog;
 use App\Models\Lead;
@@ -62,6 +63,10 @@ class ScoreLeadJob implements ShouldQueue
             $lead->update([
                 'status' => LeadStatus::Archived,
                 'score_reason' => $filter['reason'],
+                // Stamped so the Archived pile stays readable: this one the
+                // engine rejected, it was not a person choosing to skip it.
+                'outcome' => LeadOutcome::AutoFiltered,
+                'outcome_at' => now(),
             ]);
 
             ActivityLog::record(ActivityType::LeadFiltered, subject: $lead, meta: [
@@ -127,6 +132,8 @@ class ScoreLeadJob implements ShouldQueue
             'proposal_warnings' => ($proposal['warnings'] ?? []) !== [] ? $proposal['warnings'] : null,
             'boost' => $result['boost'],
             'status' => $isReady ? LeadStatus::Ready : LeadStatus::Archived,
+            'outcome' => $isReady ? null : LeadOutcome::AutoFiltered,
+            'outcome_at' => $isReady ? null : now(),
         ]);
 
         ActivityLog::record(ActivityType::LeadScored, subject: $lead, meta: [

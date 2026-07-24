@@ -33,7 +33,11 @@ class ExportTrainingDataCommand extends Command
     protected $description = 'Export sent proposals as brief->final JSONL training pairs (read-only)';
 
     /** Leads whose proposal is treated as "sent" and eligible for export. */
-    protected const SENT_STATUSES = [LeadStatus::Sent, LeadStatus::Replied, LeadStatus::Won];
+    /** @return array<int, LeadStatus> */
+    protected static function sentStatuses(): array
+    {
+        return LeadStatus::sentOrBeyond();
+    }
 
     /** With --replied-only, a proven-outcome subset of the above. */
     protected const REPLIED_STATUSES = [LeadStatus::Replied, LeadStatus::Won];
@@ -55,7 +59,7 @@ class ExportTrainingDataCommand extends Command
         $end = (clone $start)->endOfMonth();
         $split = max(0.0, min(0.9, (float) $this->option('split')));
 
-        $statuses = $this->option('replied-only') ? self::REPLIED_STATUSES : self::SENT_STATUSES;
+        $statuses = $this->option('replied-only') ? self::REPLIED_STATUSES : self::sentStatuses();
 
         // The system message is the voice the model should learn. Prefer an
         // explicit training prompt; fall back to the live drafting skill so the

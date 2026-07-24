@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Enums\ActivityType;
+use App\Enums\LeadOutcome;
 use App\Enums\LeadStatus;
 use App\Models\ActivityLog;
 use App\Models\Lead;
@@ -106,6 +107,8 @@ class LeadsScoreNowCommand extends Command
             'score_reason' => $result['reason'],
             'proposal_text' => $result['proposal'],
             'status' => $isReady ? LeadStatus::Ready : LeadStatus::Archived,
+            'outcome' => $isReady ? null : LeadOutcome::AutoFiltered,
+            'outcome_at' => $isReady ? null : now(),
         ]);
 
         ActivityLog::record(ActivityType::LeadScored, subject: $lead, meta: [
