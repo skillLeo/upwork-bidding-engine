@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Jobs\Concerns\RunsForTenant;
 use App\Enums\ActivityType;
 use App\Enums\LeadStatus;
 use App\Models\ActivityLog;
@@ -16,6 +17,8 @@ use Illuminate\Queue\SerializesModels;
 
 class NotifyBidderJob implements ShouldQueue
 {
+    use RunsForTenant;
+
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     /**
@@ -24,7 +27,10 @@ class NotifyBidderJob implements ShouldQueue
      */
     public int $tries = 4;
 
-    public function __construct(public int $leadId) {}
+    public function __construct(public int $leadId)
+    {
+        $this->captureTenant();
+    }
 
     /**
      * @return array<int, int>
@@ -35,6 +41,11 @@ class NotifyBidderJob implements ShouldQueue
     }
 
     public function handle(OpenClawService $openClaw, SettingsService $settings): void
+    {
+        $this->forTenant(fn () => $this->run($openClaw, $settings));
+    }
+
+    protected function run(OpenClawService $openClaw, SettingsService $settings): void
     {
         $lead = Lead::find($this->leadId);
 

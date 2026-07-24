@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Console\Concerns\RunsForTenants;
 use App\Models\Lead;
 use App\Services\Ai\ProposalService;
 use Illuminate\Console\Command;
@@ -14,11 +15,19 @@ use Illuminate\Console\Command;
  */
 class AiShowPromptCommand extends Command
 {
-    protected $signature = 'ai:show-prompt {lead_id}';
+    use RunsForTenants;
+
+    protected $signature = 'ai:show-prompt {lead_id}
+        {--tenant= : run for this tenant only}';
 
     protected $description = 'Print the exact system + user blocks a proposal call would send for a lead';
 
     public function handle(ProposalService $proposals): int
+    {
+        return $this->forOneTenant(fn () => $this->runForTenant($proposals));
+    }
+
+    protected function runForTenant(ProposalService $proposals): int
     {
         $lead = Lead::find($this->argument('lead_id'));
 

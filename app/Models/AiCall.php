@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 
@@ -15,6 +16,8 @@ use Illuminate\Database\Eloquent\Model;
 ])]
 class AiCall extends Model
 {
+    use BelongsToTenant;
+
     public $timestamps = false;
 
     protected static function booted(): void

@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Jobs\Concerns\RunsForTenant;
 use App\Enums\ActivityType;
 use App\Enums\LeadOutcome;
 use App\Enums\LeadStatus;
@@ -20,6 +21,8 @@ use Illuminate\Queue\SerializesModels;
 
 class ScoreLeadJob implements ShouldQueue
 {
+    use RunsForTenant;
+
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 3;
@@ -39,7 +42,10 @@ class ScoreLeadJob implements ShouldQueue
      * (needs_review + operator alert) because the importer immediately
      * queues a fresh job that owns the real retry cycle.
      */
-    public function __construct(public int $leadId, public bool $inline = false) {}
+    public function __construct(public int $leadId, public bool $inline = false)
+    {
+        $this->captureTenant();
+    }
 
     /**
      * @return array<int, int>
@@ -50,6 +56,11 @@ class ScoreLeadJob implements ShouldQueue
     }
 
     public function handle(ScoringService $scoring, AiScoringService $aiScoring, ProposalService $proposals, SettingsService $settings): void
+    {
+        $this->forTenant(fn () => $this->run($scoring, $aiScoring, $proposals, $settings));
+    }
+
+    protected function run(ScoringService $scoring, AiScoringService $aiScoring, ProposalService $proposals, SettingsService $settings): void
     {
         $lead = Lead::find($this->leadId);
 

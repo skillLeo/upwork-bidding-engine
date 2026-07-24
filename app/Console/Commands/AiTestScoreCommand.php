@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Console\Concerns\RunsForTenants;
 use App\Models\AiCall;
 use App\Models\Lead;
 use App\Services\Ai\AiResponse;
@@ -19,11 +20,19 @@ use Illuminate\Console\Command;
  */
 class AiTestScoreCommand extends Command
 {
-    protected $signature = 'ai:test-score {lead_id : The lead to score}';
+    use RunsForTenants;
+
+    protected $signature = 'ai:test-score {lead_id : The lead to score}
+        {--tenant= : run for this tenant only}';
 
     protected $description = 'Score a lead through the direct AI layer and print tokens + cost (no side effects)';
 
     public function handle(SettingsService $settings, ScoringService $scoring, ProposalService $proposals): int
+    {
+        return $this->forOneTenant(fn () => $this->runForTenant($settings, $scoring, $proposals));
+    }
+
+    protected function runForTenant(SettingsService $settings, ScoringService $scoring, ProposalService $proposals): int
     {
         $lead = Lead::find((int) $this->argument('lead_id'));
 

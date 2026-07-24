@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToTenant;
 use App\Enums\ClientStage;
 use Database\Factories\ClientFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -13,6 +14,8 @@ use Illuminate\Database\Eloquent\Model;
 #[Fillable(['name', 'lead_id', 'budget_discussed', 'agreed_scope', 'stage', 'notes'])]
 class Client extends Model
 {
+    use BelongsToTenant;
+
     /** @use HasFactory<ClientFactory> */
     use HasFactory;
 

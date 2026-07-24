@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Console\Concerns\RunsForTenants;
 use App\Enums\ActivityType;
 use App\Enums\LeadStatus;
 use App\Models\ActivityLog;
@@ -22,6 +23,8 @@ use Illuminate\Console\Command;
  */
 class SendLeadRemindersCommand extends Command
 {
+    use RunsForTenants;
+
     public const FIRST_REMINDER_MINUTES = 45;
 
     public const SECOND_REMINDER_MINUTES = 90;
@@ -30,11 +33,17 @@ class SendLeadRemindersCommand extends Command
 
     public const MAX_LEAD_AGE_HOURS = 6;
 
-    protected $signature = 'leads:send-reminders';
+    protected $signature = 'leads:send-reminders
+        {--tenant= : run for this tenant only (default: every operable tenant)}';
 
     protected $description = 'Send up to two WhatsApp reminders for fresh, high-scoring leads still sitting unbid.';
 
     public function handle(OpenClawService $openClaw, SettingsService $settings): int
+    {
+        return $this->forEachTenant(fn () => $this->runForTenant($openClaw, $settings));
+    }
+
+    protected function runForTenant(OpenClawService $openClaw, SettingsService $settings): int
     {
         if (! $settings->bidderWhatsapp() || ! $settings->openClawUrl()) {
             return self::SUCCESS;

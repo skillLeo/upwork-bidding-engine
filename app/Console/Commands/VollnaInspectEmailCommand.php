@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Console\Concerns\RunsForTenants;
 use App\Services\Mail\Mailbox;
 use App\Services\Mail\MailboxException;
 use App\Services\SettingsService;
@@ -15,11 +16,19 @@ use Illuminate\Console\Command;
  */
 class VollnaInspectEmailCommand extends Command
 {
-    protected $signature = 'vollna:inspect-email {--limit=2 : how many recent messages to dump} {--chars=3000 : body characters to show}';
+    use RunsForTenants;
+
+    protected $signature = 'vollna:inspect-email {--limit=2 : how many recent messages to dump} {--chars=3000 : body characters to show}
+        {--tenant= : run for this tenant only}';
 
     protected $description = 'Dump the structure of recent Vollna emails (read-only diagnostic)';
 
     public function handle(Mailbox $mailbox, SettingsService $settings): int
+    {
+        return $this->forOneTenant(fn () => $this->runForTenant($mailbox, $settings));
+    }
+
+    protected function runForTenant(Mailbox $mailbox, SettingsService $settings): int
     {
         $config = $settings->imapConfig();
 

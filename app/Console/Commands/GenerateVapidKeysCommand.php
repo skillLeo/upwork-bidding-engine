@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Console\Concerns\RunsForTenants;
 use App\Services\SettingsService;
 use App\Services\WebPushService;
 use Illuminate\Console\Command;
@@ -13,11 +14,18 @@ use Illuminate\Console\Command;
  */
 class GenerateVapidKeysCommand extends Command
 {
+    use RunsForTenants;
+
     protected $signature = 'push:generate-vapid-keys {--force : Regenerate even if keys already exist}';
 
     protected $description = 'Generate the Web Push (VAPID) keypair used to send browser push notifications';
 
     public function handle(WebPushService $push, SettingsService $settings): int
+    {
+        return $this->asPlatform(fn () => $this->runForTenant($push, $settings));
+    }
+
+    protected function runForTenant(WebPushService $push, SettingsService $settings): int
     {
         if ($push->configured() && ! $this->option('force')) {
             $this->info('VAPID keys already exist. Use --force to regenerate (this invalidates every current device subscription).');

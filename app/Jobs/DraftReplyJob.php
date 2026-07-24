@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Jobs\Concerns\RunsForTenant;
 use App\Enums\ActivityType;
 use App\Models\ActivityLog;
 use App\Models\Message;
@@ -21,11 +22,16 @@ use Illuminate\Queue\SerializesModels;
  */
 class DraftReplyJob implements ShouldQueue
 {
+    use RunsForTenant;
+
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 2;
 
-    public function __construct(public int $messageId) {}
+    public function __construct(public int $messageId)
+    {
+        $this->captureTenant();
+    }
 
     /**
      * @return array<int, int>
@@ -36,6 +42,11 @@ class DraftReplyJob implements ShouldQueue
     }
 
     public function handle(OpenClawService $openClaw): void
+    {
+        $this->forTenant(fn () => $this->run($openClaw));
+    }
+
+    protected function run(OpenClawService $openClaw): void
     {
         $message = Message::with('client')->find($this->messageId);
 

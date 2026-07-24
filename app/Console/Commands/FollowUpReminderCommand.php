@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Console\Concerns\RunsForTenants;
 use App\Enums\ActivityType;
 use App\Enums\LeadStatus;
 use App\Models\ActivityLog;
@@ -12,11 +13,19 @@ use Illuminate\Console\Command;
 
 class FollowUpReminderCommand extends Command
 {
-    protected $signature = 'leads:follow-up-reminders';
+    use RunsForTenants;
+
+    protected $signature = 'leads:follow-up-reminders
+        {--tenant= : run for this tenant only (default: every operable tenant)}';
 
     protected $description = 'Ping the bidder on WhatsApp for sent leads that have had no reply after the configured follow-up window.';
 
     public function handle(SettingsService $settings, OpenClawService $openClaw): int
+    {
+        return $this->forEachTenant(fn () => $this->runForTenant($settings, $openClaw));
+    }
+
+    protected function runForTenant(SettingsService $settings, OpenClawService $openClaw): int
     {
         // Follow-ups are "reminder"-shaped WhatsApp traffic too, so the
         // same global pause/mute switch covers them.

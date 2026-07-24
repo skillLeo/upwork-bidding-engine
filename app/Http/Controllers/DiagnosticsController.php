@@ -56,6 +56,8 @@ class DiagnosticsController extends Controller
                 'last_attempt_at' => \Illuminate\Support\Facades\Cache::get(\App\Console\Commands\PingHeartbeatCommand::LAST_ATTEMPT_KEY),
                 'last_result' => \Illuminate\Support\Facades\Cache::get(\App\Console\Commands\PingHeartbeatCommand::LAST_RESULT_KEY),
             ],
+            // TENANCY: jobs/failed_jobs are Laravel infrastructure tables, not
+            // tenant-owned — there is one shared queue on this host by design.
             'queue_depth' => DB::table('jobs')->count(),
             'failed_jobs' => DB::table('failed_jobs')->count(),
             'ai_engine_enabled' => $settings->aiEngineEnabled(),

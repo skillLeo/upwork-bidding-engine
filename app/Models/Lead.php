@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToTenant;
 use App\Enums\ClientView;
 use App\Enums\LeadOutcome;
 use App\Enums\LeadStatus;
@@ -21,6 +22,8 @@ use Illuminate\Database\Eloquent\Model;
 ])]
 class Lead extends Model
 {
+    use BelongsToTenant;
+
     /** @use HasFactory<LeadFactory> */
     use HasFactory;
 

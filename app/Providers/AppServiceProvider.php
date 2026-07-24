@@ -17,6 +17,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        // One instance per request/command, so the global scope, the
+        // middleware, jobs and commands all read and write the same context.
+        // A non-singleton here would mean the scope silently seeing no
+        // tenant while the middleware believed it had bound one.
+        $this->app->singleton(\App\Tenancy\TenantContext::class);
+
         // Bound to the interface so tests (and any host without the imap
         // extension) can swap in a fake without touching the poller.
         $this->app->bind(

@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Console\Concerns\RunsForTenants;
 use App\Services\OpenClawService;
 use App\Services\OpsAlertService;
 use App\Services\SettingsService;
@@ -23,15 +24,23 @@ use Illuminate\Support\Facades\Cache;
  */
 class HealthCheckCommand extends Command
 {
+    use RunsForTenants;
+
     public const OPENCLAW_DOWN_KEY = 'health:openclaw_down_alerted';
 
     public const WHATSAPP_DOWN_KEY = 'health:whatsapp_down_alerted';
 
-    protected $signature = 'health:check';
+    protected $signature = 'health:check
+        {--tenant= : run for this tenant only (default: every operable tenant)}';
 
     protected $description = 'Check OpenClaw and WhatsApp health; alert once per outage';
 
     public function handle(SettingsService $settings, OpenClawService $openClaw, OpsAlertService $alerts): int
+    {
+        return $this->forEachTenant(fn () => $this->runForTenant($settings, $openClaw, $alerts));
+    }
+
+    protected function runForTenant(SettingsService $settings, OpenClawService $openClaw, OpsAlertService $alerts): int
     {
         if (! $settings->openClawUrl()) {
             $this->info('OpenClaw not configured; nothing to check.');

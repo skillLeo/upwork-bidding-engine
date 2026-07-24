@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Console\Concerns\RunsForTenants;
 use App\Services\VollnaProjectImporter;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
@@ -15,11 +16,19 @@ use Illuminate\Support\Facades\Http;
  */
 class VollnaBackfillCommand extends Command
 {
-    protected $signature = 'vollna:backfill {token : Vollna API token (Developers > API Tokens)} {filter : The numeric filter ID, e.g. 40694 from the filter URL} {--pages=10 : Max pages to fetch, 100 projects each} {--hours= : Only import projects published within this many hours; omit for no limit}';
+    use RunsForTenants;
+
+    protected $signature = 'vollna:backfill {token : Vollna API token (Developers > API Tokens)} {filter : The numeric filter ID, e.g. 40694 from the filter URL} {--pages=10 : Max pages to fetch, 100 projects each} {--hours= : Only import projects published within this many hours; omit for no limit}
+        {--tenant= : run for this tenant only}';
 
     protected $description = 'One-time import of projects an existing Vollna filter already matched, via the REST API.';
 
     public function handle(VollnaProjectImporter $importer): int
+    {
+        return $this->forOneTenant(fn () => $this->runForTenant($importer));
+    }
+
+    protected function runForTenant(VollnaProjectImporter $importer): int
     {
         $token = (string) $this->argument('token');
         $filterId = (string) $this->argument('filter');

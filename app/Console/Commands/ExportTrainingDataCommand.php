@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Console\Concerns\RunsForTenants;
 use App\Enums\LeadStatus;
 use App\Models\Lead;
 use App\Models\ProposalVersion;
@@ -25,10 +26,13 @@ use Illuminate\Support\Facades\File;
  */
 class ExportTrainingDataCommand extends Command
 {
+    use RunsForTenants;
+
     protected $signature = 'proposals:export-training-data
         {--month= : Month to export as YYYY-MM (defaults to the current month)}
         {--replied-only : Only leads that drew a reply (status replied or won)}
-        {--split=0.15 : Fraction held out as a validation set}';
+        {--split=0.15 : Fraction held out as a validation set}
+        {--tenant= : run for this tenant only (default: every operable tenant)}';
 
     protected $description = 'Export sent proposals as brief->final JSONL training pairs (read-only)';
 
@@ -43,6 +47,11 @@ class ExportTrainingDataCommand extends Command
     protected const REPLIED_STATUSES = [LeadStatus::Replied, LeadStatus::Won];
 
     public function handle(SettingsService $settings, ScoringService $scoring): int
+    {
+        return $this->forEachTenant(fn () => $this->runForTenant($settings, $scoring));
+    }
+
+    protected function runForTenant(SettingsService $settings, ScoringService $scoring): int
     {
         $monthOpt = $this->option('month');
 

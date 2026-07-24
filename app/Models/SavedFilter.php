@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToTenant;
 use Database\Factories\SavedFilterFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -10,6 +11,8 @@ use Illuminate\Database\Eloquent\Model;
 #[Fillable(['name', 'is_default', 'is_pinned', 'criteria'])]
 class SavedFilter extends Model
 {
+    use BelongsToTenant;
+
     /** @use HasFactory<SavedFilterFactory> */
     use HasFactory;
 

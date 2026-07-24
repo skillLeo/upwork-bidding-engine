@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Console\Concerns\RunsForTenants;
 use App\Enums\ActivityType;
 use App\Enums\LeadOutcome;
 use App\Enums\LeadStatus;
@@ -19,11 +20,19 @@ use Illuminate\Console\Command;
  */
 class LeadsScoreNowCommand extends Command
 {
-    protected $signature = 'leads:score-now {id : The lead ID to score}';
+    use RunsForTenants;
+
+    protected $signature = 'leads:score-now {id : The lead ID to score}
+        {--tenant= : run for this tenant only}';
 
     protected $description = 'Score one lead right now, synchronously, printing the full request/response for debugging.';
 
     public function handle(ScoringService $scoring, OpenClawService $openClaw, SettingsService $settings): int
+    {
+        return $this->forOneTenant(fn () => $this->runForTenant($scoring, $openClaw, $settings));
+    }
+
+    protected function runForTenant(ScoringService $scoring, OpenClawService $openClaw, SettingsService $settings): int
     {
         $lead = Lead::find($this->argument('id'));
 

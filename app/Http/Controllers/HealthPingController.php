@@ -48,6 +48,8 @@ class HealthPingController extends Controller
         // stack trace — DB host, port, schema — gets rendered.
         try {
             $secondsAgo = $this->secondsSinceLastTick();
+            // TENANCY: jobs/failed_jobs are Laravel infrastructure tables, not
+            // tenant-owned — there is one shared queue on this host by design.
             $queueDepth = DB::table('jobs')->count();
             $failedJobs = DB::table('failed_jobs')->count();
         } catch (\Throwable $e) {

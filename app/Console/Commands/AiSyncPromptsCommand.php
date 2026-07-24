@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Console\Concerns\RunsForTenants;
 use App\Services\SettingsService;
 use Illuminate\Console\Command;
 
@@ -15,11 +16,18 @@ use Illuminate\Console\Command;
  */
 class AiSyncPromptsCommand extends Command
 {
+    use RunsForTenants;
+
     protected $signature = 'ai:sync-prompts {--only= : scoring|skill|reference — sync just one}';
 
     protected $description = 'Load docs/ai-rules prompt files into the live scoring/proposal settings';
 
     public function handle(SettingsService $settings): int
+    {
+        return $this->asPlatform(fn () => $this->runForTenant($settings));
+    }
+
+    protected function runForTenant(SettingsService $settings): int
     {
         $map = [
             'scoring' => ['scoring_system_prompt', base_path('docs/ai-rules/scoring-system-prompt.md')],

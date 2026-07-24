@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Console\Concerns\RunsForTenants;
 use App\Enums\ActivityType;
 use App\Enums\LeadStatus;
 use App\Models\ActivityLog;
@@ -21,7 +22,10 @@ use Illuminate\Console\Command;
  */
 class PruneOldLeadsCommand extends Command
 {
-    protected $signature = 'leads:prune {--hours=2 : Delete leads posted more than this many hours ago}';
+    use RunsForTenants;
+
+    protected $signature = 'leads:prune {--hours=2 : Delete leads posted more than this many hours ago}
+        {--tenant= : run for this tenant only (default: every operable tenant)}';
 
     protected $description = 'Permanently delete stale unactioned leads and block them from ever being re-synced';
 
@@ -32,6 +36,11 @@ class PruneOldLeadsCommand extends Command
     }
 
     public function handle(): int
+    {
+        return $this->forEachTenant(fn () => $this->runForTenant());
+    }
+
+    protected function runForTenant(): int
     {
         $hours = (int) $this->option('hours');
         $cutoff = now()->subHours($hours);
@@ -57,9 +66,20 @@ class PruneOldLeadsCommand extends Command
 
             // insertOrIgnore: a lead can only be tombstoned once, and this
             // must never fail the whole batch on a duplicate.
+            //
+            // TENANCY: this is a query-builder insert, so the BelongsToTenant
+            // creating hook does NOT fire and tenant_id must be supplied by
+            // hand. Getting this wrong is silent rather than loud — the NOT
+            // NULL violation is swallowed by insertOrIgnore itself, no
+            // tombstone is written, and every pruned lead is re-imported on
+            // the next poll forever. The uniqueness is now per tenant too:
+            // one workspace pruning a job must not hide it from the others.
             if ($externalIds->isNotEmpty()) {
+                $tenantId = app(\App\Tenancy\TenantContext::class)->id();
+
                 DeletedLeadExternalId::query()->insertOrIgnore(
                     $externalIds->map(fn ($id) => [
+                        'tenant_id' => $tenantId,
                         'external_id' => $id,
                         'created_at' => now(),
                         'updated_at' => now(),

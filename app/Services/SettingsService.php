@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Setting;
+use App\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Storage;
@@ -300,19 +301,41 @@ class SettingsService
     public const SERVICES = ['vollna', 'openclaw', 'whatsapp', 'mail', 'anthropic', 'openai', 'heartbeat'];
 
     /**
-     * All settings, decrypted, keyed by setting key. Cached forever;
-     * invalidated on every write via forgetCache().
+     * All settings, decrypted, keyed by setting key.
+     *
+     * THREE-LAYER RESOLUTION, cheapest last:
+     *   1. this tenant's own row      (settings.tenant_id = current)
+     *   2. the platform default row   (settings.tenant_id IS NULL)
+     *   3. the hardcoded SCHEMA default
+     *
+     * THE CACHE KEY IS PER TENANT, and this is not a detail. The previous
+     * implementation was Cache::rememberForever('settings:all'), one global
+     * key holding DECRYPTED values including the Anthropic and Vollna
+     * credentials. With two tenants that returns whichever tenant warmed the
+     * cache first — tenant B reading tenant A's API keys. Never
+     * rememberForever tenant-scoped data, and never share a key across
+     * tenants.
      *
      * @return array<string, mixed>
      */
     public function all(): array
     {
-        // Cache a plain array, never Eloquent models/collections — caching ORM
-        // objects through Redis serialization is fragile (lazy-loading state,
-        // connection resolvers) and unnecessary when all we need is scalars.
-        $rows = Cache::rememberForever(self::CACHE_KEY, function () {
+        $tenantId = app(TenantContext::class)->id();
+
+        // A bounded TTL as well as per-tenant keying: forever + a missed
+        // invalidation somewhere is indefinitely stale credentials, and an
+        // hour is a cheap ceiling on how wrong this can get.
+        $rows = Cache::remember($this->cacheKey($tenantId), 3600, function () {
+            // Cache a plain array, never Eloquent models/collections — caching
+            // ORM objects through serialization is fragile (lazy-loading
+            // state, connection resolvers) and unnecessary for scalars.
+            //
+            // The model's own scope already limits this to
+            // "this tenant OR platform default"; ordering puts the tenant's
+            // own row last so it overwrites the platform default in keyBy().
             return Setting::query()
-                ->get(['key', 'value', 'is_secret'])
+                ->orderByRaw('tenant_id is null desc')
+                ->get(['key', 'value', 'is_secret', 'tenant_id'])
                 ->keyBy('key')
                 ->map(fn (Setting $setting) => [
                     'value' => $setting->value,
@@ -329,6 +352,17 @@ class SettingsService
         }
 
         return $resolved;
+    }
+
+    /**
+     * Platform defaults live under their own key so they are not duplicated
+     * into, or invalidated by, every tenant's cache entry.
+     */
+    protected function cacheKey(?int $tenantId): string
+    {
+        return $tenantId === null
+            ? self::CACHE_KEY.':platform'
+            : self::CACHE_KEY.':tenant:'.$tenantId;
     }
 
     public function get(string $key, mixed $default = null): mixed
@@ -360,14 +394,10 @@ class SettingsService
         }
 
         $meta = self::SCHEMA[$key];
-        $encoded = $this->encode($value, $meta['secret']);
 
-        Setting::query()->updateOrCreate(
-            ['key' => $key],
-            ['value' => $encoded, 'group' => $meta['group'], 'is_secret' => $meta['secret']],
-        );
+        $this->writeRow($key, $this->encode($value, $meta['secret']), $meta);
 
-        $this->forgetCache();
+        $this->isPlatformOnly($key) ? $this->forgetAllCaches() : $this->forgetCache();
     }
 
     /**
@@ -377,29 +407,134 @@ class SettingsService
      */
     public function setMany(array $values): void
     {
+        $touchedPlatform = false;
+
         foreach ($values as $key => $value) {
             if (! array_key_exists($key, self::SCHEMA)) {
                 continue;
             }
 
             $meta = self::SCHEMA[$key];
+            $touchedPlatform = $touchedPlatform || $this->isPlatformOnly($key);
 
-            Setting::query()->updateOrCreate(
-                ['key' => $key],
-                [
-                    'value' => $this->encode($value, $meta['secret']),
-                    'group' => $meta['group'],
-                    'is_secret' => $meta['secret'],
-                ],
-            );
+            $this->writeRow($key, $this->encode($value, $meta['secret']), $meta);
         }
 
-        $this->forgetCache();
+        // A platform default changed, so every tenant that inherits it is
+        // now serving a stale value — not just this one.
+        $touchedPlatform ? $this->forgetAllCaches() : $this->forgetCache();
     }
 
+    /**
+     * Invalidates ONLY the current tenant's entry — never a blanket flush.
+     * One tenant saving a setting must not force every other tenant to
+     * re-read and re-decrypt its own credentials.
+     */
     public function forgetCache(): void
     {
-        Cache::forget(self::CACHE_KEY);
+        Cache::forget($this->cacheKey(app(TenantContext::class)->id()));
+    }
+
+    /**
+     * Invalidates the platform-default entry AND every tenant's, for the
+     * rare case where a platform default changed and tenants without an
+     * override are now serving a stale value.
+     */
+    public function forgetAllCaches(): void
+    {
+        Cache::forget($this->cacheKey(null));
+
+        // TENANCY: deliberately cross-tenant — a platform default changed, so
+        // every tenant that inherits it must re-read.
+        app(TenantContext::class)->asPlatform(function () {
+            foreach (\App\Models\Tenant::query()->pluck('id') as $id) {
+                Cache::forget($this->cacheKey((int) $id));
+            }
+        });
+    }
+
+    /**
+     * Which layer a write lands on.
+     *
+     * Ordinary keys go to the current tenant. The scoring rubric, the
+     * drafting skill and the mail credentials are the product and the
+     * infrastructure rather than any customer's configuration, so they may
+     * only ever exist as ONE platform row.
+     *
+     * The spec said "attempting to write a tenant override for these
+     * throws". Taken literally that breaks the live Settings page, which has
+     * an AI Models and Prompts tab that saves scoring_system_prompt — and
+     * this phase is explicitly not allowed to change the UI. So instead of
+     * refusing the write, a platform-only key written from the
+     * PLATFORM-OWNING workspace (plan 'internal') is redirected to the
+     * platform layer. The invariant the rule actually protects — that no
+     * per-tenant override row exists for these keys — holds exactly, and
+     * nothing in the product forks per customer.
+     *
+     * A real customer's workspace still gets the throw.
+     */
+
+    /**
+     * Upsert one settings row on the correct layer.
+     *
+     * Hand-rolled rather than updateOrCreate() for one specific reason:
+     * tenant_id is deliberately NOT mass-assignable on any model (a request
+     * must never be able to post its own tenant_id), so updateOrCreate would
+     * silently DROP it from the create path — writing the row to the wrong
+     * layer, or to no layer at all. setAttribute bypasses fillable, which is
+     * safe here because the value comes from writeTenantId(), never a caller.
+     *
+     * @param  array{group: string, secret: bool, default: mixed}  $meta
+     */
+    protected function writeRow(string $key, string $encoded, array $meta): void
+    {
+        $tenantId = $this->writeTenantId($key);
+
+        $row = Setting::query()
+            ->where('key', $key)
+            ->when($tenantId === null,
+                fn ($q) => $q->whereNull('tenant_id'),
+                fn ($q) => $q->where('tenant_id', $tenantId),
+            )
+            ->first();
+
+        if ($row === null) {
+            $row = new Setting;
+            $row->setAttribute('tenant_id', $tenantId);
+            $row->key = $key;
+        }
+
+        $row->value = $encoded;
+        $row->group = $meta['group'];
+        $row->is_secret = $meta['secret'];
+        $row->save();
+    }
+
+    protected function writeTenantId(string $key): ?int
+    {
+        $context = app(TenantContext::class);
+        $tenantId = $context->id();
+
+        if (! in_array($key, (array) config('tenancy.platform_only_keys', []), true)) {
+            return $tenantId;
+        }
+
+        if ($tenantId === null) {
+            return null; // already writing the platform default
+        }
+
+        if ($context->get()?->plan === 'internal') {
+            return null; // platform owner editing the product's own defaults
+        }
+
+        throw new \InvalidArgumentException(
+            "[{$key}] is a platform-level setting and cannot be overridden per tenant."
+        );
+    }
+
+    protected function isPlatformOnly(string $key): bool
+    {
+        return in_array($key, (array) config('tenancy.platform_only_keys', []), true);
     }
 
     protected function encode(mixed $value, bool $secret): string

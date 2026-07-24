@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Console\Concerns\RunsForTenants;
 use App\Models\ActivityLog;
 use App\Services\OpsAlertService;
 use App\Services\SettingsService;
@@ -30,13 +31,21 @@ use Illuminate\Support\Facades\Http;
  */
 class VollnaPollApiCommand extends Command
 {
+    use RunsForTenants;
+
     public const FAIL_ALERT_KEY = 'vollna:poll_failure_alerted';
 
-    protected $signature = 'vollna:poll-api {--quiet-ok : only print when something was imported}';
+    protected $signature = 'vollna:poll-api {--quiet-ok : only print when something was imported}
+        {--tenant= : run for this tenant only (default: every operable tenant)}';
 
     protected $description = 'Poll the Vollna filter API for new projects and run them through the intake pipeline';
 
     public function handle(SettingsService $settings, VollnaProjectImporter $importer, OpsAlertService $alerts): int
+    {
+        return $this->forEachTenant(fn () => $this->runForTenant($settings, $importer, $alerts));
+    }
+
+    protected function runForTenant(SettingsService $settings, VollnaProjectImporter $importer, OpsAlertService $alerts): int
     {
         $token = $settings->vollnaApiToken();
         $filterId = $settings->vollnaFilterId();

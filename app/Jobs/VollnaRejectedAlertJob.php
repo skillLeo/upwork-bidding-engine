@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Jobs\Concerns\RunsForTenant;
 use App\Enums\ActivityType;
 use App\Models\ActivityLog;
 use App\Services\OpsAlertService;
@@ -21,6 +22,8 @@ use Illuminate\Support\Facades\Cache;
  */
 class VollnaRejectedAlertJob implements ShouldQueue
 {
+    use RunsForTenant;
+
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public const ALERTED_CACHE_KEY = 'vollna:rejected_alerted';
@@ -29,9 +32,17 @@ class VollnaRejectedAlertJob implements ShouldQueue
     // queue whose whole purpose is signalling that something is broken.
     public int $tries = 1;
 
-    public function __construct(public string $reason, public ?string $ip) {}
+    public function __construct(public string $reason, public ?string $ip)
+    {
+        $this->captureTenant();
+    }
 
     public function handle(OpsAlertService $alerts): void
+    {
+        $this->forTenant(fn () => $this->run($alerts));
+    }
+
+    protected function run(OpsAlertService $alerts): void
     {
         if (Cache::has(self::ALERTED_CACHE_KEY)) {
             return;

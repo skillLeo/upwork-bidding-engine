@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToTenantOrPlatform;
 use Database\Factories\SettingFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -15,6 +16,8 @@ use Illuminate\Database\Eloquent\Model;
 #[Fillable(['key', 'value', 'group', 'is_secret'])]
 class Setting extends Model
 {
+    use BelongsToTenantOrPlatform;
+
     /** @use HasFactory<SettingFactory> */
     use HasFactory;
 

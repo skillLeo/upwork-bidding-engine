@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToTenant;
 use App\Enums\ActivityType;
 use Database\Factories\ActivityLogFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -13,6 +14,8 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 #[Fillable(['type', 'subject_type', 'subject_id', 'meta', 'user_id'])]
 class ActivityLog extends Model
 {
+    use BelongsToTenant;
+
     /** @use HasFactory<ActivityLogFactory> */
     use HasFactory;
 

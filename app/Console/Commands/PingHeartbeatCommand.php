@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Console\Concerns\RunsForTenants;
 use App\Services\SettingsService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
@@ -29,15 +30,23 @@ use Illuminate\Support\Facades\Http;
  */
 class PingHeartbeatCommand extends Command
 {
+    use RunsForTenants;
+
     public const LAST_ATTEMPT_KEY = 'heartbeat:last_attempt_at';
 
     public const LAST_RESULT_KEY = 'heartbeat:last_result';
 
-    protected $signature = 'ops:heartbeat';
+    protected $signature = 'ops:heartbeat
+        {--tenant= : run for this tenant only (default: every operable tenant)}';
 
     protected $description = 'Ping the configured external heartbeat monitor (no-op if unconfigured)';
 
     public function handle(SettingsService $settings): int
+    {
+        return $this->forEachTenant(fn () => $this->runForTenant($settings));
+    }
+
+    protected function runForTenant(SettingsService $settings): int
     {
         $url = trim((string) $settings->get('heartbeat_ping_url', ''));
 

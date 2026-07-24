@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Console\Concerns\RunsForTenants;
 use App\Enums\ActivityType;
 use App\Models\ActivityLog;
 use App\Services\OpsAlertService;
@@ -32,13 +33,21 @@ use Illuminate\Support\Facades\Cache;
  */
 class VollnaCheckSilenceCommand extends Command
 {
+    use RunsForTenants;
+
     public const ALERTED_CACHE_KEY = 'vollna:silence_alerted';
 
-    protected $signature = 'vollna:check-silence';
+    protected $signature = 'vollna:check-silence
+        {--tenant= : run for this tenant only (default: every operable tenant)}';
 
     protected $description = 'Alert (once per incident) when no Vollna webhook delivery has arrived within the configured window';
 
     public function handle(SettingsService $settings, OpsAlertService $alerts): int
+    {
+        return $this->forEachTenant(fn () => $this->runForTenant($settings, $alerts));
+    }
+
+    protected function runForTenant(SettingsService $settings, OpsAlertService $alerts): int
     {
         $threshold = max(1, (int) $settings->get('vollna_silence_alert_hours', 6));
 

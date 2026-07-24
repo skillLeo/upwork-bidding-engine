@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Jobs\Concerns\RunsForTenant;
 use App\Models\ActivityLog;
 use App\Models\Lead;
 use App\Services\SettingsService;
@@ -22,6 +23,8 @@ use Illuminate\Support\Facades\Http;
  */
 class VollnaSyncJob implements ShouldQueue
 {
+    use RunsForTenant;
+
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 1;
@@ -30,7 +33,17 @@ class VollnaSyncJob implements ShouldQueue
 
     protected const MAX_PAGES = 20;
 
+    public function __construct()
+    {
+        $this->captureTenant();
+    }
+
     public function handle(VollnaProjectImporter $importer, SettingsService $settings): void
+    {
+        $this->forTenant(fn () => $this->run($importer, $settings));
+    }
+
+    protected function run(VollnaProjectImporter $importer, SettingsService $settings): void
     {
         $token = $settings->vollnaApiToken();
         $filterId = $settings->vollnaFilterId();

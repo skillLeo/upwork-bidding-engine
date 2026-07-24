@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Console\Concerns\RunsForTenants;
 use App\Enums\LeadStatus;
 use App\Models\ActivityLog;
 use App\Models\Lead;
@@ -16,11 +17,19 @@ use Illuminate\Console\Command;
  */
 class BackfillSubmittedAtCommand extends Command
 {
-    protected $signature = 'leads:backfill-submitted-at';
+    use RunsForTenants;
+
+    protected $signature = 'leads:backfill-submitted-at
+        {--tenant= : run for this tenant only (default: every operable tenant)}';
 
     protected $description = 'Backfill submitted_at for already-sent leads from their real activity_log status-change entry';
 
     public function handle(): int
+    {
+        return $this->forEachTenant(fn () => $this->runForTenant());
+    }
+
+    protected function runForTenant(): int
     {
         $candidates = Lead::query()
             ->whereIn('status', LeadStatus::sentOrBeyond())

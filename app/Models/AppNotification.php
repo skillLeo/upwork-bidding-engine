@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 
@@ -12,6 +13,8 @@ use Illuminate\Database\Eloquent\Model;
 #[Fillable(['type', 'level', 'title', 'body', 'url', 'lead_id', 'read_at'])]
 class AppNotification extends Model
 {
+    use BelongsToTenant;
+
     public const UPDATED_AT = null; // created_at only; a notification is immutable bar read_at.
 
     /**
