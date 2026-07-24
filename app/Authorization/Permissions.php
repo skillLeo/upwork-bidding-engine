@@ -95,6 +95,15 @@ final class Permissions
     // ------------------------------------------------------ notifications
     public const NOTIFICATIONS_VIEW = 'notifications.view';
 
+    // ---------------------------------------------------------- workspace
+    /**
+     * The Workspace tab: name/slug, plan/status (read-only there), member
+     * count, export. Transfer-ownership and delete-workspace are NOT gated
+     * by this (or any delegable permission) — they are hardcoded to the
+     * tenant's owner_user_id, the same lock pattern as the rest of P4.
+     */
+    public const WORKSPACE_MANAGE = 'workspace.manage';
+
     /**
      * The hand-defined feature permissions, in display order.
      *
@@ -115,6 +124,7 @@ final class Permissions
             self::PERMISSIONS_EDIT,
             self::BILLING_MANAGE,
             self::NOTIFICATIONS_VIEW,
+            self::WORKSPACE_MANAGE,
         ];
     }
 

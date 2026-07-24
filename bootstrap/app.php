@@ -35,6 +35,11 @@ return Application::configure(basePath: dirname(__DIR__))
             // Used for coarse whole-tab access; per-model actions authorize via
             // their Policy in the controller instead.
             'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
+            // P5 platform console — see each middleware's own docblock.
+            'platform.staff' => \App\Http\Middleware\EnsurePlatformStaff::class,
+            'impersonation.guard' => \App\Http\Middleware\ImpersonationGuard::class,
+            // P6 workspace require_2fa enrolment lock.
+            'enforce.2fa' => \App\Http\Middleware\EnforceTwoFactorEnrolment::class,
         ]);
 
         // Pure JSON API, no Blade login page — never redirect an

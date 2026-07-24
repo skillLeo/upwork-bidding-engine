@@ -28,6 +28,14 @@ export const useAuthStore = defineStore("auth", {
   state: () => ({
     ...loadPersisted(),
     hasHydrated: true,
+    // P5 platform console impersonation. `platformToken` holds the staff
+    // member's OWN token while `token` is swapped to the impersonation
+    // token, so "stop impersonating" can restore it without a re-login.
+    // Rehydrated from /me's `impersonating` field on refresh (see
+    // api-client's boot / App.vue), since the persisted `token` alone
+    // doesn't say whether IT is the impersonation token.
+    platformToken: null,
+    impersonating: null, // { reason, expires_at } | null
   }),
   getters: {
     isAdmin: (state) => state.user?.role === "admin",
@@ -58,8 +66,34 @@ export const useAuthStore = defineStore("auth", {
     logout() {
       this.token = null;
       this.user = null;
+      this.platformToken = null;
+      this.impersonating = null;
       localStorage.removeItem(STORAGE_KEY);
       sessionStorage.removeItem(STORAGE_KEY);
+    },
+    // P5 platform console: swap to the impersonation token, keeping the
+    // platform staff member's own token so "stop" can restore it without a
+    // fresh login.
+    startImpersonation(token, user, reason, expiresAt) {
+      this.platformToken = this.token;
+      this.token = token;
+      this.user = user;
+      this.impersonating = { reason, expires_at: expiresAt };
+      persist(this.token, this.user, this.remember);
+    },
+    stopImpersonation(platformUser) {
+      this.token = this.platformToken;
+      this.user = platformUser;
+      this.platformToken = null;
+      this.impersonating = null;
+      persist(this.token, this.user, this.remember);
+    },
+    // Rehydrates the banner after a page refresh, when /me reports the
+    // CURRENT token is an impersonation token (see AuthController::me()).
+    // There is no way to recover the platform staff member's own token in
+    // this case — "stop" has to fall back to a real logout.
+    setImpersonatingFromMe(impersonating) {
+      this.impersonating = impersonating;
     },
     // Remember the last real page so a later sign-in can return the user
     // exactly where they left off, whether they were logged out or left.

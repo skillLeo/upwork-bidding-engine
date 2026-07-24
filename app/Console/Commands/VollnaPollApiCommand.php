@@ -42,7 +42,10 @@ class VollnaPollApiCommand extends Command
 
     public function handle(SettingsService $settings, VollnaProjectImporter $importer, OpsAlertService $alerts): int
     {
-        return $this->forEachTenant(fn () => $this->runForTenant($settings, $importer, $alerts));
+        // P5: a suspended OR past_due tenant is skipped entirely by the
+        // poller — no polling, no AI spend from the scoring this import
+        // schedules. See RunsForTenants::tenantsToRun()'s $requireBillable.
+        return $this->forEachTenant(fn () => $this->runForTenant($settings, $importer, $alerts), requireBillable: true);
     }
 
     protected function runForTenant(SettingsService $settings, VollnaProjectImporter $importer, OpsAlertService $alerts): int

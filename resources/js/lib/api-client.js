@@ -34,6 +34,13 @@ function endSession() {
   }
 }
 
+// P6 require_2fa: the backend hard-blocks every route except a small
+// self-service allowlist with this code until the member enrols a second
+// factor (see EnforceTwoFactorEnrolment). The frontend mirrors that as a
+// hard redirect rather than a dismissible toast, matching "cannot reach any
+// other route until enrolled."
+let redirectingToEnrol = false;
+
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -41,6 +48,16 @@ apiClient.interceptors.response.use(
     const url = error.config?.url ?? "";
     const auth = useAuthStore();
     const isAuthCall = url.includes("/auth/") || url.endsWith("/me");
+
+    if (status === 403 && error.response?.data?.code === "must_enroll_2fa" && !redirectingToEnrol) {
+      redirectingToEnrol = true;
+      if (router.currentRoute.value.name !== "profile") {
+        router.push({ name: "profile", query: { enroll2fa: "1" } });
+      }
+      setTimeout(() => (redirectingToEnrol = false), 500);
+
+      return Promise.reject(error);
+    }
 
     // A 401 no longer nukes the session outright. Tokens never expire
     // server-side, so a lone 401 is almost always transient (a blip on a

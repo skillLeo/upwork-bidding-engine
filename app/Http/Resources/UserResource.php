@@ -33,6 +33,10 @@ class UserResource extends JsonResource
             'platform_role' => $this->platform_role,
             'avatar_url' => $this->avatar_path ? Storage::disk('public')->url($this->avatar_path) : null,
             'two_factor_enabled' => (bool) $this->two_factor_enabled,
+            // P6: authenticator-app TOTP status, separate from the email-OTP
+            // flag above — a user may hold either, both, or neither.
+            'totp_enabled' => $this->hasTotpEnabled(),
+            'has_password' => $this->hasPassword(),
         ];
     }
 }

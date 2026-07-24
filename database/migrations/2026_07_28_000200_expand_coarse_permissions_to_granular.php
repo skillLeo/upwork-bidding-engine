@@ -59,7 +59,11 @@ return new class extends Migration
         ];
 
         Tenancy::asPlatform(function () use ($map) {
-            Tenant::query()->get()->each(function (Tenant $tenant) use ($map) {
+            // withTrashed(): see the identical comment in
+            // 2026_07_27_000300_seed_rbac_and_assign_members — a later
+            // migration adds Tenant's soft-delete column, and Eloquent
+            // models in migrations always run the CURRENT class file.
+            Tenant::withTrashed()->get()->each(function (Tenant $tenant) use ($map) {
                 Tenancy::runAs($tenant, function () use ($map) {
                     foreach (['admin', 'bidder', 'viewer'] as $roleName) {
                         $role = Role::where('name', $roleName)->first();

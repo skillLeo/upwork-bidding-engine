@@ -301,6 +301,52 @@ class SettingsService
         // dashboard as Archived, and is never deleted. It only skips the
         // paid AI call for a job that's realistically already gone.
         'max_posted_age_days' => ['group' => 'rules', 'secret' => false, 'default' => 7],
+
+        // AI spend quota — per tenant, enforced in AiManager BEFORE any
+        // provider call (so a refused call never reaches the ledger at all).
+        // 0 = no cap. Usage is computed live from the ai_calls ledger for the
+        // current calendar month, never stored as a running counter, so it
+        // can never drift from the true spend.
+        'ai_monthly_token_cap' => ['group' => 'quotas', 'secret' => false, 'default' => 0],
+        // Off: the 100% line still shows the "paused" banner reason in the
+        // ledger, but calls keep flowing — a soft warning only. On: AiManager
+        // throws before the call, and Diagnostics/the dashboard surface why.
+        'ai_hard_stop_on_cap' => ['group' => 'quotas', 'secret' => false, 'default' => false],
+
+        // Workspace-wide 2FA requirement (P6). Owner/admin editable. A member
+        // with neither TOTP nor email-OTP enrolled is redirected to enrolment
+        // on next login and can reach nothing else until they enrol — except
+        // the tenant's LAST remaining owner, who is never locked out by a
+        // setting they themselves may be the only one able to undo.
+        'require_2fa' => ['group' => 'security', 'secret' => false, 'default' => false],
+
+        // Platform-only (see config/tenancy.php platform_only_keys): editable
+        // display metadata for each plan tier. Not billing — no price
+        // enforcement reads this, Stripe is explicitly out of scope for P5.
+        // Shape: [{key, label, lead_cap, notes}, ...].
+        'platform_plan_definitions' => ['group' => 'platform', 'secret' => false, 'default' => []],
+
+        // Platform-only "global AI model defaults" (P5 platform console).
+        // Deliberately SEPARATE keys from the per-tenant scoring_model /
+        // proposal_model / review_model above, not a platform-layer write of
+        // those same keys — conflating the two would mean editing this from
+        // the platform console silently changed the platform-owning
+        // workspace's OWN live model choice. Not yet consulted as a runtime
+        // fallback by SettingsService::all() (that 3-layer resolution is a
+        // hot path every request touches); today this is admin-facing
+        // guidance for what new workspaces should be seeded with.
+        'platform_default_scoring_model' => ['group' => 'platform', 'secret' => false, 'default' => 'claude-haiku-4-5'],
+        'platform_default_proposal_model' => ['group' => 'platform', 'secret' => false, 'default' => 'claude-sonnet-5'],
+        'platform_default_review_model' => ['group' => 'platform', 'secret' => false, 'default' => 'claude-sonnet-5'],
+
+        // Google OAuth (P6) — one app registration for the whole product
+        // (its authorized redirect URIs are tied to this deployment's
+        // domain), not a per-tenant credential, so platform-only like mail.
+        // Configured dynamically here rather than .env for the same reason
+        // mail is: changeable without a redeploy. See AppServiceProvider's
+        // configureDynamicGoogleOAuth().
+        'google_oauth_client_id' => ['group' => 'oauth', 'secret' => false, 'default' => ''],
+        'google_oauth_client_secret' => ['group' => 'oauth', 'secret' => true, 'default' => ''],
     ];
 
     public const SERVICES = ['vollna', 'openclaw', 'whatsapp', 'mail', 'anthropic', 'openai', 'heartbeat'];

@@ -3,22 +3,41 @@ import { computed, onMounted } from "vue";
 import { useRoute } from "vue-router";
 import { Toaster } from "vue-sonner";
 import NavBar from "@/components/layout/NavBar.vue";
+import ImpersonationBanner from "@/components/layout/ImpersonationBanner.vue";
 import AiProgressToast from "@/components/ui/AiProgressToast.vue";
+import { apiClient } from "@/lib/api-client";
+import { useAuthStore } from "@/stores/auth";
 import { useBrandingStore } from "@/stores/branding";
 import { initLeadAlerts } from "@/stores/leadAlerts";
 import { initNotifications } from "@/stores/notifications";
 
 const route = useRoute();
-const showNav = computed(() => route.name !== "login");
+const auth = useAuthStore();
+const showNav = computed(() => route.name !== "login" && !route.name?.startsWith("platform-"));
 
-onMounted(() => {
+onMounted(async () => {
   useBrandingStore().fetch();
   initLeadAlerts();
   initNotifications();
+
+  // Rehydrates the impersonation banner after a page refresh — the
+  // persisted token alone doesn't say whether IT is an impersonation
+  // token; only /me (reading the token's own row) knows.
+  if (auth.token && !auth.impersonating) {
+    try {
+      const res = await apiClient.get("/me");
+      if (res.data.data.impersonating) {
+        auth.setImpersonatingFromMe(res.data.data.impersonating);
+      }
+    } catch {
+      // A dead token here is handled by the response interceptor already.
+    }
+  }
 });
 </script>
 
 <template>
+  <ImpersonationBanner />
   <NavBar v-if="showNav" />
   <main class="flex-1">
     <router-view />

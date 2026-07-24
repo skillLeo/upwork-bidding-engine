@@ -72,10 +72,29 @@ Route::post('/auth/dev-login', [AuthController::class, 'devLogin'])
 
 Route::post('/auth/verify-otp', [AuthController::class, 'verifyOtp'])
     ->middleware('throttle:otp');
+// P6: authenticator-app / recovery-code second step — same tight per-challenge
+// limit as email OTP (a 6-8 char code is guessable fast without one).
+Route::post('/auth/verify-totp', [AuthController::class, 'verifyTotp'])
+    ->middleware('throttle:otp');
 Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])
     ->middleware('throttle:password-reset');
 Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])
     ->middleware('throttle:login');
+
+/*
+|----------------------------------------------------------------------
+| Google OAuth (P6). redirect/callback are real browser navigations
+| (Google itself redirects here), never axios calls. link confirms a
+| matching-email account with its PASSWORD before creating the link —
+| see SocialAuthController's docblock for why that step is not optional.
+|----------------------------------------------------------------------
+*/
+Route::get('/auth/google/redirect', [\App\Http\Controllers\SocialAuthController::class, 'redirect'])
+    ->middleware('throttle:login');
+Route::get('/auth/google/callback', [\App\Http\Controllers\SocialAuthController::class, 'callback'])
+    ->middleware('throttle:login');
+Route::post('/auth/google/link', [\App\Http\Controllers\SocialAuthController::class, 'link'])
+    ->middleware('throttle:otp');
 
 // The "this wasn't me" link in the new-device email. Unauthenticated by
 // necessity — a mail client has no session — so the `signed` middleware is
@@ -93,7 +112,12 @@ Route::get('/invitations/show', [\App\Http\Controllers\InvitationAcceptControlle
 Route::post('/invitations/accept', [\App\Http\Controllers\InvitationAcceptController::class, 'accept'])
     ->middleware('throttle:webhooks');
 
-Route::middleware('auth:sanctum')->group(function () {
+// P5: an impersonation token acts as the tenant user across the WHOLE app,
+// so the write-block/auto-expiry has to sit ahead of every route below, not
+// just /platform. A normal (non-impersonating) token passes straight
+// through at negligible cost. enforce.2fa is P6's require_2fa enrolment
+// lock — same "applies everywhere, cheap no-op when off" shape.
+Route::middleware(['auth:sanctum', 'impersonation.guard', 'enforce.2fa'])->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
 
@@ -108,10 +132,53 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/profile/avatar', [ProfileController::class, 'uploadAvatar']);
     Route::put('/profile/two-factor', [ProfileController::class, 'toggleTwoFactor']);
 
+    // Authenticator-app TOTP (P6) — enrol, confirm (the one place
+    // two_factor_confirmed_at is ever set), regenerate recovery codes, disable.
+    Route::post('/profile/totp/enroll', [\App\Http\Controllers\TotpController::class, 'enroll']);
+    Route::post('/profile/totp/confirm', [\App\Http\Controllers\TotpController::class, 'confirm']);
+    Route::post('/profile/totp/recovery-codes/regenerate', [\App\Http\Controllers\TotpController::class, 'regenerateRecoveryCodes']);
+    Route::post('/profile/totp/disable', [\App\Http\Controllers\TotpController::class, 'disable']);
+
+    // Connected accounts (P6) — Google today.
+    Route::get('/profile/social-accounts', [ProfileController::class, 'socialAccounts']);
+    Route::delete('/profile/social-accounts/{provider}', [ProfileController::class, 'unlinkSocialAccount']);
+
     // Devices and sessions — always scoped to the caller's own account.
     Route::get('/profile/sessions', [SessionController::class, 'index']);
     Route::delete('/profile/sessions/others', [SessionController::class, 'destroyOthers']);
     Route::delete('/profile/sessions/{token}', [SessionController::class, 'destroy']);
+
+    // Notification preferences — which events email/push this person, quiet
+    // hours (P5 Profile extension).
+    Route::get('/profile/notification-preferences', [ProfileController::class, 'notificationPreferences']);
+    Route::put('/profile/notification-preferences', [ProfileController::class, 'updateNotificationPreferences']);
+
+    // My workspaces — list every workspace this account belongs to, switch
+    // (a navigation link, tenancy is subdomain-resolved), leave.
+    Route::get('/profile/workspaces', [ProfileController::class, 'workspaces']);
+    Route::delete('/profile/workspaces/{tenant}', [ProfileController::class, 'leaveWorkspace']);
+
+    // Ending an impersonation session — reachable WHILE impersonating (see
+    // ImpersonationGuard's route-name exemption) since it's how that state
+    // ends. Not gated by platform.staff: the caller here is the
+    // IMPERSONATED tenant user's token, not a platform-staff account.
+    Route::post('/platform/impersonate/end', [\App\Http\Controllers\Platform\ImpersonationController::class, 'end'])
+        ->name('platform.impersonation.end');
+
+    /*
+    |----------------------------------------------------------------------
+    | Workspace — name/slug, plan/status, member count, export, transfer
+    | ownership, delete. Transfer/delete are hardcoded to owner_user_id
+    | (see WorkspaceController's docblock), not gated by workspace.manage.
+    |----------------------------------------------------------------------
+    */
+    Route::middleware('permission:workspace.manage')->group(function () {
+        Route::get('/workspace', [\App\Http\Controllers\WorkspaceController::class, 'show']);
+        Route::put('/workspace', [\App\Http\Controllers\WorkspaceController::class, 'update']);
+        Route::get('/workspace/export', [\App\Http\Controllers\WorkspaceController::class, 'exportData']);
+    });
+    Route::post('/workspace/transfer-ownership', [\App\Http\Controllers\WorkspaceController::class, 'transferOwnership']);
+    Route::delete('/workspace', [\App\Http\Controllers\WorkspaceController::class, 'destroy']);
 
     /*
     |----------------------------------------------------------------------
@@ -245,4 +312,25 @@ Route::middleware('auth:sanctum')->group(function () {
     // what each role can do.
     Route::get('/roles-matrix', [\App\Http\Controllers\MemberController::class, 'rolesMatrix'])
         ->middleware('permission:settings.view');
+
+    /*
+    |----------------------------------------------------------------------
+    | Platform console (P5) — a separate area, gated ONLY by platform_role
+    | (platform.staff), a column no tenant-facing UI can ever write. Never
+    | linked from tenant navigation. Impersonation START lives here (staff
+    | only); impersonation END is above, outside this group, because the
+    | caller at that point is the impersonated tenant user, not staff.
+    |----------------------------------------------------------------------
+    */
+    Route::prefix('platform')->middleware('platform.staff')->group(function () {
+        Route::get('/tenants', [\App\Http\Controllers\Platform\TenantController::class, 'index']);
+        Route::get('/tenants/{tenant}', [\App\Http\Controllers\Platform\TenantController::class, 'show']);
+
+        Route::post('/tenants/{tenant}/users/{user}/impersonate', [\App\Http\Controllers\Platform\ImpersonationController::class, 'start']);
+
+        Route::get('/settings', [\App\Http\Controllers\Platform\SettingsController::class, 'show']);
+        Route::put('/settings', [\App\Http\Controllers\Platform\SettingsController::class, 'update']);
+
+        Route::get('/health', \App\Http\Controllers\Platform\HealthController::class);
+    });
 });

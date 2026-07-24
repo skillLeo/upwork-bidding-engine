@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\NotificationPreference;
 use App\Models\PushSubscription;
 use Minishlink\WebPush\Subscription;
 use Minishlink\WebPush\VAPID;
@@ -47,18 +48,55 @@ class WebPushService
     }
 
     /**
-     * Push to every subscribed device. Returns the number delivered. No-ops
-     * (before touching any crypto) when unconfigured or there are no
-     * subscriptions - which is why tests without subscriptions never load the
-     * gmp/bcmath-heavy code path.
+     * Notification "type" -> the NotificationPreference column that gates
+     * push for it. Kept in sync with NotificationService::EMAIL_PREFERENCE_COLUMN's
+     * mapping of the same two real types.
      */
-    public function send(string $title, ?string $body, ?string $url): int
+    private const PUSH_PREFERENCE_COLUMN = [
+        'lead' => 'push_on_new_lead',
+        'reminder' => 'push_on_reminder',
+    ];
+
+    /**
+     * Push to every subscribed device, minus anyone this send's $type says
+     * to skip (their own push_on_* preference off, or their quiet hours).
+     * Returns the number delivered. No-ops (before touching any crypto) when
+     * unconfigured or there are no subscriptions - which is why tests
+     * without subscriptions never load the gmp/bcmath-heavy code path.
+     *
+     * $type is optional and defaults to "send to everyone" (unattributed
+     * subscriptions with no user_id ALWAYS receive everything — see the
+     * add_user_id_to_push_subscriptions migration for why that's the safe,
+     * backward-compatible default rather than a silent drop).
+     */
+    public function send(string $title, ?string $body, ?string $url, ?string $type = null): int
     {
         if (! $this->configured()) {
             return 0;
         }
 
         $subscriptions = PushSubscription::all();
+
+        if ($subscriptions->isEmpty()) {
+            return 0;
+        }
+
+        $column = self::PUSH_PREFERENCE_COLUMN[$type] ?? null;
+
+        if ($column !== null) {
+            $userIds = $subscriptions->pluck('user_id')->filter()->unique();
+            $prefsByUser = NotificationPreference::query()->whereIn('user_id', $userIds)->get()->keyBy('user_id');
+
+            $subscriptions = $subscriptions->filter(function (PushSubscription $sub) use ($column, $prefsByUser) {
+                if ($sub->user_id === null) {
+                    return true;
+                }
+
+                $prefs = $prefsByUser->get($sub->user_id) ?? NotificationPreference::defaultsFor($sub->user_id);
+
+                return $prefs->{$column} && ! $prefs->isQuietNow();
+            })->values();
+        }
 
         if ($subscriptions->isEmpty()) {
             return 0;

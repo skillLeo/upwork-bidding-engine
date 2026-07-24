@@ -74,6 +74,15 @@ return [
         'mail_encryption',
         'mail_from_address',
         'mail_from_name',
+        // P5 platform console — plan display metadata is the product's own
+        // catalog, not a customer's configuration.
+        'platform_plan_definitions',
+        'platform_default_scoring_model',
+        'platform_default_proposal_model',
+        'platform_default_review_model',
+        // P6 — one Google OAuth app registration for the whole deployment.
+        'google_oauth_client_id',
+        'google_oauth_client_secret',
     ],
 
 ];

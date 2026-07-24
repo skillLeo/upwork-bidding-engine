@@ -51,6 +51,11 @@ class PushController extends Controller
                 'p256dh' => $validated['keys']['p256dh'],
                 'auth_key' => $validated['keys']['auth'],
                 'content_encoding' => $validated['content_encoding'] ?? 'aes128gcm',
+                // Attributes the device to a person so Notification
+                // preferences (P5) can filter it; a subscription from before
+                // this shipped keeps user_id null and keeps receiving
+                // everything unconditionally (see WebPushService::send()).
+                'user_id' => $request->user()?->id,
             ],
         );
 

@@ -164,7 +164,10 @@ class ScoringStageTest extends TestCase
 
         $lead->refresh();
         $this->assertEquals(LeadStatus::Archived, $lead->status);
-        $this->assertSame(
+        // assertEquals, not assertSame: sub_scores round-trips through a real
+        // MySQL JSON column, which canonicalizes (re-sorts) object key order
+        // on storage — the values are what matter, not the key order.
+        $this->assertEquals(
             ['client_quality' => 2, 'competition' => 4, 'stack_fit' => 3, 'budget' => 2, 'post_quality' => 4],
             $lead->sub_scores,
         );

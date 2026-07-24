@@ -31,7 +31,15 @@ return new class extends Migration
         $provisioner = app(RoleProvisioner::class);
 
         Tenancy::asPlatform(function () use ($provisioner) {
-            Tenant::query()->get()->each(function (Tenant $tenant) use ($provisioner) {
+            // withTrashed(), not query(): a later migration (2026_07_29) adds
+            // Tenant's soft-delete column. Eloquent models in migrations
+            // always reflect the CURRENT class file, so on a fresh
+            // migrate-from-zero this line runs before that column exists —
+            // withTrashed() removes the soft-delete global scope entirely
+            // (no reference to deleted_at at all), which is also the
+            // correct historical behavior since no tenant could possibly be
+            // trashed yet at this point in a fresh install.
+            Tenant::withTrashed()->get()->each(function (Tenant $tenant) use ($provisioner) {
                 $provisioner->provision($tenant);
 
                 Tenancy::runAs($tenant, function () use ($tenant) {

@@ -2,11 +2,15 @@
 
 namespace App\Services\Ai;
 
+use App\Exceptions\AiQuotaExceededException;
+use App\Mail\LeadNotificationMail;
 use App\Models\ActivityLog;
 use App\Models\AiCall;
 use App\Services\OpsAlertService;
 use App\Services\SettingsService;
+use App\Tenancy\Tenancy;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Mail;
 
 /**
  * The one entry point every AI call goes through. Owns three concerns the
@@ -37,10 +41,13 @@ class AiManager
         protected AnthropicProvider $anthropic,
         protected OpenAiProvider $openAi,
         protected OpsAlertService $alerts,
+        protected AiQuotaService $quota,
     ) {}
 
     public function complete(string $purpose, string $systemPrompt, string $userContent, string $model, int $maxTokens, ?int $leadId = null): AiResponse
     {
+        $this->enforceQuota();
+
         $primary = $this->provider($this->settings->get('ai_provider', 'anthropic'));
         $secondary = $primary->name() === 'anthropic' ? $this->openAi : $this->anthropic;
 
@@ -80,6 +87,73 @@ class AiManager
         }
 
         return $response;
+    }
+
+    /**
+     * P5 AI quotas — checked BEFORE any provider call, so a refused call
+     * never reaches the ledger and never spends a token.
+     *
+     * Two independent gates: a suspended/past_due tenant is refused
+     * unconditionally (no polling, no AI spend — a billing decision, not a
+     * usage one); an over-cap tenant is refused only when the workspace
+     * itself turned ai_hard_stop_on_cap on. The 80% warning fires on the
+     * way IN, before either gate can block the call that would have
+     * crossed it, so the owner is warned before the very call that trips
+     * the hard stop, not after.
+     */
+    protected function enforceQuota(): void
+    {
+        $tenant = Tenancy::current();
+
+        if ($tenant === null) {
+            return; // console/tinker context with no tenant bound — nothing to gate.
+        }
+
+        if ($tenant->isBillingBlocked()) {
+            throw new \RuntimeException(
+                'This workspace is suspended or past due — AI calls are paused until billing is resolved.'
+            );
+        }
+
+        if ($this->quota->shouldAlertAt80Percent($tenant->id)) {
+            $this->notifyOwnerOfQuota($tenant, $this->quota->summary());
+        }
+
+        if ($this->quota->shouldRefuseCalls()) {
+            throw new AiQuotaExceededException($this->quota->capTokens(), $this->quota->tokensUsedThisMonth());
+        }
+    }
+
+    /**
+     * Best-effort direct email to the owner specifically — not the tenant-wide
+     * bell (AppNotification has no per-user targeting today), because the
+     * spec asks to notify THE OWNER, not the workspace at large.
+     */
+    protected function notifyOwnerOfQuota(\App\Models\Tenant $tenant, array $summary): void
+    {
+        $owner = $tenant->owner;
+
+        if ($owner === null) {
+            return;
+        }
+
+        try {
+            Mail::to($owner->email)->queue(new LeadNotificationMail(
+                'AI usage at '.$summary['percent'].'% of this month\'s cap',
+                sprintf(
+                    'This workspace has used %s of its %s token monthly AI cap. %s',
+                    number_format($summary['used']),
+                    number_format($summary['cap']),
+                    $summary['hard_stop']
+                        ? 'The hard stop is ON — scoring and proposal writing will pause at 100%.'
+                        : 'The hard stop is off, so calls will keep flowing past 100%.',
+                ),
+                '/settings?section=ai-usage',
+                (string) config('app.url'),
+            ));
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     protected function attempt(AiProvider $provider, string $purpose, string $system, string $user, string $model, int $maxTokens, ?int $leadId): AiResponse

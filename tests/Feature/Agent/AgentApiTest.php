@@ -164,9 +164,15 @@ class AgentApiTest extends TestCase
         $this->assertEquals(LeadStatus::Archived, $lead->fresh()->status);
         $this->assertSame(8, $lead->fresh()->score);
 
-        // The audit trail distinguishes WhatsApp-triggered runs.
+        // The audit trail distinguishes WhatsApp-triggered runs. Asserted on
+        // the DECODED meta, not the raw column string — a real MySQL JSON
+        // column canonicalizes (re-sorts) key order on storage, so raw
+        // string containment isn't reliable across DB engines.
         $this->assertDatabaseHas('activity_logs', ['type' => 'lead_scored']);
-        $this->assertStringContainsString('"source":"agent_api"', (string) \App\Models\ActivityLog::where('type', 'lead_scored')->latest('id')->first()->getRawOriginal('meta'));
+        $this->assertSame(
+            'agent_api',
+            \App\Models\ActivityLog::where('type', 'lead_scored')->latest('id')->first()->meta['source'] ?? null,
+        );
 
         // The configured settings model was used — the body's gpt-4o was ignored.
         \Illuminate\Support\Facades\Http::assertSent(fn ($request) => $request->data()['model'] === 'claude-haiku-4-5');

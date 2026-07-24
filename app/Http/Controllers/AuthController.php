@@ -23,11 +23,15 @@ use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use PragmaRX\Google2FALaravel\Google2FA;
 
 class AuthController extends Controller
 {
-    /** Wrong OTP codes allowed against one challenge before it is destroyed. */
+    /** Wrong codes allowed against one challenge before it is destroyed. Shared by email-OTP and TOTP/recovery. */
     private const MAX_OTP_ATTEMPTS = 5;
+
+    /** ±30 seconds each direction (google2fa's window is measured in 30s periods) — no wider. */
+    private const TOTP_WINDOW = 1;
 
     public function __construct(
         protected TokenIssuer $tokens,
@@ -44,7 +48,15 @@ class AuthController extends Controller
         // cannot use this endpoint as a password oracle at all.
         $this->throttle->assertNotLocked($email, $ip);
 
-        if (! Auth::once($credentials)) {
+        // Explicit 'web' guard, not the ambient default — Sanctum's own
+        // Authenticate middleware calls Auth::shouldUse('sanctum') on every
+        // authenticated request, which would otherwise silently redirect
+        // this Auth::once() call to the token guard (no once() method)
+        // the next time this process handles an authenticated request
+        // first (observed in tests, which reuse one process across many
+        // requests; a traditional PHP-FPM request never hits this, but
+        // relying on ambient guard state here was fragile regardless).
+        if (! Auth::guard('web')->once($credentials)) {
             $this->throttle->recordFailure($email, $ip);
 
             AuthEvent::record(AuthEventType::LoginFailed, emailAttempted: $email, request: $request);
@@ -63,6 +75,14 @@ class AuthController extends Controller
         // not punishing someone who mistyped and then got it right.
         $this->throttle->clear($email, $ip);
 
+        // TOTP first — it is the recommended factor precisely because it
+        // does not round-trip through the email account this app itself
+        // sends mail from (see TotpController's docblock). A user with both
+        // enrolled is only ever asked for one.
+        if ($user->hasTotpEnabled()) {
+            return response()->json(['data' => $this->issueTotpChallenge($user)]);
+        }
+
         if ($user->two_factor_enabled) {
             return response()->json(['data' => $this->issueOtpChallenge($user)]);
         }
@@ -70,6 +90,92 @@ class AuthController extends Controller
         ActivityLog::record(ActivityType::UserLoggedIn, subject: $user, userId: $user->id);
 
         return response()->json(['data' => $this->issueToken($user, $request)]);
+    }
+
+    /**
+     * Second step of a TOTP login — the authenticator-app code, OR one of
+     * the 8 single-use recovery codes. Mirrors verifyOtp()'s challenge/
+     * lockout shape exactly, so the two second-factor UIs behave identically
+     * from the client's point of view.
+     */
+    public function verifyTotp(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'challenge' => ['required', 'string'],
+            'code' => ['required', 'string'],
+        ]);
+
+        $user = User::where('two_factor_challenge', $validated['challenge'])->first();
+
+        $expired = $user === null || ! $user->two_factor_expires_at || $user->two_factor_expires_at->isPast();
+
+        if (! $expired) {
+            $code = trim($validated['code']);
+            $google2fa = app(Google2FA::class);
+
+            $viaTotp = $user->google2fa_secret !== null
+                && $google2fa->verifyKey($user->google2fa_secret, $code, self::TOTP_WINDOW) !== false;
+
+            $viaRecovery = ! $viaTotp && $this->consumeRecoveryCodeIfValid($user, $code);
+
+            if ($viaTotp || $viaRecovery) {
+                $this->clearOtpChallenge($user);
+
+                ActivityLog::record(ActivityType::UserLoggedIn, subject: $user, userId: $user->id, meta: [
+                    'via' => $viaRecovery ? 'totp_recovery_code' : 'totp',
+                ]);
+
+                return response()->json(['data' => $this->issueToken($user, $request)]);
+            }
+        }
+
+        if ($user !== null) {
+            $attempts = (int) $user->two_factor_attempts + 1;
+
+            if ($attempts >= self::MAX_OTP_ATTEMPTS) {
+                $this->clearOtpChallenge($user);
+
+                AuthEvent::record(AuthEventType::LoginFailed, user: $user, request: $request);
+
+                throw ValidationException::withMessages([
+                    'code' => ['Too many incorrect codes. Start the sign-in again.'],
+                ]);
+            }
+
+            $user->forceFill(['two_factor_attempts' => $attempts])->save();
+        }
+
+        AuthEvent::record(
+            AuthEventType::LoginFailed,
+            user: $user,
+            emailAttempted: $user?->email,
+            request: $request,
+        );
+
+        throw ValidationException::withMessages([
+            'code' => ['That code is incorrect or has expired.'],
+        ]);
+    }
+
+    /**
+     * Single-use: the matched code is removed from the stored (hashed)
+     * array immediately, so a captured/reused code never works twice — the
+     * literal thing recovery codes exist to survive.
+     */
+    protected function consumeRecoveryCodeIfValid(User $user, string $code): bool
+    {
+        $hashed = (array) ($user->two_factor_recovery_codes ?? []);
+
+        foreach ($hashed as $i => $candidate) {
+            if (Hash::check($code, (string) $candidate)) {
+                unset($hashed[$i]);
+                $user->forceFill(['two_factor_recovery_codes' => array_values($hashed)])->save();
+
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -183,7 +289,23 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
-        return response()->json(['data' => new UserResource($request->user())]);
+        $data = (new UserResource($request->user()))->resolve();
+
+        // Surfaces the persistent impersonation banner even after a page
+        // refresh, since impersonation state lives on the TOKEN, not the
+        // user — see ImpersonationController::start().
+        $token = $request->user()?->currentAccessToken();
+
+        if ($token instanceof \Laravel\Sanctum\PersonalAccessToken && $token->impersonator_id !== null) {
+            $data['impersonating'] = [
+                'reason' => $token->impersonation_reason,
+                'expires_at' => optional($token->impersonation_expires_at)
+                    ? \Illuminate\Support\Carbon::parse($token->impersonation_expires_at)->toIso8601String()
+                    : null,
+            ];
+        }
+
+        return response()->json(['data' => $data]);
     }
 
     /**
@@ -270,5 +392,25 @@ class AuthController extends Controller
         Mail::to($user->email)->send(new OtpCodeMail($code));
 
         return ['requires_otp' => true, 'challenge' => $challenge];
+    }
+
+    /**
+     * No email round-trip — the app already has the code the moment the
+     * user's authenticator does. two_factor_code stays null; verifyTotp()
+     * checks the TOTP secret / recovery codes instead of a hash of this.
+     *
+     * @return array{requires_totp: true, challenge: string}
+     */
+    protected function issueTotpChallenge(User $user): array
+    {
+        $challenge = Str::random(40);
+
+        $user->forceFill([
+            'two_factor_challenge' => $challenge,
+            'two_factor_expires_at' => now()->addMinutes(10),
+            'two_factor_attempts' => 0,
+        ])->save();
+
+        return ['requires_totp' => true, 'challenge' => $challenge];
     }
 }

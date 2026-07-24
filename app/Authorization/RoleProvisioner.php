@@ -83,9 +83,12 @@ class RoleProvisioner
     public function provisionAll(): void
     {
         // TENANCY: provisioning spans every tenant by design; each provision()
-        // call rebinds the specific tenant via runAs internally.
+        // call rebinds the specific tenant via runAs internally. withTrashed(),
+        // not query() — called from a migration that can run on a fresh
+        // install before Tenant's soft-delete column exists (see the
+        // withTrashed() call just below for the full reasoning).
         Tenancy::asPlatform(function () {
-            Tenant::query()->get()->each(fn (Tenant $tenant) => $this->provision($tenant));
+            Tenant::withTrashed()->get()->each(fn (Tenant $tenant) => $this->provision($tenant));
         });
     }
 }

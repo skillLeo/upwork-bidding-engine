@@ -41,6 +41,7 @@ class TenancyGuardTest extends TestCase
         \App\Models\Invitation::class,
         \App\Models\Lead::class,
         \App\Models\Message::class,
+        \App\Models\NotificationPreference::class,
         \App\Models\ProposalVersion::class,
         \App\Models\PushSubscription::class,
         \App\Models\SavedFilter::class,
@@ -82,6 +83,7 @@ class TenancyGuardTest extends TestCase
         'app_notification_reads' => 'per-user read state; keyed by (notification, user), the notification carries the scope',
         'permission_denies' => 'per-user permission denies; composite (tenant,user,permission) key written explicitly, '
             .'and read inside Gate::before where the global scope would throw. See PermissionDeny.',
+        'social_accounts' => 'keyed by user, not tenant (P6) — a Google identity is workspace-independent, same as a password',
     ];
 
     /**
@@ -298,6 +300,9 @@ class TenancyGuardTest extends TestCase
             \App\Models\Message::class => \App\Models\Message::create([
                 'client_id' => \App\Models\Client::factory()->create()->id,
                 'direction' => 'in', 'text' => 'hello',
+            ]),
+            \App\Models\NotificationPreference::class => \App\Models\NotificationPreference::create([
+                'user_id' => \App\Models\User::factory()->create()->id,
             ]),
             \App\Models\ProposalVersion::class => \App\Models\ProposalVersion::create([
                 'lead_id' => \App\Models\Lead::factory()->create()->id,

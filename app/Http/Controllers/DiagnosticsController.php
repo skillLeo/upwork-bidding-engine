@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\ActivityType;
 use App\Models\ActivityLog;
 use App\Models\Lead;
+use App\Services\Ai\AiQuotaService;
 use App\Services\OpenClawService;
 use App\Services\SettingsService;
 use Illuminate\Http\JsonResponse;
@@ -17,7 +18,7 @@ use Illuminate\Support\Facades\DB;
  */
 class DiagnosticsController extends Controller
 {
-    public function __invoke(SettingsService $settings, OpenClawService $openClaw): JsonResponse
+    public function __invoke(SettingsService $settings, OpenClawService $openClaw, AiQuotaService $quota): JsonResponse
     {
         $lastScored = ActivityLog::where('type', ActivityType::LeadScored->value)
             ->latest('id')->first();
@@ -60,6 +61,9 @@ class DiagnosticsController extends Controller
             // tenant-owned — there is one shared queue on this host by design.
             'queue_depth' => DB::table('jobs')->count(),
             'failed_jobs' => DB::table('failed_jobs')->count(),
+            // P5 AI quotas — the dashboard banner reads this to explain a
+            // paused pipeline instead of just showing "AI calls are failing".
+            'ai_quota' => $quota->summary(),
             'ai_engine_enabled' => $settings->aiEngineEnabled(),
             'openclaw_online' => $openClaw->isReachable(),
             'whatsapp' => $openClaw->whatsappStatus(),

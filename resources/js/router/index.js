@@ -27,6 +27,11 @@ const routes = [
     component: () => import("@/pages/AcceptInvite.vue"),
   },
   {
+    path: "/auth/google/finish",
+    name: "google-callback",
+    component: () => import("@/pages/GoogleCallback.vue"),
+  },
+  {
     path: "/profile",
     name: "profile",
     component: () => import("@/pages/Profile.vue"),
@@ -70,6 +75,35 @@ const routes = [
     component: () => import("@/pages/Analytics.vue"),
     meta: { requiresAuth: true, requiresPermission: "analytics.view" },
   },
+  // The platform console (P5) — a separate area, never linked from the
+  // tenant NavBar, reachable only by users holding a platform_role. Gated
+  // below by requiresPlatformStaff, not requiresPermission (platform_role
+  // is a completely separate namespace from tenant permissions).
+  {
+    path: "/platform",
+    name: "platform-tenants",
+    component: () => import("@/pages/platform/PlatformTenants.vue"),
+    meta: { requiresAuth: true, requiresPlatformStaff: true },
+  },
+  {
+    path: "/platform/tenants/:id",
+    name: "platform-tenant-detail",
+    component: () => import("@/pages/platform/PlatformTenantDetail.vue"),
+    meta: { requiresAuth: true, requiresPlatformStaff: true },
+    props: true,
+  },
+  {
+    path: "/platform/settings",
+    name: "platform-settings",
+    component: () => import("@/pages/platform/PlatformSettings.vue"),
+    meta: { requiresAuth: true, requiresPlatformStaff: true },
+  },
+  {
+    path: "/platform/health",
+    name: "platform-health",
+    component: () => import("@/pages/platform/PlatformHealth.vue"),
+    meta: { requiresAuth: true, requiresPlatformStaff: true },
+  },
 ];
 
 const router = createRouter({
@@ -89,6 +123,10 @@ router.beforeEach((to) => {
   }
 
   if (to.meta.requiresPermission && !auth.can(to.meta.requiresPermission)) {
+    return { name: "leads" };
+  }
+
+  if (to.meta.requiresPlatformStaff && !auth.user?.platform_role) {
     return { name: "leads" };
   }
 

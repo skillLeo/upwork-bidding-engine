@@ -28,21 +28,30 @@ trait RunsForTenants
 {
     /**
      * Add to the command's signature: {--tenant= : ...}
+     *
+     * $requireBillable narrows the filter from isOperable() (excludes only
+     * suspended) to isBillingBlocked()===false (excludes suspended AND
+     * past_due too) — for the specific commands P5 says must not spend AI
+     * credit or poll intake while a workspace is past due, without changing
+     * every OTHER scheduled command's (health checks, reminders) more
+     * lenient "past_due still runs" behavior.
      */
-    protected function tenantsToRun(): \Illuminate\Support\Collection
+    protected function tenantsToRun(bool $requireBillable = false): \Illuminate\Support\Collection
     {
         $slug = $this->option('tenant');
 
         // TENANCY: the tenants table is never tenant-scoped — it is the table
         // the scope is derived from.
-        return \App\Tenancy\Tenancy::asPlatform(function () use ($slug) {
+        return \App\Tenancy\Tenancy::asPlatform(function () use ($slug, $requireBillable) {
             $query = Tenant::query()->orderBy('id');
 
             if (is_string($slug) && $slug !== '') {
                 $query->where('slug', $slug);
             }
 
-            return $query->get()->filter(fn (Tenant $t) => $t->isOperable())->values();
+            return $query->get()
+                ->filter(fn (Tenant $t) => $requireBillable ? ! $t->isBillingBlocked() : $t->isOperable())
+                ->values();
         });
     }
 
@@ -57,9 +66,9 @@ trait RunsForTenants
      *
      * @param  Closure(Tenant): int  $fn
      */
-    protected function forEachTenant(Closure $fn): int
+    protected function forEachTenant(Closure $fn, bool $requireBillable = false): int
     {
-        $tenants = $this->tenantsToRun();
+        $tenants = $this->tenantsToRun($requireBillable);
 
         if ($tenants->isEmpty()) {
             $slug = $this->option('tenant');

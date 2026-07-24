@@ -6,6 +6,7 @@ import {
   Bell,
   Bot,
   Brain,
+  Building2,
   Mail as MailIcon,
   MessageCircle,
   Palette,
@@ -30,6 +31,7 @@ import MailSection from "@/components/settings/MailSection.vue";
 import RulesSection from "@/components/settings/RulesSection.vue";
 import MembersSection from "@/components/settings/MembersSection.vue";
 import RolesMatrixSection from "@/components/settings/RolesMatrixSection.vue";
+import WorkspaceSection from "@/components/settings/WorkspaceSection.vue";
 import { useAuthStore } from "@/stores/auth";
 import { cn } from "@/lib/utils";
 
@@ -52,6 +54,7 @@ const allSections = [
   { id: "browser-alerts", label: "Browser Alerts", icon: Bell },
   { id: "mail", label: "Mail", icon: MailIcon, need: "setting.mail_host" },
   { id: "rules", label: "Bidding Rules", icon: SlidersHorizontal },
+  { id: "workspace", label: "Workspace", icon: Building2, need: "workspace.manage" },
   { id: "members", label: "Members", icon: Users, need: "members.invite" },
   { id: "roles", label: "Roles & permissions", icon: ShieldCheck },
 ];
@@ -144,6 +147,7 @@ const activeLabel = computed(() => allSections.find((s) => s.id === activeSectio
             <BrowserAlertsSection v-else-if="activeSection === 'browser-alerts'" />
             <MailSection v-else-if="activeSection === 'mail'" :settings="settings.mail" @saved="refetch" />
             <RulesSection v-else-if="activeSection === 'rules'" :settings="settings.rules" @saved="refetch" />
+            <WorkspaceSection v-else-if="activeSection === 'workspace'" />
             <MembersSection v-else-if="activeSection === 'members'" />
             <RolesMatrixSection v-else-if="activeSection === 'roles'" />
           </div>

@@ -23,6 +23,9 @@ enum AuthEventType: string
     case RoleChanged = 'role_changed';
     case ImpersonationStarted = 'impersonation_started';
     case ImpersonationEnded = 'impersonation_ended';
+    /** P6: a Google identity was linked to an existing password account (never silent — see SocialAuthController). */
+    case SocialAccountLinked = 'social_account_linked';
+    case SocialAccountUnlinked = 'social_account_unlinked';
 
     public function label(): string
     {
@@ -38,6 +41,8 @@ enum AuthEventType: string
             self::RoleChanged => 'Role changed',
             self::ImpersonationStarted => 'Impersonation started',
             self::ImpersonationEnded => 'Impersonation ended',
+            self::SocialAccountLinked => 'Google account linked',
+            self::SocialAccountUnlinked => 'Google account unlinked',
         };
     }
 

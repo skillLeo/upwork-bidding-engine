@@ -90,6 +90,7 @@ class AppServiceProvider extends ServiceProvider
         );
 
         $this->configureDynamicMail();
+        $this->configureDynamicGoogleOAuth();
 
         // The default notification points at a named `password.reset` web
         // route, which doesn't exist here (API-only backend, SPA does the
@@ -137,6 +138,39 @@ class AppServiceProvider extends ServiceProvider
         Config::set('mail.from', [
             'address' => $mail['from_address'] ?: $mail['username'],
             'name' => $mail['from_name'],
+        ]);
+    }
+
+    /**
+     * Same rationale and same fail-open-on-fresh-install guard as
+     * configureDynamicMail() — Google OAuth (P6) is configured from
+     * Settings > Platform console, not .env, so the client id/secret can be
+     * added without a redeploy.
+     */
+    protected function configureDynamicGoogleOAuth(): void
+    {
+        try {
+            $settings = app(SettingsService::class);
+            $clientId = (string) $settings->get('google_oauth_client_id');
+            $clientSecret = (string) $settings->get('google_oauth_client_secret');
+        } catch (\Throwable) {
+            return;
+        }
+
+        if ($clientId === '' || $clientSecret === '') {
+            return;
+        }
+
+        // The redirect target is a BACKEND route (this app resolves the
+        // account before handing the browser back to the SPA) — app.url,
+        // not frontend_url, even though the two happen to share a host on
+        // this single-domain deployment.
+        $backend = rtrim((string) config('app.url'), '/');
+
+        Config::set('services.google', [
+            'client_id' => $clientId,
+            'client_secret' => $clientSecret,
+            'redirect' => $backend.'/api/auth/google/callback',
         ]);
     }
 }

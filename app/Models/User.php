@@ -17,7 +17,7 @@ use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 
 #[Fillable(['name', 'email', 'password', 'role', 'platform_role', 'avatar_path', 'two_factor_enabled', 'two_factor_attempts'])]
-#[Hidden(['password', 'remember_token', 'two_factor_code', 'two_factor_challenge'])]
+#[Hidden(['password', 'remember_token', 'two_factor_code', 'two_factor_challenge', 'google2fa_secret', 'two_factor_recovery_codes'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
@@ -45,7 +45,49 @@ class User extends Authenticatable
             'two_factor_enabled' => 'boolean',
             'two_factor_expires_at' => 'datetime',
             'two_factor_attempts' => 'integer',
+            // Encrypted at rest via Eloquent's own cast (not SettingsService's
+            // Crypt pattern — this column lives on users, not settings).
+            'google2fa_secret' => 'encrypted',
+            'two_factor_confirmed_at' => 'datetime',
+            // Each entry is itself a Hash::make() of one recovery code —
+            // this cast is just JSON array (de)serialization, not the hash.
+            'two_factor_recovery_codes' => 'array',
         ];
+    }
+
+    /**
+     * TOTP is enrolled AND confirmed — never true from display alone (see
+     * TotpController::confirm()). This is the "recommended" second factor;
+     * hasEmailOtp() is the older, still-supported one.
+     */
+    public function hasTotpEnabled(): bool
+    {
+        return $this->google2fa_secret !== null && $this->two_factor_confirmed_at !== null;
+    }
+
+    public function hasEmailOtp(): bool
+    {
+        return (bool) $this->two_factor_enabled;
+    }
+
+    /**
+     * False only for an account created entirely via Google with no invite
+     * (P6) — genuinely no password exists, not merely an unused random one.
+     * Unlinking Google on such an account would be a permanent lockout, so
+     * this is what SocialAuthController's unlink refusal checks.
+     */
+    public function hasPassword(): bool
+    {
+        return $this->password !== null;
+    }
+
+    /**
+     * Any second factor at all — what require_2fa (P6) checks to decide
+     * whether a member must be routed to enrolment before anything else.
+     */
+    public function hasAnyTwoFactor(): bool
+    {
+        return $this->hasTotpEnabled() || $this->hasEmailOtp();
     }
 
     public function isAdmin(): bool
@@ -135,5 +177,13 @@ class User extends Authenticatable
     public function activityLogs(): HasMany
     {
         return $this->hasMany(ActivityLog::class);
+    }
+
+    /**
+     * @return HasMany<SocialAccount, $this>
+     */
+    public function socialAccounts(): HasMany
+    {
+        return $this->hasMany(SocialAccount::class);
     }
 }
