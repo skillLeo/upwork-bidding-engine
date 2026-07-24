@@ -1,26 +1,25 @@
 <script setup>
 import { onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { toast } from "vue-sonner";
-import Card from "@/components/ui/Card.vue";
-import CardContent from "@/components/ui/CardContent.vue";
-import Button from "@/components/ui/Button.vue";
-import Input from "@/components/ui/Input.vue";
-import Label from "@/components/ui/Label.vue";
 import { apiClient, apiErrorMessage } from "@/lib/api-client";
 import { useAuthStore } from "@/stores/auth";
+import AuthLayout from "@/components/auth/AuthLayout.vue";
+import AuthDeadEnd from "@/components/auth/AuthDeadEnd.vue";
+import AuthField from "@/components/auth/AuthField.vue";
+import AuthButton from "@/components/auth/AuthButton.vue";
 
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
 
-const token = route.query.token;
+const token = String(route.query.token ?? "");
 const loading = ref(true);
 const invalid = ref(false);
 const info = ref(null);
 const name = ref("");
 const password = ref("");
-const passwordConfirm = ref("");
+const errors = ref({});
+const formError = ref("");
 const submitting = ref(false);
 
 onMounted(async () => {
@@ -40,23 +39,33 @@ onMounted(async () => {
 });
 
 async function accept() {
+  errors.value = {};
+  formError.value = "";
+  if (info.value.needs_account) {
+    if (!name.value) {
+      errors.value = { name: "Enter your name." };
+      return;
+    }
+    if (password.value.length < 8) {
+      errors.value = { password: "Use at least 8 characters." };
+      return;
+    }
+  }
   submitting.value = true;
   try {
     const payload = { token };
     if (info.value.needs_account) {
       payload.name = name.value;
       payload.password = password.value;
-      payload.password_confirmation = passwordConfirm.value;
+      payload.password_confirmation = password.value;
     }
     const res = await apiClient.post("/invitations/accept", payload);
-    // Land signed in.
     auth.setAuth(res.data.data.token, null, true);
     const me = await apiClient.get("/me");
     auth.setUser(me.data.data);
-    toast.success(res.data.data.message);
-    router.push("/leads");
+    router.replace("/leads");
   } catch (error) {
-    toast.error(apiErrorMessage(error, "Could not accept the invitation."));
+    formError.value = apiErrorMessage(error, "Could not accept the invitation.");
   } finally {
     submitting.value = false;
   }
@@ -64,49 +73,53 @@ async function accept() {
 </script>
 
 <template>
-  <div class="flex min-h-screen items-center justify-center bg-bg px-4">
-    <Card class="w-full max-w-md">
-      <CardContent class="space-y-4 p-6">
-        <div v-if="loading" class="py-8 text-center text-sm text-text-secondary">Checking your invitation…</div>
+  <AuthDeadEnd
+    v-if="invalid"
+    title="This invitation is no longer valid"
+    body="It may have expired or already been used. Ask whoever invited you to send a fresh one."
+    action-label="Back to sign in"
+    action-to="/login"
+  />
 
-        <div v-else-if="invalid" class="space-y-3 py-4 text-center">
-          <p class="text-base font-semibold text-text-primary">This invitation is invalid or expired</p>
-          <p class="text-sm text-text-secondary">Ask whoever invited you to send a fresh one.</p>
-          <Button variant="secondary" @click="router.push('/login')">Go to sign in</Button>
+  <AuthLayout v-else>
+    <template v-if="loading">
+      <p style="font-size: 15px; color: var(--paper-ink-2)">Checking your invitation…</p>
+    </template>
+
+    <template v-else>
+      <h1 class="auth-h1">
+        Join {{ info.workspace }}
+      </h1>
+      <p class="auth-sub">
+        <template v-if="info.invited_by">{{ info.invited_by }} invited you</template>
+        <template v-else>You've been invited</template>
+        as {{ info.role }} · {{ info.email }}
+      </p>
+
+      <form class="mt-8 flex flex-col gap-4" novalidate @submit.prevent="accept">
+        <template v-if="info.needs_account">
+          <AuthField id="name" v-model="name" label="Your name" autocomplete="name" :error="errors.name" />
+          <AuthField
+            id="password"
+            v-model="password"
+            label="Create a password"
+            type="password"
+            autocomplete="new-password"
+            :error="errors.password"
+          />
+        </template>
+        <p v-else style="font-size: 15px; color: var(--paper-ink-2)">
+          You already have an account with this email — joining adds this workspace to it.
+        </p>
+
+        <div class="auth-error" :class="{ open: !!formError }" aria-live="polite">
+          <span>{{ formError }}</span>
         </div>
 
-        <template v-else>
-          <div>
-            <h1 class="text-lg font-semibold text-text-primary">Join {{ info.workspace }}</h1>
-            <p class="mt-1 text-sm text-text-secondary">
-              {{ info.invited_by ? `${info.invited_by} invited you` : "You've been invited" }}
-              as a <strong>{{ info.role }}</strong> ({{ info.email }}).
-            </p>
-          </div>
-
-          <template v-if="info.needs_account">
-            <div>
-              <Label>Your name</Label>
-              <Input v-model="name" type="text" placeholder="Your name" />
-            </div>
-            <div>
-              <Label>Password</Label>
-              <Input v-model="password" type="password" autocomplete="new-password" />
-            </div>
-            <div>
-              <Label>Confirm password</Label>
-              <Input v-model="passwordConfirm" type="password" autocomplete="new-password" />
-            </div>
-          </template>
-          <p v-else class="text-sm text-text-secondary">
-            You already have a SkillLeo account with this email — accepting adds this workspace to it.
-          </p>
-
-          <Button class="w-full" :loading="submitting" @click="accept">
-            {{ info.needs_account ? "Create account and join" : "Join workspace" }}
-          </Button>
-        </template>
-      </CardContent>
-    </Card>
-  </div>
+        <AuthButton type="submit" :loading="submitting">
+          {{ info.needs_account ? "Create account and join" : "Join workspace" }}
+        </AuthButton>
+      </form>
+    </template>
+  </AuthLayout>
 </template>

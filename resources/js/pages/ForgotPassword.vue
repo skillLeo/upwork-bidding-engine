@@ -1,31 +1,31 @@
 <script setup>
 import { ref } from "vue";
-import { Mail } from "@lucide/vue";
-import { apiClient, apiErrorMessage } from "@/lib/api-client";
-import AuthShell from "@/components/layout/AuthShell.vue";
-import Button from "@/components/ui/Button.vue";
-import Input from "@/components/ui/Input.vue";
-import Label from "@/components/ui/Label.vue";
-import FieldError from "@/components/ui/FieldError.vue";
+import { apiClient } from "@/lib/api-client";
+import AuthLayout from "@/components/auth/AuthLayout.vue";
+import AuthField from "@/components/auth/AuthField.vue";
+import AuthButton from "@/components/auth/AuthButton.vue";
 
 const email = ref("");
-const errors = ref({});
+const error = ref("");
 const submitting = ref(false);
 const sent = ref(false);
 
 async function onSubmit() {
-  errors.value = {};
+  error.value = "";
   if (!email.value || !/^\S+@\S+\.\S+$/.test(email.value)) {
-    errors.value = { email: "Enter a valid email address." };
+    error.value = "Enter a valid email address.";
     return;
   }
-
   submitting.value = true;
   try {
     await apiClient.post("/auth/forgot-password", { email: email.value });
+    // Same confirmation whether or not the address exists — the API never
+    // reveals which, and neither does this screen.
     sent.value = true;
-  } catch (error) {
-    errors.value = { email: apiErrorMessage(error, "Could not send the reset link.") };
+  } catch {
+    // Even a failure lands on the neutral confirmation: an error here would
+    // itself leak whether the address is known.
+    sent.value = true;
   } finally {
     submitting.value = false;
   }
@@ -33,52 +33,43 @@ async function onSubmit() {
 </script>
 
 <template>
-  <AuthShell tagline="Score, draft, and track Upwork proposals from one dashboard.">
+  <AuthLayout>
     <template v-if="sent">
-      <h1 class="text-2xl font-semibold text-text-primary">Check your email</h1>
-      <p class="mt-1.5 text-sm text-text-secondary">
-        If <span class="font-medium text-text-primary">{{ email }}</span> is registered, a
-        password reset link is on its way.
+      <h1 class="auth-h1">
+        Check your email
+      </h1>
+      <p class="auth-sub">
+        If an account exists for {{ email }}, a link to reset the password is on its way. It
+        expires in 60 minutes.
       </p>
-      <router-link
-        to="/login"
-        class="mt-6 inline-block text-sm font-medium text-primary hover:underline"
-      >
-        ← Back to sign in
-      </router-link>
+      <router-link to="/login" class="auth-link mt-8 inline-block">Back to sign in</router-link>
     </template>
 
     <template v-else>
-      <h1 class="text-2xl font-semibold text-text-primary">Forgot your password?</h1>
-      <p class="mt-1.5 text-sm text-text-secondary">We'll email you a link to reset it.</p>
+      <h1 class="auth-h1">
+        Reset your password
+      </h1>
+      <p class="auth-sub">
+        Enter your email and we'll send a link to set a new one.
+      </p>
 
-      <form @submit.prevent="onSubmit" class="mt-6 space-y-4" novalidate>
-        <div>
-          <Label for="email">Email</Label>
-          <div class="relative">
-            <Mail class="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
-            <Input
-              id="email"
-              type="email"
-              autocomplete="email"
-              placeholder="you@company.com"
-              v-model="email"
-              class="pl-9"
-            />
-          </div>
-          <FieldError :text="errors.email" />
-        </div>
-        <Button type="submit" class="w-full" size="lg" :loading="submitting">
-          Send reset link
-        </Button>
+      <form class="mt-8 flex flex-col gap-4" novalidate @submit.prevent="onSubmit">
+        <AuthField
+          id="email"
+          v-model="email"
+          label="Email"
+          type="email"
+          inputmode="email"
+          autocomplete="email"
+          autocapitalize="none"
+          autocorrect="off"
+          spellcheck="false"
+          :error="error"
+        />
+        <AuthButton type="submit" :loading="submitting">Send reset link</AuthButton>
       </form>
 
-      <router-link
-        to="/login"
-        class="mt-6 inline-block text-sm font-medium text-primary hover:underline"
-      >
-        ← Back to sign in
-      </router-link>
+      <router-link to="/login" class="auth-link mt-8 inline-block">Back to sign in</router-link>
     </template>
-  </AuthShell>
+  </AuthLayout>
 </template>

@@ -2,7 +2,10 @@ import { defineStore } from "pinia";
 import { apiClient } from "@/lib/api-client";
 
 const STORAGE_KEY = "skillleo-branding";
-const DEFAULTS = { name: "SkillLeo", logoUrl: null };
+// signupMode/googleEnabled default to the safe closed-ish state until the
+// public /branding call fills them in, so a sign-up screen never flashes an
+// open form it shouldn't.
+const DEFAULTS = { name: "SkillLeo", logoUrl: null, signupMode: "invite_code", googleEnabled: false };
 
 function loadPersisted() {
   try {
@@ -24,9 +27,17 @@ export const useBrandingStore = defineStore("branding", {
     async fetch() {
       try {
         const res = await apiClient.get("/branding");
-        this.name = res.data.data.name;
-        this.logoUrl = res.data.data.logo_url;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ name: this.name, logoUrl: this.logoUrl }));
+        const d = res.data.data;
+        this.name = d.name;
+        this.logoUrl = d.logo_url;
+        // signup_mode / google_enabled are optional public hints the auth
+        // screens read; fall back to the current value if an older API omits them.
+        this.signupMode = d.signup_mode ?? this.signupMode;
+        this.googleEnabled = d.google_enabled ?? this.googleEnabled;
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({ name: this.name, logoUrl: this.logoUrl }),
+        );
         document.title = `${this.name} Bidding Engine`;
       } catch {
         // keep current state

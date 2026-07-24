@@ -1,25 +1,25 @@
 <script setup>
 import { onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { toast } from "vue-sonner";
-import AuthShell from "@/components/layout/AuthShell.vue";
-import Button from "@/components/ui/Button.vue";
-import Input from "@/components/ui/Input.vue";
-import Label from "@/components/ui/Label.vue";
-import FieldError from "@/components/ui/FieldError.vue";
 import { apiClient, apiErrorMessage } from "@/lib/api-client";
 import { useAuthStore } from "@/stores/auth";
+import AuthLayout from "@/components/auth/AuthLayout.vue";
+import AuthDeadEnd from "@/components/auth/AuthDeadEnd.vue";
+import AuthButton from "@/components/auth/AuthButton.vue";
+import OtpInput from "@/components/auth/OtpInput.vue";
 
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
 
-const state = ref("loading"); // loading | link | totp | otp | error
-const error = ref("");
+const view = ref("loading"); // loading | link | totp | otp | error
+const errorText = ref("");
 const email = ref("");
 const linkToken = ref("");
 const password = ref("");
+const passwordError = ref("");
 const code = ref("");
+const codeError = ref("");
 const challenge = ref("");
 const submitting = ref(false);
 
@@ -31,155 +31,173 @@ async function finishWithToken(token) {
   try {
     const res = await apiClient.get("/me", { headers: { Authorization: `Bearer ${token}` } });
     auth.setAuth(token, res.data.data, true);
-    toast.success("Welcome back.");
     router.replace(landing());
   } catch (err) {
-    error.value = apiErrorMessage(err, "Could not complete sign-in.");
-    state.value = "error";
+    errorText.value = apiErrorMessage(err, "Could not complete sign-in.");
+    view.value = "error";
   }
 }
 
 async function submitLink() {
-  if (!password.value) return;
+  passwordError.value = "";
+  if (!password.value) {
+    passwordError.value = "Enter your account password.";
+    return;
+  }
   submitting.value = true;
   try {
     const res = await apiClient.post("/auth/google/link", {
       link_token: linkToken.value,
       password: password.value,
     });
-    if (res.data.data.requires_totp) {
-      challenge.value = res.data.data.challenge;
-      state.value = "totp";
+    const data = res.data.data;
+    if (data.requires_totp) {
+      challenge.value = data.challenge;
+      view.value = "totp";
       return;
     }
-    if (res.data.data.requires_otp) {
-      challenge.value = res.data.data.challenge;
-      state.value = "otp";
+    if (data.requires_otp) {
+      challenge.value = data.challenge;
+      view.value = "otp";
       return;
     }
-    await finishWithToken(res.data.data.token);
+    await finishWithToken(data.token);
   } catch (err) {
-    error.value = apiErrorMessage(err, "That password is incorrect.");
+    passwordError.value = apiErrorMessage(err, "That password is incorrect.");
   } finally {
     submitting.value = false;
   }
 }
 
 async function submitChallenge() {
-  if (!code.value) return;
+  codeError.value = "";
+  if (!code.value) {
+    codeError.value = "Enter the 6-digit code.";
+    return;
+  }
   submitting.value = true;
   try {
-    const endpoint = state.value === "totp" ? "/auth/verify-totp" : "/auth/verify-otp";
+    const endpoint = view.value === "totp" ? "/auth/verify-totp" : "/auth/verify-otp";
     const res = await apiClient.post(endpoint, { challenge: challenge.value, code: code.value });
     await finishWithToken(res.data.data.token);
   } catch (err) {
-    error.value = apiErrorMessage(err, "That code is incorrect or has expired.");
+    codeError.value = apiErrorMessage(err, "That code is incorrect or has expired.");
   } finally {
     submitting.value = false;
   }
 }
 
-// The redirect never carries the token/challenge/email directly (see
-// SocialAuthController's class docblock) — just an opaque, single-use
-// handoff code, exchanged here via POST for the real payload.
+// The redirect never carries the token/challenge/email directly — only an
+// opaque, single-use handoff code, exchanged here via POST for the payload.
 async function exchangeHandoff(handoff) {
   try {
     const res = await apiClient.post("/auth/google/exchange", { handoff });
     const payload = res.data.data;
-
     if (payload.link_required) {
       linkToken.value = payload.link_token;
       email.value = payload.email;
-      state.value = "link";
+      view.value = "link";
       return;
     }
-
     if (payload.requires_totp) {
       challenge.value = payload.challenge;
-      state.value = "totp";
+      view.value = "totp";
       return;
     }
-
     if (payload.requires_otp) {
       challenge.value = payload.challenge;
-      state.value = "otp";
+      view.value = "otp";
       return;
     }
-
     if (payload.token) {
       await finishWithToken(payload.token);
       return;
     }
-
-    error.value = "Something went wrong finishing Google sign-in.";
-    state.value = "error";
+    errorText.value = "Something went wrong finishing Google sign-in.";
+    view.value = "error";
   } catch (err) {
-    error.value = apiErrorMessage(err, "This sign-in link has expired. Try again.");
-    state.value = "error";
+    errorText.value = apiErrorMessage(err, "This sign-in link has expired. Try again.");
+    view.value = "error";
   }
 }
 
 onMounted(() => {
   const q = route.query;
-
   if (q.error) {
-    error.value = String(q.error);
-    state.value = "error";
+    errorText.value = String(q.error);
+    view.value = "error";
     return;
   }
-
   if (q.handoff) {
     exchangeHandoff(String(q.handoff));
     return;
   }
-
-  error.value = "Something went wrong finishing Google sign-in.";
-  state.value = "error";
+  errorText.value = "Something went wrong finishing Google sign-in.";
+  view.value = "error";
 });
 </script>
 
 <template>
-  <AuthShell>
-    <template v-if="state === 'loading'">
-      <p class="text-center text-sm text-text-secondary">Finishing sign-in…</p>
+  <AuthDeadEnd
+    v-if="view === 'error'"
+    title="Couldn't sign you in"
+    :body="errorText"
+    action-label="Back to sign in"
+    action-to="/login"
+  />
+
+  <AuthLayout v-else>
+    <template v-if="view === 'loading'">
+      <p style="font-size: 15px; color: var(--paper-ink-2)">Finishing sign-in…</p>
     </template>
 
-    <template v-else-if="state === 'link'">
-      <h1 class="text-2xl font-semibold text-text-primary">Confirm it's you</h1>
-      <p class="mt-1.5 text-sm text-text-secondary">
-        <span class="font-medium text-text-primary">{{ email }}</span> already has an account. Enter
-        its password to link your Google sign-in — this is never done automatically.
+    <template v-else-if="view === 'link'">
+      <h1 class="auth-h1">
+        Confirm it's you
+      </h1>
+      <p class="auth-sub">
+        {{ email }} already has an account. Enter its password once to link Google — this is
+        never done automatically.
       </p>
-      <form @submit.prevent="submitLink" class="mt-6 space-y-4" novalidate>
+      <form class="mt-8 flex flex-col gap-4" novalidate @submit.prevent="submitLink">
         <div>
-          <Label for="link-password">Password</Label>
-          <Input id="link-password" type="password" autocomplete="current-password" v-model="password" />
-          <FieldError :text="error" />
+          <label for="link-password" class="auth-label">Password</label>
+          <input
+            id="link-password"
+            v-model="password"
+            class="auth-input"
+            style="margin-top: 6px"
+            :class="{ 'is-invalid': !!passwordError }"
+            type="password"
+            autocomplete="current-password"
+          />
+          <div class="auth-error" :class="{ open: !!passwordError }" aria-live="polite">
+            <span>{{ passwordError }}</span>
+          </div>
         </div>
-        <Button type="submit" class="w-full" size="lg" :loading="submitting">Link and sign in</Button>
+        <AuthButton type="submit" :loading="submitting">Link and sign in</AuthButton>
       </form>
-      <router-link to="/login" class="mt-4 block text-sm font-medium text-text-secondary hover:text-primary">← Back to sign in</router-link>
-    </template>
-
-    <template v-else-if="state === 'totp' || state === 'otp'">
-      <h1 class="text-2xl font-semibold text-text-primary">Enter your code</h1>
-      <p class="mt-1.5 text-sm text-text-secondary">
-        {{ state === "totp" ? "The 6-digit code from your authenticator app (or a recovery code)." : "The 6-digit code we emailed you." }}
-      </p>
-      <form @submit.prevent="submitChallenge" class="mt-6 space-y-4" novalidate>
-        <div>
-          <Label for="google-code">Code</Label>
-          <Input id="google-code" autocomplete="one-time-code" v-model="code" class="text-center text-lg tracking-[0.3em]" />
-          <FieldError :text="error" />
-        </div>
-        <Button type="submit" class="w-full" size="lg" :loading="submitting">Verify</Button>
-      </form>
+      <router-link to="/login" class="auth-link mt-8 inline-block">Back to sign in</router-link>
     </template>
 
     <template v-else>
-      <h1 class="text-2xl font-semibold text-text-primary">Couldn't sign you in</h1>
-      <p class="mt-1.5 text-sm text-text-secondary">{{ error }}</p>
-      <router-link to="/login" class="mt-6 inline-block text-sm font-medium text-primary hover:underline">← Back to sign in</router-link>
+      <h1 class="auth-h1">
+        Two-step verification
+      </h1>
+      <p class="auth-sub">
+        {{
+          view === "totp"
+            ? "Enter the 6-digit code from your authenticator app."
+            : "Enter the 6-digit code we emailed you."
+        }}
+      </p>
+      <form class="mt-8" novalidate @submit.prevent="submitChallenge">
+        <OtpInput v-model="code" :invalid="!!codeError" :disabled="submitting" />
+        <div class="auth-error" :class="{ open: !!codeError }" aria-live="polite">
+          <span>{{ codeError }}</span>
+        </div>
+        <AuthButton type="submit" class="mt-6" :loading="submitting">Verify</AuthButton>
+      </form>
     </template>
-  </AuthShell>
+  </AuthLayout>
 </template>

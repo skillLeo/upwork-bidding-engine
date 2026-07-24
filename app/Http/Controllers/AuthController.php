@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Authorization\RoleProvisioner;
+use App\Authorization\TenantRole;
 use App\Enums\ActivityType;
 use App\Enums\AuthEventType;
 use App\Enums\UserRole;
@@ -10,13 +12,17 @@ use App\Http\Resources\UserResource;
 use App\Mail\OtpCodeMail;
 use App\Models\ActivityLog;
 use App\Models\AuthEvent;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Auth\LoginThrottle;
 use App\Services\Auth\TokenIssuer;
+use App\Services\SettingsService;
+use App\Tenancy\Tenancy;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
@@ -346,6 +352,140 @@ class AuthController extends Controller
         }
 
         return response()->json(['data' => ['message' => 'Password reset — sign in with your new password.']]);
+    }
+
+    /**
+     * Public self-serve sign-up. Reachable ONLY when signup_mode is "open"
+     * (the default is invite_code, so this is off until an admin turns it on);
+     * the mode is re-checked here server-side, never trusted from the client.
+     *
+     * A successful registration provisions a brand-new workspace with the
+     * registrant as its owner — the workspace name on the form is real. A
+     * fresh tenant needs no seeding: SettingsService resolves every key to its
+     * schema default until the owner configures Vollna/AI, so the workspace is
+     * functional (just idle) from the first request. Everything is wrapped in
+     * one transaction so a half-provisioned tenant can never be left behind.
+     */
+    public function register(Request $request): JsonResponse
+    {
+        $mode = (string) app(SettingsService::class)->get('signup_mode', 'invite_code');
+
+        if ($mode !== 'open') {
+            // A truthful, non-enumerating message: it is about the workspace
+            // policy, not about whether the email exists.
+            throw ValidationException::withMessages([
+                'email' => ['Open sign-up is closed. You need an invitation to join.'],
+            ]);
+        }
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'workspace_name' => ['required', 'string', 'max:255'],
+        ]);
+
+        // The workspace, the user, and the membership are created atomically.
+        [$tenant, $user] = DB::transaction(function () use ($validated) {
+            $tenant = Tenant::create([
+                'name' => $validated['workspace_name'],
+                'slug' => $this->uniqueSlug($validated['workspace_name']),
+                'plan' => 'free',
+                'status' => Tenant::STATUS_ACTIVE,
+            ]);
+
+            $user = User::create([
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+                'password' => Hash::make($validated['password']),
+                'role' => UserRole::Admin->value,
+            ]);
+
+            $tenant->users()->syncWithoutDetaching([$user->id => ['joined_at' => now()]]);
+            $tenant->update(['owner_user_id' => $user->id]);
+
+            return [$tenant->fresh(), $user];
+        });
+
+        // Role provisioning runs AFTER the commit so Spatie's team-scoped
+        // lookups query committed rows. It is the one step that would leave a
+        // workspace ownerless if it failed mid-way — acceptable because it is
+        // idempotent (findOrCreate) and the owner grant can always be re-run,
+        // whereas a half-rolled-back tenant could not.
+        $this->provisionNewWorkspace($tenant, $user);
+
+        // Bind the new workspace before issuing the token so the token, its
+        // device metadata and the audit row all record the right tenant.
+        $tenant = $user->tenants()->first();
+        $issued = Tenancy::runAs($tenant, fn () => $this->issueToken($user, $request));
+
+        ActivityLog::record(ActivityType::UserLoggedIn, subject: $user, userId: $user->id);
+
+        return response()->json(['data' => $issued], 201);
+    }
+
+    /**
+     * Provision the four roles for a brand-new workspace and make the
+     * registrant its owner.
+     *
+     * This deliberately does NOT call RoleProvisioner::provision(): that method
+     * looks roles up with an un-team-scoped `Role::where('name', …)->first()`,
+     * which returns SOME OTHER tenant's role whenever one already exists in the
+     * process (e.g. the request that created this tenant). Self-serve sign-up
+     * is the first runtime path that provisions a *second* tenant while another
+     * tenant's roles are already loaded, so it must scope explicitly. Spatie's
+     * own findOrCreate()/syncRoles() honour the team id we pin below, so every
+     * role and the owner grant land on THIS tenant.
+     */
+    protected function provisionNewWorkspace(Tenant $tenant, User $user): void
+    {
+        $registrar = app(\Spatie\Permission\PermissionRegistrar::class);
+
+        // The global permission vocabulary is tenant-agnostic; make sure it
+        // exists before roles reference it.
+        app(RoleProvisioner::class)->ensureGlobalPermissions();
+
+        $previousTeam = $registrar->getPermissionsTeamId();
+        $registrar->setPermissionsTeamId($tenant->id);
+
+        try {
+            foreach (TenantRole::cases() as $roleEnum) {
+                $permissions = $roleEnum === TenantRole::Owner
+                    ? \App\Authorization\Permissions::all()
+                    : $roleEnum->defaultPermissions();
+
+                \Spatie\Permission\Models\Role::findOrCreate($roleEnum->value, 'web')
+                    ->syncPermissions($permissions);
+            }
+
+            $user->syncRoles([TenantRole::Owner->value]);
+        } finally {
+            $registrar->setPermissionsTeamId($previousTeam);
+            $registrar->forgetCachedPermissions();
+        }
+    }
+
+    /**
+     * A slug that is unique across the tenants table. The tenants table is
+     * never tenant-scoped, so this reads it as platform.
+     */
+    protected function uniqueSlug(string $name): string
+    {
+        $base = Str::slug($name) ?: 'workspace';
+
+        // TENANCY: slug uniqueness is a global property of the tenants table,
+        // which is never tenant-scoped; there is also no tenant bound yet on
+        // this public, pre-auth request. Read as platform, deliberately.
+        return Tenancy::asPlatform(function () use ($base) {
+            $slug = $base;
+            $n = 1;
+
+            while (Tenant::where('slug', $slug)->exists()) {
+                $slug = $base.'-'.(++$n);
+            }
+
+            return $slug;
+        });
     }
 
     /**

@@ -226,3 +226,332 @@ body {
   opacity: 1;
   background: rgba(16, 24, 40, 0.06);
 }
+
+/* ===========================================================================
+   Authentication screens — a self-contained design language (Phase 7, v2).
+   Everything lives under .auth-screen so the dashboard's own tokens and body
+   font are never touched. The only hexes on these screens are the six tokens
+   plus the paper text (#101720/#5A6672) and the four named control states
+   (#E3E1DD border, #C9C6C0 hover, #C4453A error, #D89230 button hover). Two
+   radii total: 6px controls, 10px cards. Every transition names its property
+   and uses one of the two cubic-bezier easings below; no bare timing keywords.
+   ========================================================================= */
+.auth-screen {
+  --ink: #101720;
+  --surface: #1b2530;
+  --hairline: #2c3846;
+  --paper: #fcfcfb;
+  --signal: #e9a23b;
+  --muted: #8494a5;
+
+  --paper-ink: #101720; /* primary text on paper */
+  --paper-ink-2: #5a6672; /* secondary text on paper */
+  --paper-line: #e3e1dd; /* control border, resting */
+  --paper-line-hover: #c9c6c0; /* control border, hover (pre-focus response) */
+  --error: #c4453a; /* error border + message */
+  --signal-hover: #d89230; /* primary button, hover */
+  --ring: rgba(233, 162, 59, 0.25); /* --signal at 25%, the focus ring + selection */
+
+  --ease-ui: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-cycle: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --font-auth-sans: "Public Sans", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, Helvetica, Arial, sans-serif;
+  --font-auth-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
+    monospace;
+
+  font-family: var(--font-auth-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--paper-ink);
+}
+
+/* The browser default selection is a tell. Amber at 25% on ink text. */
+.auth-screen ::selection {
+  background: var(--ring);
+  color: var(--ink);
+}
+
+/* Focus ring is amber (--signal) everywhere in this scope, overriding the
+   app-wide indigo :focus-visible. Same ring on inputs, buttons, links, and
+   the Google button — one system. */
+.auth-screen :focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.auth-mono {
+  font-family: var(--font-auth-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The one page heading and the one sub-copy style, defined once so the
+   four-size scale can never drift screen to screen. */
+.auth-h1 {
+  font-family: var(--font-auth-sans);
+  font-weight: 600;
+  font-size: 28px;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  text-wrap: balance;
+  color: var(--paper-ink);
+}
+.auth-sub {
+  margin-top: 8px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--paper-ink-2);
+}
+
+/* --- Form controls, built from scratch (no shared indigo components) ------ */
+.auth-label {
+  display: block;
+  font-family: var(--font-auth-sans);
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  color: var(--paper-ink-2);
+}
+
+.auth-input {
+  width: 100%;
+  height: 44px;
+  border-radius: 6px;
+  border: 1px solid var(--paper-line);
+  padding: 0 12px;
+  font-family: var(--font-auth-sans);
+  font-weight: 400;
+  font-size: 15px;
+  color: var(--paper-ink);
+  background: var(--paper);
+  caret-color: var(--signal);
+  transition:
+    border-color 140ms var(--ease-ui),
+    box-shadow 140ms var(--ease-ui);
+}
+.auth-input::placeholder {
+  color: var(--paper-ink-2);
+}
+.auth-input:hover:not(:focus):not(:disabled) {
+  border-color: var(--paper-line-hover);
+}
+.auth-input:focus {
+  outline: none;
+  border-color: var(--signal);
+  /* 2px ring at 25% — no glow, no spread beyond the ring. */
+  box-shadow: 0 0 0 2px var(--ring);
+}
+.auth-input:disabled {
+  color: var(--paper-ink-2);
+  cursor: not-allowed;
+}
+.auth-input.is-invalid {
+  border-color: var(--error);
+}
+
+/* Kill Chrome's yellow autofill: paint the field back to --paper with an
+   inset shadow (0 blur, so it never registers as a glow) and hold it there
+   with the classic ultra-long, explicitly-eased background transition. */
+.auth-screen input:-webkit-autofill,
+.auth-screen input:-webkit-autofill:hover,
+.auth-screen input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--paper-ink);
+  -webkit-box-shadow: 0 0 0 1000px var(--paper) inset;
+  caret-color: var(--signal);
+  transition: background-color 5000s var(--ease-ui);
+}
+
+/* Per-digit boxes for the two-factor challenge. 44px square, numerals so mono. */
+.auth-otp {
+  width: 44px;
+  height: 44px;
+  text-align: center;
+  font-family: var(--font-auth-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  font-size: 20px;
+  color: var(--paper-ink);
+  background: var(--paper);
+  border-radius: 6px;
+  border: 1px solid var(--paper-line);
+  caret-color: var(--signal);
+  transition:
+    border-color 140ms var(--ease-ui),
+    box-shadow 140ms var(--ease-ui);
+}
+.auth-otp:hover:not(:focus):not(:disabled) {
+  border-color: var(--paper-line-hover);
+}
+.auth-otp:focus {
+  outline: none;
+  border-color: var(--signal);
+  box-shadow: 0 0 0 2px var(--ring);
+}
+.auth-otp.is-invalid {
+  border-color: var(--error);
+}
+
+/* Password-strength meter: a 4-segment bar, --hairline empty, --signal filled.
+   6px radius keeps to the two-radius rule. */
+.auth-meter {
+  height: 4px;
+  flex: 1;
+  border-radius: 6px;
+  background: var(--paper-line);
+  transition: background-color 140ms var(--ease-ui);
+}
+.auth-meter.on {
+  background: var(--signal);
+}
+
+.auth-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 44px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  padding: 0 16px;
+  font-family: var(--font-auth-sans);
+  font-weight: 500;
+  font-size: 15px;
+  cursor: pointer;
+  transition:
+    background-color 140ms var(--ease-ui),
+    border-color 140ms var(--ease-ui),
+    transform 180ms var(--ease-ui);
+}
+.auth-btn:active:not(:disabled) {
+  transform: translateY(1px); /* press — not scale */
+}
+.auth-btn-primary {
+  background: var(--signal); /* no gradient, no shadow, no border */
+  color: var(--ink);
+}
+.auth-btn-primary:hover:not(:disabled) {
+  background: var(--signal-hover);
+}
+.auth-btn-primary:disabled {
+  cursor: default;
+}
+.auth-btn-secondary {
+  background: var(--paper);
+  color: var(--paper-ink);
+  border-color: var(--paper-line);
+}
+.auth-btn-secondary:hover:not(:disabled) {
+  border-color: var(--paper-line-hover);
+}
+.auth-btn-secondary:disabled {
+  cursor: default;
+}
+
+/* Loading spinner: an inline SVG ring+arc (drawn with SVG geometry, so no
+   CSS gradient and no border-radius circle — both are tells). Only the
+   rotation is animated, in 12 steps so it ticks rather than glides; a
+   stepped keyframe needs no cubic-bezier and is not a transition. */
+.auth-spinner {
+  flex: 0 0 auto;
+  animation: auth-spin 800ms steps(12) infinite;
+}
+@keyframes auth-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.auth-link {
+  color: var(--paper-ink);
+  font-size: 13px;
+  text-decoration: underline;
+  text-decoration-color: var(--paper-ink-2);
+  text-underline-offset: 3px;
+  transition: text-decoration-color 140ms var(--ease-ui);
+}
+.auth-link:hover {
+  text-decoration-color: var(--signal);
+}
+
+/* Single-rule "or" divider: one line behind, the word sitting on it with
+   --paper padding punching a clean hole (never two separate rules). */
+.auth-divider {
+  position: relative;
+  text-align: center;
+}
+.auth-divider::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--paper-line);
+}
+.auth-divider > span {
+  position: relative;
+  padding: 0 12px;
+  background: var(--paper);
+  font-size: 13px;
+  color: var(--paper-ink-2);
+}
+
+/* Error message: pushes the layout down over 140ms via the 0fr→1fr grid
+   trick rather than jumping. aria-live lives on the region in markup. */
+.auth-error {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 140ms var(--ease-ui);
+}
+.auth-error.open {
+  grid-template-rows: 1fr;
+}
+.auth-error > span {
+  overflow: hidden;
+  padding-top: 6px; /* 6px below the input, clipped while collapsed */
+  font-size: 13px;
+  color: var(--error);
+}
+
+/* --- The aging column (signature element, ink panel) ---------------------- */
+.aging-card {
+  width: 320px;
+  background: var(--surface);
+  border-radius: 10px;
+  border: 1px solid var(--hairline);
+  padding: 16px;
+  opacity: var(--o); /* resting opacity from position; --o set inline */
+}
+.aging-card + .aging-card {
+  margin-top: 12px;
+}
+
+/* The 4-second cycle. Enter (300ms) fades a new top card up 6px; leave (400ms)
+   fades the bottom card out of flow; move (500ms) shifts the survivors down
+   and dims them a step. All on the cycle easing. The component also freezes
+   everything under prefers-reduced-motion by not scheduling the timers. */
+.aging-enter-active {
+  transition:
+    opacity 300ms var(--ease-cycle),
+    transform 300ms var(--ease-cycle);
+}
+.aging-enter-from {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+.aging-leave-active {
+  transition: opacity 400ms var(--ease-cycle);
+  position: absolute;
+  width: 320px;
+}
+.aging-leave-to {
+  opacity: 0;
+}
+.aging-move {
+  transition:
+    transform 500ms var(--ease-cycle),
+    opacity 500ms var(--ease-cycle);
+}

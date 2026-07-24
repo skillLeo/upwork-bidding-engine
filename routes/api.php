@@ -76,6 +76,11 @@ Route::post('/auth/verify-otp', [AuthController::class, 'verifyOtp'])
 // limit as email OTP (a 6-8 char code is guessable fast without one).
 Route::post('/auth/verify-totp', [AuthController::class, 'verifyTotp'])
     ->middleware('throttle:otp');
+// P7: public self-serve sign-up. The controller re-checks signup_mode=open
+// (off by default) and refuses otherwise, so this is inert until an admin
+// opens registration. Same rate limit as login.
+Route::post('/auth/register', [AuthController::class, 'register'])
+    ->middleware('throttle:login');
 Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])
     ->middleware('throttle:password-reset');
 Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])

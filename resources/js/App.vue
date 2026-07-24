@@ -13,7 +13,19 @@ import { initNotifications } from "@/stores/notifications";
 
 const route = useRoute();
 const auth = useAuthStore();
-const showNav = computed(() => route.name !== "login" && !route.name?.startsWith("platform-"));
+// The auth screens are a self-contained, full-bleed system — never the app
+// chrome. Platform console has its own shell too.
+const AUTH_ROUTES = new Set([
+  "login",
+  "signup",
+  "forgot-password",
+  "reset-password",
+  "accept-invite",
+  "google-callback",
+]);
+const showNav = computed(
+  () => !AUTH_ROUTES.has(route.name) && !route.name?.startsWith("platform-"),
+);
 
 onMounted(async () => {
   useBrandingStore().fetch();

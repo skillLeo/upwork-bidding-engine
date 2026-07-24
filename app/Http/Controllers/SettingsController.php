@@ -75,6 +75,13 @@ class SettingsController extends Controller
         return response()->json(['data' => [
             'name' => $this->settings->appName(),
             'logo_url' => $this->settings->appLogoUrl(),
+            // Public, non-secret hints the sign-in / sign-up screens need to
+            // render the right state before anyone is authenticated: whether
+            // self-serve sign-up is open, and whether "Continue with Google"
+            // should appear at all (only the presence of a client id is
+            // exposed — never the id or secret itself).
+            'signup_mode' => (string) $this->settings->get('signup_mode', 'invite_code'),
+            'google_enabled' => (bool) $this->settings->get('google_oauth_client_id'),
         ]]);
     }
 
