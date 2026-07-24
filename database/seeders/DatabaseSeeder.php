@@ -45,5 +45,21 @@ class DatabaseSeeder extends Seeder
                 $tenant->users()->syncWithoutDetaching([$userId => ['joined_at' => now()]]);
             }
         });
+
+        // Provision the four roles for this workspace and assign the seeded
+        // users. The RBAC data migration handles an EXISTING install (tenant
+        // already there when it runs); on migrate:fresh the tenant is created
+        // above, after migrations, so the seeder does it.
+        app(\App\Authorization\RoleProvisioner::class)->provision($tenant->fresh());
+
+        \App\Tenancy\Tenancy::runAs($tenant->fresh(), function () use ($tenant) {
+            foreach (\App\Models\User::whereIn('id', $tenant->users()->pluck('users.id'))->get() as $user) {
+                $role = $tenant->owner_user_id === $user->id
+                    ? \App\Authorization\TenantRole::Owner
+                    : ($user->role?->value === 'admin' ? \App\Authorization\TenantRole::Admin : \App\Authorization\TenantRole::Bidder);
+
+                $user->syncRoles([$role->value]);
+            }
+        });
     }
 }

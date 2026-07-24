@@ -29,31 +29,37 @@ class NotificationTest extends TestCase
         $this->assertSame("/leads/{$lead->id}", $first->url);
     }
 
-    public function test_index_returns_items_and_unread_count(): void
+    public function test_index_returns_items_and_a_per_user_unread_count(): void
     {
+        // A fresh user has read nothing, so both notifications are unread FOR
+        // THEM regardless of any other user's state.
         $user = User::factory()->bidder()->create();
-        AppNotification::create(['type' => 'lead', 'level' => 'info', 'title' => 'Unread one']);
-        AppNotification::create(['type' => 'lead', 'level' => 'info', 'title' => 'Already read', 'read_at' => now()]);
+        AppNotification::create(['type' => 'lead', 'level' => 'info', 'title' => 'One']);
+        AppNotification::create(['type' => 'lead', 'level' => 'info', 'title' => 'Two']);
 
         $res = $this->actingAs($user, 'sanctum')->getJson('/api/notifications')->assertOk();
 
         $this->assertCount(2, $res->json('data'));
-        $this->assertSame(1, $res->json('meta.unread_count'));
+        $this->assertSame(2, $res->json('meta.unread_count'));
     }
 
-    public function test_mark_one_read(): void
+    public function test_mark_one_read_is_per_user(): void
     {
         $user = User::factory()->bidder()->create();
         $n1 = AppNotification::create(['type' => 'lead', 'level' => 'info', 'title' => 'A']);
-        $n2 = AppNotification::create(['type' => 'lead', 'level' => 'info', 'title' => 'B']);
+        AppNotification::create(['type' => 'lead', 'level' => 'info', 'title' => 'B']);
 
         $this->actingAs($user, 'sanctum')->postJson("/api/notifications/{$n1->id}/read")->assertOk();
 
-        $this->assertNotNull($n1->fresh()->read_at);
-        $this->assertNull($n2->fresh()->read_at);
+        $res = $this->actingAs($user, 'sanctum')->getJson('/api/notifications')->assertOk();
+        $this->assertSame(1, $res->json('meta.unread_count'));
+        $this->assertDatabaseHas('app_notification_reads', [
+            'app_notification_id' => $n1->id,
+            'user_id' => $user->id,
+        ]);
     }
 
-    public function test_mark_all_read(): void
+    public function test_mark_all_read_only_affects_the_acting_user(): void
     {
         $user = User::factory()->bidder()->create();
         AppNotification::create(['type' => 'lead', 'level' => 'info', 'title' => 'A']);
@@ -61,7 +67,27 @@ class NotificationTest extends TestCase
 
         $this->actingAs($user, 'sanctum')->postJson('/api/notifications/read-all')->assertOk();
 
-        $this->assertSame(0, AppNotification::whereNull('read_at')->count());
+        $res = $this->actingAs($user, 'sanctum')->getJson('/api/notifications')->assertOk();
+        $this->assertSame(0, $res->json('meta.unread_count'));
+    }
+
+    /**
+     * Verify (d): two users have independent notification read state. The old
+     * shared read_at meant one person opening the bell cleared it for
+     * everyone; this proves that is fixed.
+     */
+    public function test_two_users_have_independent_read_state(): void
+    {
+        $alice = User::factory()->bidder()->create();
+        $bob = User::factory()->bidder()->create();
+        $n = AppNotification::create(['type' => 'lead', 'level' => 'info', 'title' => 'Shared notice']);
+
+        // Alice reads it.
+        $this->actingAs($alice, 'sanctum')->postJson("/api/notifications/{$n->id}/read")->assertOk();
+
+        // Alice now has 0 unread; Bob still has 1 — the same notification.
+        $this->assertSame(0, $this->actingAs($alice, 'sanctum')->getJson('/api/notifications')->json('meta.unread_count'));
+        $this->assertSame(1, $this->actingAs($bob, 'sanctum')->getJson('/api/notifications')->json('meta.unread_count'));
     }
 
     public function test_notifications_require_auth(): void

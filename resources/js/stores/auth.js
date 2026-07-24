@@ -31,6 +31,18 @@ export const useAuthStore = defineStore("auth", {
   }),
   getters: {
     isAdmin: (state) => state.user?.role === "admin",
+    // The flat permission list for the current workspace, from UserResource.
+    // Used to HIDE actions a user can't perform (hide, not disable).
+    permissions: (state) => state.user?.permissions ?? [],
+    tenantRole: (state) => state.user?.tenant_role ?? state.user?.role,
+    // A function-style getter: auth.can('members.invite'). Falls back to the
+    // legacy admin flag while a session predates the permissions payload, so
+    // an admin is never wrongly locked out mid-upgrade.
+    can: (state) => (permission) => {
+      const perms = state.user?.permissions;
+      if (Array.isArray(perms)) return perms.includes(permission);
+      return state.user?.role === "admin";
+    },
   },
   actions: {
     setAuth(token, user, remember = true) {

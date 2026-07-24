@@ -407,10 +407,20 @@ class LeadController extends Controller
 
     public function updateStatus(UpdateLeadStatusRequest $request, Lead $lead, \App\Services\ProposalVersionRecorder $versions): JsonResponse
     {
+        $this->authorize('updateStatus', $lead);
         $oldStatus = $lead->status;
         $newStatus = LeadStatus::from($request->validated('status'));
 
         $updates = ['status' => $newStatus];
+
+        // Attribution: stamp WHICH person first sent this, alongside the
+        // existing submitted_at (the model's booted hook stamps the time).
+        // First send only — a later re-send never overwrites it, so the
+        // record of who converted a lead is honest. This is the column the
+        // by-bidder analytics is built on.
+        if ($newStatus === LeadStatus::Sent && $lead->submitted_at === null) {
+            $updates['submitted_by_user_id'] = $request->user()?->id;
+        }
 
         // A reason belongs to the branch it was recorded on. Moving a lead
         // out of that branch (Lost -> Won, or Archived -> Sent) must clear it
@@ -552,7 +562,11 @@ class LeadController extends Controller
         // scoped with whereNull so a lead already sent once keeps its
         // original time even if it's bulk-marked sent again.
         if ($validated['status'] === 'sent') {
-            Lead::query()->whereIn('id', $validated['ids'])->whereNull('submitted_at')->update(['submitted_at' => now()]);
+            // Same first-send-only rule for both the time and the attribution:
+            // whereNull('submitted_at') means a lead already sent once keeps
+            // its original time AND its original submitter.
+            Lead::query()->whereIn('id', $validated['ids'])->whereNull('submitted_at')
+                ->update(['submitted_at' => now(), 'submitted_by_user_id' => $request->user()?->id]);
         }
 
         $count = Lead::query()->whereIn('id', $validated['ids'])->update(['status' => $validated['status']]);
@@ -609,6 +623,7 @@ class LeadController extends Controller
      */
     public function regenerateProposal(Lead $lead, \App\Services\LeadRefreshService $refresh): JsonResponse
     {
+        $this->authorize('rewriteProposal', $lead);
         try {
             $refresh->rewrite($lead, 'dashboard');
         } catch (\App\Services\LeadRunInProgressException $e) {
@@ -631,6 +646,7 @@ class LeadController extends Controller
      */
     public function updateProposal(Request $request, Lead $lead, \App\Services\ProposalVersionRecorder $versions): JsonResponse
     {
+        $this->authorize('editProposal', $lead);
         $validated = $request->validate([
             'proposal_text' => ['required', 'string', 'max:20000'],
         ]);
@@ -670,6 +686,7 @@ class LeadController extends Controller
      */
     public function aiEditProposal(Request $request, Lead $lead, \App\Services\Ai\ProposalEditor $editor): JsonResponse
     {
+        $this->authorize('rewriteProposal', $lead);
         $validated = $request->validate([
             'instruction' => ['required', 'string', 'max:1000'],
             'selection_start' => ['nullable', 'integer', 'min:0', 'required_with:selection_end'],
@@ -775,6 +792,7 @@ class LeadController extends Controller
 
     public function rescore(Lead $lead): JsonResponse
     {
+        $this->authorize('rescore', $lead);
         $lead->update([
             'status' => LeadStatus::New,
             'score' => null,

@@ -16,13 +16,15 @@ class DiagnosticsTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_bidder_cannot_access_diagnostics(): void
+    public function test_bidder_can_access_diagnostics_under_settings_view(): void
     {
+        // P4: diagnostics moved to settings.view, which a bidder has. The
+        // gated-off surface is secrets, not health.
         $bidder = User::factory()->bidder()->create();
 
         $this->actingAs($bidder, 'sanctum')
             ->getJson('/api/diagnostics')
-            ->assertStatus(403);
+            ->assertOk();
     }
 
     public function test_admin_sees_diagnostics_shape(): void

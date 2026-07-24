@@ -282,6 +282,11 @@ class SettingsService
         // external monitor - not this app - notices the silence. Empty = disabled, no ping
         // sent, nothing to configure by default.
         'heartbeat_ping_url' => ['group' => 'rules', 'secret' => false, 'default' => ''],
+        // Controls public self-serve signup: open (anyone), invite_code
+        // (needs a code — the launch default so growth is deliberate), or
+        // closed (invite-only). Platform-level: one switch for the whole
+        // deployment, never per tenant.
+        'signup_mode' => ['group' => 'rules', 'secret' => false, 'default' => 'invite_code'],
         'hourly_floor' => ['group' => 'rules', 'secret' => false, 'default' => 8],
         'zero_history_budget_floor' => ['group' => 'rules', 'secret' => false, 'default' => 100],
         'red_flag_words' => ['group' => 'rules', 'secret' => false, 'default' => ['free test', 'unpaid sample', 'urgent no budget', 'revenue share only']],

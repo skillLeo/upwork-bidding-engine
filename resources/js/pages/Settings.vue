@@ -9,7 +9,9 @@ import {
   Mail as MailIcon,
   MessageCircle,
   Palette,
+  ShieldCheck,
   SlidersHorizontal,
+  Users,
   Wallet,
   Webhook,
 } from "@lucide/vue";
@@ -26,32 +28,42 @@ import WhatsAppSection from "@/components/settings/WhatsAppSection.vue";
 import BrowserAlertsSection from "@/components/settings/BrowserAlertsSection.vue";
 import MailSection from "@/components/settings/MailSection.vue";
 import RulesSection from "@/components/settings/RulesSection.vue";
+import MembersSection from "@/components/settings/MembersSection.vue";
+import RolesMatrixSection from "@/components/settings/RolesMatrixSection.vue";
+import { useAuthStore } from "@/stores/auth";
 import { cn } from "@/lib/utils";
 
 const { settings, isLoading, refetch } = useSettings();
+const auth = useAuthStore();
 const route = useRoute();
 const router = useRouter();
 
-const sections = [
+// `need` is the permission a tab requires; a tab with no `need` is visible to
+// anyone who can open Settings. Tabs the user lacks permission for are HIDDEN
+// (not shown disabled) — a control that can never work is never rendered.
+const allSections = [
   { id: "branding", label: "Branding", icon: Palette },
   { id: "diagnostics", label: "Diagnostics", icon: Activity },
-  { id: "vollna", label: "Vollna", icon: Webhook },
-  { id: "openclaw", label: "AI Engine", icon: Bot },
+  { id: "vollna", label: "Vollna", icon: Webhook, need: "settings.edit_secrets" },
+  { id: "openclaw", label: "AI Engine", icon: Bot, need: "settings.edit_secrets" },
   { id: "ai", label: "AI Models & Prompts", icon: Brain },
-  { id: "ai-usage", label: "AI Usage & Cost", icon: Wallet },
+  { id: "ai-usage", label: "AI Usage & Cost", icon: Wallet, need: "settings.edit_secrets" },
   { id: "whatsapp", label: "WhatsApp", icon: MessageCircle },
   { id: "browser-alerts", label: "Browser Alerts", icon: Bell },
-  { id: "mail", label: "Mail", icon: MailIcon },
+  { id: "mail", label: "Mail", icon: MailIcon, need: "settings.edit_secrets" },
   { id: "rules", label: "Bidding Rules", icon: SlidersHorizontal },
+  { id: "members", label: "Members", icon: Users, need: "members.invite" },
+  { id: "roles", label: "Roles & permissions", icon: ShieldCheck },
 ];
-const sectionIds = sections.map((s) => s.id);
+const sections = computed(() => allSections.filter((s) => !s.need || auth.can(s.need)));
+const sectionIds = computed(() => sections.value.map((s) => s.id));
 
 // One section rendered at a time, like a real settings app (Stripe/GitHub/
 // Linear) - not a single long page you jump-scroll around. The current tab
 // lives in the URL so a refresh or a shared link lands back on the same
 // section instead of always resetting to Branding.
 const activeSection = computed(() =>
-  sectionIds.includes(route.query.section) ? route.query.section : sections[0].id,
+  sectionIds.value.includes(route.query.section) ? route.query.section : sections.value[0].id,
 );
 
 function selectSection(id) {
@@ -59,7 +71,7 @@ function selectSection(id) {
   router.replace({ path: route.path, query: { ...route.query, section: id } });
 }
 
-const activeLabel = computed(() => sections.find((s) => s.id === activeSection.value)?.label ?? "");
+const activeLabel = computed(() => allSections.find((s) => s.id === activeSection.value)?.label ?? "");
 </script>
 
 <template>
@@ -132,6 +144,8 @@ const activeLabel = computed(() => sections.find((s) => s.id === activeSection.v
             <BrowserAlertsSection v-else-if="activeSection === 'browser-alerts'" />
             <MailSection v-else-if="activeSection === 'mail'" :settings="settings.mail" @saved="refetch" />
             <RulesSection v-else-if="activeSection === 'rules'" :settings="settings.rules" @saved="refetch" />
+            <MembersSection v-else-if="activeSection === 'members'" />
+            <RolesMatrixSection v-else-if="activeSection === 'roles'" />
           </div>
         </Transition>
       </div>

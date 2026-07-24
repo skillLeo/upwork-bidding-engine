@@ -27,8 +27,14 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->prepend(\App\Http\Middleware\ResolveTenant::class);
 
         $middleware->alias([
+            // Legacy: kept because a couple of routes still use it during the
+            // RBAC transition. Permission checks are the real gate now.
             'role' => EnsureRole::class,
             'agent' => \App\Http\Middleware\AuthenticateAgent::class,
+            // Spatie route-level permission gate, e.g. permission:settings.view.
+            // Used for coarse whole-tab access; per-model actions authorize via
+            // their Policy in the controller instead.
+            'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
         ]);
 
         // Pure JSON API, no Blade login page — never redirect an

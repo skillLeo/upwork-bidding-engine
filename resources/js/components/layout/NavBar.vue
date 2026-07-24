@@ -17,14 +17,14 @@ const branding = useBrandingStore();
 const menuOpen = ref(false);
 
 const navItems = [
-  { to: "/leads", label: "Leads", icon: LayoutGrid, adminOnly: false },
-  { to: "/analytics", label: "Analytics", icon: BarChart3, adminOnly: true },
-  { to: "/health", label: "Health", icon: Activity, adminOnly: true },
-  { to: "/settings", label: "Settings", icon: SettingsIcon, adminOnly: true },
+  { to: "/leads", label: "Leads", icon: LayoutGrid, need: "leads.view" },
+  { to: "/analytics", label: "Analytics", icon: BarChart3, need: "analytics.view" },
+  { to: "/health", label: "Health", icon: Activity, need: "settings.view" },
+  { to: "/settings", label: "Settings", icon: SettingsIcon, need: "settings.view" },
 ];
 
 const visibleNavItems = computed(() =>
-  navItems.filter((item) => !item.adminOnly || auth.isAdmin),
+  navItems.filter((item) => !item.need || auth.can(item.need)),
 );
 
 const firstName = computed(() => auth.user?.name?.split(" ")[0] ?? "Account");

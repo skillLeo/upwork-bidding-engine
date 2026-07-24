@@ -321,6 +321,53 @@ class AnalyticsService
     }
 
     /**
+     * Reply and win rate segmented BY BIDDER — the screen that tells an
+     * agency which of its people actually converts, keyed on the
+     * submitted_by_user_id stamped when a lead first went to Sent.
+     *
+     * Rates below MIN_SAMPLE_FOR_RATE sent leads render null ("not enough
+     * data"), consistent with every other rate this class reports — a 100%
+     * win rate on one bid is noise, not a leaderboard.
+     *
+     * @return array<int, array{user_id: ?int, name: string, sent: int, reply_rate: ?float, win_rate: ?float}>
+     */
+    public function byBidder(): array
+    {
+        $sentStatuses = array_column(LeadStatus::sentOrBeyond(), 'value');
+        $repliedStatuses = [LeadStatus::Replied->value, LeadStatus::Won->value];
+
+        return Lead::query()
+            ->leftJoin('users', 'users.id', '=', 'leads.submitted_by_user_id')
+            ->whereIn('leads.status', $sentStatuses)
+            ->groupBy('leads.submitted_by_user_id', 'users.name')
+            ->selectRaw(
+                'leads.submitted_by_user_id as user_id,'
+                .' users.name as name,'
+                .' count(*) as sent,'
+                .' sum(case when leads.status in (?, ?) then 1 else 0 end) as reply_count,'
+                .' sum(case when leads.status = ? then 1 else 0 end) as win_count',
+                [...$repliedStatuses, LeadStatus::Won->value]
+            )
+            ->orderByDesc('sent')
+            ->get()
+            ->map(function ($row) {
+                $sent = (int) $row->sent;
+                $enough = $sent >= self::MIN_SAMPLE_FOR_RATE;
+
+                return [
+                    'user_id' => $row->user_id !== null ? (int) $row->user_id : null,
+                    // Leads sent before attribution existed have no submitter.
+                    'name' => $row->name ?? 'Unattributed',
+                    'sent' => $sent,
+                    'reply_rate' => $enough ? round(((int) $row->reply_count / $sent) * 100, 1) : null,
+                    'win_rate' => $enough ? round(((int) $row->win_count / $sent) * 100, 1) : null,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
      * @return array<int, array<string, mixed>>
      */
     public function recentActivity(int $limit = 20): array

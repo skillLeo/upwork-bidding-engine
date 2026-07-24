@@ -53,9 +53,11 @@ import SkeletonText from "@/components/ui/SkeletonText.vue";
 import EmptyState from "@/components/ui/EmptyState.vue";
 import { cn, relativeTime } from "@/lib/utils";
 import { apiErrorMessage } from "@/lib/api-client";
+import { useAuthStore } from "@/stores/auth";
 
 const route = useRoute();
 const router = useRouter();
+const auth = useAuthStore();
 
 // Every lead ends somewhere: Won, Lost (bid, didn't get it) or Archived
 // (never bid). Nothing is left sitting on Sent forever.
@@ -538,6 +540,7 @@ async function handleRegenerateProposal() {
               </span>
             </div>
             <Button
+              v-if="auth.can('leads.rescore')"
               variant="secondary"
               size="sm"
               :disabled="regenLoading !== null"
@@ -603,6 +606,7 @@ async function handleRegenerateProposal() {
             </div>
             <div v-if="!editing" class="flex items-center gap-2">
               <Button
+                v-if="auth.can('proposals.rewrite')"
                 variant="secondary"
                 size="sm"
                 :disabled="regenLoading !== null"
@@ -854,7 +858,7 @@ async function handleRegenerateProposal() {
           </dl>
         </Card>
 
-        <Card class="p-5">
+        <Card v-if="auth.can('leads.update_status')" class="p-5">
           <p class="mb-3 text-sm font-semibold text-text-primary">Actions</p>
           <div class="flex flex-col gap-2">
             <Button

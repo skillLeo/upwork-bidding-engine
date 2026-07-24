@@ -85,6 +85,14 @@ Route::get('/auth/revoke-all/{user}', [SessionController::class, 'revokeAllFromE
     ->middleware(['signed', 'throttle:webhooks'])
     ->name('auth.revoke-all');
 
+// Invitation accept — reached from the email link with no session. The raw
+// token is the credential (looked up by hash, single-use). Rate limited
+// because it is public and token-guessable in theory.
+Route::get('/invitations/show', [\App\Http\Controllers\InvitationAcceptController::class, 'show'])
+    ->middleware('throttle:webhooks');
+Route::post('/invitations/accept', [\App\Http\Controllers\InvitationAcceptController::class, 'accept'])
+    ->middleware('throttle:webhooks');
+
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
@@ -126,8 +134,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/leads/{lead}/favorite', [LeadController::class, 'toggleFavorite']);
     Route::post('/leads/{lead}/client-view', [LeadController::class, 'updateClientView']);
     Route::post('/leads/{lead}/outcome', [LeadController::class, 'updateOutcome']);
-    Route::post('/leads/{lead}/rescore', [LeadController::class, 'rescore'])->middleware('role:admin');
-    Route::post('/leads/sync-vollna', [LeadController::class, 'syncVollna'])->middleware('role:admin');
+    // rescore authorizes via LeadPolicy inside the controller (it re-spends
+    // an AI call). sync-vollna can prune leads, so it needs leads.delete.
+    Route::post('/leads/{lead}/rescore', [LeadController::class, 'rescore']);
+    Route::post('/leads/sync-vollna', [LeadController::class, 'syncVollna'])->middleware('permission:leads.delete');
 
     /*
     |----------------------------------------------------------------------
@@ -164,20 +174,54 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /*
     |----------------------------------------------------------------------
-    | Settings — admin only, enforced here AND hidden client-side.
+    | Settings. GET is settings.view (a bidder can see rules), but the
+    | controller OMITS every secret field entirely for anyone without
+    | settings.edit_secrets — absent from the body, not masked in it.
+    | Writes and secret-specific endpoints require the tighter permissions.
     |----------------------------------------------------------------------
     */
-    Route::middleware('role:admin')->group(function () {
+    Route::middleware('permission:settings.view')->group(function () {
         Route::get('/settings', [SettingsController::class, 'index']);
+        Route::get('/diagnostics', DiagnosticsController::class);
+    });
+
+    Route::middleware('permission:settings.edit_rules')->group(function () {
+        // store() enforces per-key: a rule key needs edit_rules, a secret key
+        // needs edit_secrets, checked inside the controller.
         Route::post('/settings', [SettingsController::class, 'store']);
+        Route::post('/settings/logo', [SettingsController::class, 'uploadLogo']);
+        Route::delete('/settings/logo', [SettingsController::class, 'removeLogo']);
+    });
+
+    Route::middleware('permission:settings.edit_secrets')->group(function () {
         Route::get('/settings/agent-token', [SettingsController::class, 'revealAgentToken']);
         Route::post('/settings/agent-token/regenerate', [SettingsController::class, 'regenerateAgentToken']);
         Route::post('/settings/test/{service}', [SettingsController::class, 'testConnection']);
         Route::get('/ai-usage', \App\Http\Controllers\AiUsageController::class);
-        Route::post('/settings/logo', [SettingsController::class, 'uploadLogo']);
-        Route::delete('/settings/logo', [SettingsController::class, 'removeLogo']);
-
-        Route::get('/analytics', [AnalyticsController::class, 'index']);
-        Route::get('/diagnostics', DiagnosticsController::class);
     });
+
+    Route::middleware('permission:analytics.view')->group(function () {
+        Route::get('/analytics', [AnalyticsController::class, 'index']);
+    });
+
+    /*
+    |----------------------------------------------------------------------
+    | Members — invite, list, change role, remove. Requires members.invite
+    | to even see the tab; individual actions re-check their own permission.
+    |----------------------------------------------------------------------
+    */
+    Route::middleware('permission:members.invite')->group(function () {
+        Route::get('/members', [\App\Http\Controllers\MemberController::class, 'index']);
+        Route::post('/members/invite', [\App\Http\Controllers\MemberController::class, 'invite']);
+        Route::post('/members/{invitation}/resend', [\App\Http\Controllers\MemberController::class, 'resend']);
+    });
+    Route::put('/members/{user}/role', [\App\Http\Controllers\MemberController::class, 'changeRole'])
+        ->middleware('permission:members.assign_role');
+    Route::delete('/members/{user}', [\App\Http\Controllers\MemberController::class, 'remove'])
+        ->middleware('permission:members.remove');
+
+    // The read-only Roles matrix — any member who can see Settings can see
+    // what each role can do.
+    Route::get('/roles-matrix', [\App\Http\Controllers\MemberController::class, 'rolesMatrix'])
+        ->middleware('permission:settings.view');
 });

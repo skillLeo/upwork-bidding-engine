@@ -239,19 +239,23 @@ class LeadTest extends TestCase
             ->assertStatus(422);
     }
 
-    public function test_only_admin_can_rescore(): void
+    public function test_a_bidder_can_rescore_but_a_viewer_cannot(): void
     {
-        $bidder = User::factory()->bidder()->create();
+        // Under RBAC the pipeline roles (bidder+) hold leads.rescore — a
+        // bidder who can AI-rewrite a proposal can also rescore. A viewer is
+        // read-only and is refused.
+        $viewer = User::factory()->bidder()->create();
+        \App\Tenancy\Tenancy::runAs($this->tenant, fn () => $viewer->syncRoles(['viewer']));
         $lead = Lead::factory()->ready()->create();
 
-        $this->actingAs($bidder, 'sanctum')
+        $this->actingAs($viewer, 'sanctum')
             ->postJson("/api/leads/{$lead->id}/rescore")
             ->assertStatus(403);
 
         Queue::fake();
-        $admin = User::factory()->admin()->create();
+        $bidder = User::factory()->bidder()->create();
 
-        $this->actingAs($admin, 'sanctum')
+        $this->actingAs($bidder, 'sanctum')
             ->postJson("/api/leads/{$lead->id}/rescore")
             ->assertOk()
             ->assertJsonPath('data.status', 'new');

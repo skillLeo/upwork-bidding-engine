@@ -19,6 +19,7 @@ class AnalyticsController extends Controller
                 'recent_activity' => $analytics->recentActivity(20),
                 'speed' => $analytics->speed(),
                 'dying_proposals' => $analytics->dyingProposals(),
+                'by_bidder' => $analytics->byBidder(),
             ],
         ]);
     }

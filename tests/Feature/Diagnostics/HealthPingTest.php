@@ -109,11 +109,14 @@ class HealthPingTest extends TestCase
      * The authenticated /api/diagnostics route is the rich one and must stay
      * admin-only — this guards against someone "simplifying" the two into one.
      */
-    public function test_the_rich_diagnostics_route_is_still_gated(): void
+    public function test_the_rich_diagnostics_route_still_requires_authentication(): void
     {
+        // Unauthenticated is always refused. Post-P4, diagnostics sits under
+        // settings.view (which every tenant role has), so a bidder CAN see
+        // operational health — the sensitive split is edit_secrets, not view.
         $this->getJson('/api/diagnostics')->assertUnauthorized();
 
         $bidder = User::factory()->bidder()->create();
-        $this->actingAs($bidder, 'sanctum')->getJson('/api/diagnostics')->assertForbidden();
+        $this->actingAs($bidder, 'sanctum')->getJson('/api/diagnostics')->assertOk();
     }
 }

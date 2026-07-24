@@ -17,16 +17,26 @@ class SettingsTest extends TestCase
         $this->getJson('/api/settings')->assertStatus(401);
     }
 
-    public function test_bidder_cannot_access_settings(): void
+    public function test_bidder_can_view_and_edit_rules_but_never_touches_secrets(): void
     {
+        // P4 changed this deliberately: a bidder has settings.view and
+        // settings.edit_rules (they tune the budget floor) but NOT
+        // settings.edit_secrets. The old "bidder gets a flat 403" is gone.
         $bidder = User::factory()->bidder()->create();
 
-        $this->actingAs($bidder, 'sanctum')
-            ->getJson('/api/settings')
-            ->assertStatus(403);
+        // Can read settings — but secret keys are ABSENT, not masked.
+        $get = $this->actingAs($bidder, 'sanctum')->getJson('/api/settings')->assertOk();
+        $this->assertArrayNotHasKey('anthropic_api_key', $get->json('data.ai') ?? []);
+        $this->assertArrayNotHasKey('vollna_api_token', $get->json('data.vollna') ?? []);
 
+        // Can save a rule key.
         $this->actingAs($bidder, 'sanctum')
             ->postJson('/api/settings', ['score_cutoff' => 5])
+            ->assertOk();
+
+        // Cannot save a secret key — hard 403, not a silent drop.
+        $this->actingAs($bidder, 'sanctum')
+            ->postJson('/api/settings', ['anthropic_api_key' => 'sk-should-be-refused'])
             ->assertStatus(403);
     }
 

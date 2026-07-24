@@ -33,6 +33,11 @@ abstract class TestCase extends BaseTestCase
             );
 
             app(TenantContext::class)->set($this->tenant);
+
+            // Roles/permissions must exist for the bound tenant before any
+            // factory-created user is assigned one — the same provisioning a
+            // real workspace gets on creation.
+            app(\App\Authorization\RoleProvisioner::class)->provision($this->tenant);
         }
     }
 

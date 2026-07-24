@@ -22,6 +22,11 @@ const routes = [
     component: () => import("@/pages/ResetPassword.vue"),
   },
   {
+    path: "/accept-invite",
+    name: "accept-invite",
+    component: () => import("@/pages/AcceptInvite.vue"),
+  },
+  {
     path: "/profile",
     name: "profile",
     component: () => import("@/pages/Profile.vue"),
@@ -51,19 +56,19 @@ const routes = [
     path: "/settings",
     name: "settings",
     component: () => import("@/pages/Settings.vue"),
-    meta: { requiresAuth: true, adminOnly: true },
+    meta: { requiresAuth: true, requiresPermission: "settings.view" },
   },
   {
     path: "/health",
     name: "health",
     component: () => import("@/pages/Health.vue"),
-    meta: { requiresAuth: true, adminOnly: true },
+    meta: { requiresAuth: true, requiresPermission: "settings.view" },
   },
   {
     path: "/analytics",
     name: "analytics",
     component: () => import("@/pages/Analytics.vue"),
-    meta: { requiresAuth: true, adminOnly: true },
+    meta: { requiresAuth: true, requiresPermission: "analytics.view" },
   },
 ];
 
@@ -83,7 +88,7 @@ router.beforeEach((to) => {
     return { name: "login", query: to.fullPath !== "/" ? { redirect: to.fullPath } : {} };
   }
 
-  if (to.meta.adminOnly && !auth.isAdmin) {
+  if (to.meta.requiresPermission && !auth.can(to.meta.requiresPermission)) {
     return { name: "leads" };
   }
 

@@ -63,6 +63,7 @@ return [
     |
     */
     'platform_only_keys' => [
+        'signup_mode',
         'scoring_system_prompt',
         'proposal_skill',
         'stage_2_scoring_addendum',

@@ -16,14 +16,15 @@ class SettingsController extends Controller
 {
     public function __construct(protected SettingsService $settings) {}
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        return response()->json(['data' => $this->maskedPayload()]);
+        return response()->json(['data' => $this->maskedPayload($request)]);
     }
 
     public function store(UpdateSettingsRequest $request): JsonResponse
     {
         $validated = $request->validated();
+        $canEditSecrets = (bool) $request->user()?->can(\App\Authorization\Permissions::SETTINGS_EDIT_SECRETS);
         $toSave = [];
 
         foreach ($validated as $key => $value) {
@@ -31,6 +32,15 @@ class SettingsController extends Controller
 
             if (! $meta) {
                 continue;
+            }
+
+            // Per-key permission gate: settings.edit_rules gets a user this
+            // far (the route middleware), but a secret key additionally needs
+            // settings.edit_secrets. A user with only edit_rules who somehow
+            // posts a secret key is refused outright — a hard 403, not a
+            // silent drop, so it can never look like a save that worked.
+            if ($meta['secret'] && ! $canEditSecrets) {
+                abort(403, 'You do not have permission to change secret settings.');
             }
 
             // Blank secret input means "leave the existing value alone" —
@@ -51,7 +61,7 @@ class SettingsController extends Controller
         );
 
         return response()->json([
-            'data' => $this->maskedPayload(),
+            'data' => $this->maskedPayload($request),
             'meta' => ['message' => 'Settings saved.'],
         ]);
     }
@@ -367,13 +377,24 @@ class SettingsController extends Controller
     /**
      * @return array<string, mixed>
      */
-    protected function maskedPayload(): array
+    protected function maskedPayload(?Request $request = null): array
     {
         $all = $this->settings->all();
         $grouped = [];
 
+        // A user without settings.edit_secrets never receives secret keys at
+        // all — they are ABSENT from the body, not masked in it. Masking
+        // client-side would still ship the (masked) shape and, more
+        // importantly, invite the assumption that "the value is here but
+        // hidden"; omission is the honest and safe contract.
+        $canSeeSecrets = (bool) $request?->user()?->can(\App\Authorization\Permissions::SETTINGS_EDIT_SECRETS);
+
         foreach (SettingsService::SCHEMA as $key => $meta) {
             $value = $all[$key] ?? null;
+
+            if ($meta['secret'] && ! $canSeeSecrets) {
+                continue;
+            }
 
             $grouped[$meta['group']][$key] = $meta['secret']
                 ? ['is_set' => filled($value), 'masked' => $this->mask($value)]

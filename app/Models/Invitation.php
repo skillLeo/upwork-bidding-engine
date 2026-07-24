@@ -21,6 +21,15 @@ class Invitation extends Model
     use BelongsToTenant;
 
     /**
+     * The raw token, held ONLY in memory right after creation so the mailer
+     * (and tests) can reach it. A plain PHP property, deliberately NOT an
+     * Eloquent attribute — an attribute would be dirty-tracked and persisted
+     * on the next save, writing the raw token into a column that must never
+     * hold anything but its hash.
+     */
+    public ?string $rawToken = null;
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array

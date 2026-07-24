@@ -36,6 +36,7 @@ const replyRateRaw = computed(() => summary.value?.reply_rate_raw ?? { n: 0, rat
 const replyRateContested = computed(() => summary.value?.reply_rate_contested ?? { n: 0, rate: null });
 
 const speed = computed(() => analytics.value?.speed ?? { n: 0, median_minutes: null, p90_minutes: null });
+const byBidder = computed(() => analytics.value?.by_bidder ?? []);
 // `recorded` is the denominator that matters. Leads where the client-side
 // state was never filled in are counted in not_recorded and excluded from
 // the buckets — treating them as "not opened" would make a partly-filled
@@ -222,6 +223,43 @@ const calibrationTakeaway = computed(() => {
             </template>
           </p>
         </template>
+      </CardContent>
+    </Card>
+
+    <Card v-if="byBidder.length > 1 || (byBidder.length === 1 && byBidder[0].user_id !== null)">
+      <CardHeader>
+        <CardTitle>By bidder</CardTitle>
+      </CardHeader>
+      <CardContent class="p-0">
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[420px] text-sm">
+            <thead>
+              <tr class="border-b border-border text-left text-xs font-semibold uppercase tracking-wide text-text-tertiary">
+                <th class="px-5 py-2">Bidder</th>
+                <th class="px-3 py-2 text-right">Sent</th>
+                <th class="px-3 py-2 text-right">Reply rate</th>
+                <th class="px-5 py-2 text-right">Win rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="b in byBidder" :key="b.user_id ?? 'none'" class="border-b border-border last:border-0">
+                <td class="px-5 py-2.5 font-medium text-text-primary">{{ b.name }}</td>
+                <td class="px-3 py-2.5 text-right tabular-nums text-text-secondary">{{ b.sent }}</td>
+                <td class="px-3 py-2.5 text-right tabular-nums">
+                  <span v-if="b.reply_rate != null" class="text-text-primary">{{ b.reply_rate }}%</span>
+                  <span v-else class="text-xs text-text-tertiary">Not enough data</span>
+                </td>
+                <td class="px-5 py-2.5 text-right tabular-nums">
+                  <span v-if="b.win_rate != null" class="text-text-primary">{{ b.win_rate }}%</span>
+                  <span v-else class="text-xs text-text-tertiary">—</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="px-5 py-3 text-xs text-text-tertiary">
+          Rates need at least 5 sent proposals before they show — fewer than that is noise, not a ranking.
+        </p>
       </CardContent>
     </Card>
 

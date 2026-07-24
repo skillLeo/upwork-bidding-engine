@@ -70,6 +70,16 @@ class TenancyGuardTest extends TestCase
         'jobs' => 'one shared queue on this host by design',
         'job_batches' => 'one shared queue on this host by design',
         'failed_jobs' => 'one shared queue on this host by design',
+        // Spatie permission tables. tenant_id here is Spatie's TEAM key, not
+        // our BelongsToTenant scope — role/permission assignments are scoped
+        // by team through TenantTeamResolver, which reads the same
+        // TenantContext. Managed entirely by the package, never by the trait.
+        'roles' => 'Spatie roles, team-scoped by tenant_id via TenantTeamResolver',
+        'permissions' => 'Spatie permissions, global (not team-scoped)',
+        'model_has_roles' => 'Spatie pivot, tenant_id is the team key',
+        'model_has_permissions' => 'Spatie pivot, tenant_id is the team key',
+        'role_has_permissions' => 'Spatie pivot',
+        'app_notification_reads' => 'per-user read state; keyed by (notification, user), the notification carries the scope',
     ];
 
     /**

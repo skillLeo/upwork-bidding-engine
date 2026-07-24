@@ -14,7 +14,10 @@ class UpdateSettingsRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return (bool) $this->user()?->isAdmin();
+        // Route middleware already required settings.edit_rules to reach here;
+        // the store() method applies the tighter per-key secret check. This
+        // just confirms the base capability rather than an inline role name.
+        return (bool) $this->user()?->can(\App\Authorization\Permissions::SETTINGS_EDIT_RULES);
     }
 
     /**
