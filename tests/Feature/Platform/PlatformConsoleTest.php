@@ -10,7 +10,7 @@ use App\Models\User;
 use App\Services\Ai\AiManager;
 use App\Services\SettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Foundation\Testing\TestResponse;
+use Illuminate\Testing\TestResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;

@@ -79,6 +79,46 @@ async function submitChallenge() {
   }
 }
 
+// The redirect never carries the token/challenge/email directly (see
+// SocialAuthController's class docblock) — just an opaque, single-use
+// handoff code, exchanged here via POST for the real payload.
+async function exchangeHandoff(handoff) {
+  try {
+    const res = await apiClient.post("/auth/google/exchange", { handoff });
+    const payload = res.data.data;
+
+    if (payload.link_required) {
+      linkToken.value = payload.link_token;
+      email.value = payload.email;
+      state.value = "link";
+      return;
+    }
+
+    if (payload.requires_totp) {
+      challenge.value = payload.challenge;
+      state.value = "totp";
+      return;
+    }
+
+    if (payload.requires_otp) {
+      challenge.value = payload.challenge;
+      state.value = "otp";
+      return;
+    }
+
+    if (payload.token) {
+      await finishWithToken(payload.token);
+      return;
+    }
+
+    error.value = "Something went wrong finishing Google sign-in.";
+    state.value = "error";
+  } catch (err) {
+    error.value = apiErrorMessage(err, "This sign-in link has expired. Try again.");
+    state.value = "error";
+  }
+}
+
 onMounted(() => {
   const q = route.query;
 
@@ -88,27 +128,8 @@ onMounted(() => {
     return;
   }
 
-  if (q.link_required) {
-    linkToken.value = String(q.link_token ?? "");
-    email.value = String(q.email ?? "");
-    state.value = "link";
-    return;
-  }
-
-  if (q.requires_totp) {
-    challenge.value = String(q.challenge ?? "");
-    state.value = "totp";
-    return;
-  }
-
-  if (q.requires_otp) {
-    challenge.value = String(q.challenge ?? "");
-    state.value = "otp";
-    return;
-  }
-
-  if (q.token) {
-    finishWithToken(String(q.token));
+  if (q.handoff) {
+    exchangeHandoff(String(q.handoff));
     return;
   }
 

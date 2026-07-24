@@ -31,21 +31,55 @@ use PragmaRX\Google2FALaravel\Google2FA;
  * attacker who controls attacker@victim-email's Google account could
  * otherwise sign in as them with zero knowledge of the real password),
  * always pass a required second factor, always respect signup_mode.
+ *
+ * Two things this controller deliberately does NOT do, both load-bearing:
+ *
+ *   1. Trust Socialite's stateless() mode for CSRF safety. stateless()
+ *      skips the state parameter entirely (it lives in the session, which
+ *      this API has none of) — without it, an attacker's OWN valid Google
+ *      authorization code, sent to a victim as a link, would silently log
+ *      the victim into an account the ATTACKER controls (login CSRF). state()
+ *      below implements the same protection without a session: a random
+ *      nonce, cached server-side before the redirect, single-use, verified
+ *      before the callback does anything else.
+ *
+ *   2. Put a bearer token, a 2FA challenge, or an account's email in the
+ *      REDIRECT URL. A URL is logged (browser history, server access logs,
+ *      Referer headers) in places a POST body isn't. Every outcome —
+ *      success, a 2FA challenge, or a link-confirmation prompt — is instead
+ *      stashed server-side behind one opaque, single-use handoff code; the
+ *      SPA exchanges that code via exchange() (a POST) for the real payload.
  */
 class SocialAuthController extends Controller
 {
     private const LINK_TOKEN_TTL_MINUTES = 10;
 
+    private const STATE_TTL_MINUTES = 10;
+
+    private const HANDOFF_TTL_MINUTES = 2;
+
     private const TOTP_WINDOW = 1; // matches AuthController::TOTP_WINDOW
 
     public function redirect(): RedirectResponse
     {
-        return Socialite::driver('google')->stateless()->redirect();
+        $state = Str::random(40);
+        Cache::put("google_oauth_state:{$state}", true, now()->addMinutes(self::STATE_TTL_MINUTES));
+
+        return Socialite::driver('google')->stateless()->with(['state' => $state])->redirect();
     }
 
     public function callback(Request $request, InvitationService $invitations): RedirectResponse
     {
         $frontend = rtrim((string) config('skillleo.frontend_url'), '/');
+
+        // CSRF: see the class docblock. Checked, and consumed, before
+        // anything else — a missing/reused/unknown state never reaches
+        // Socialite at all.
+        $state = (string) $request->query('state');
+
+        if ($state === '' || ! Cache::pull("google_oauth_state:{$state}")) {
+            return redirect($frontend.'/auth/google/finish?error='.urlencode('This sign-in link is invalid or has expired. Try again.'));
+        }
 
         try {
             $googleUser = Socialite::driver('google')->stateless()->user();
@@ -83,7 +117,11 @@ class SocialAuthController extends Controller
                 now()->addMinutes(self::LINK_TOKEN_TTL_MINUTES),
             );
 
-            return redirect($frontend.'/auth/google/finish?link_required=1&link_token='.$linkToken.'&email='.urlencode($email));
+            // Neither the link token nor the email is a secret on its own —
+            // the point is keeping the account's address out of the URL/logs.
+            $handoff = $this->stashHandoff(['link_required' => true, 'link_token' => $linkToken, 'email' => $email]);
+
+            return redirect($frontend.'/auth/google/finish?handoff='.$handoff);
         }
 
         // 3. No account at all. A pending invite for this email always gets
@@ -177,7 +215,26 @@ class SocialAuthController extends Controller
 
         AuthEvent::record(AuthEventType::SocialAccountLinked, user: $user, request: $request);
 
-        return response()->json(['data' => $this->challengeOrToken($user, $request)]);
+        return response()->json(['data' => $this->resolvePayload($this->challengeOrToken($user, $request))]);
+    }
+
+    /**
+     * The other half of the handoff pattern (see class docblock) — the SPA
+     * posts the opaque code from the callback redirect's ?handoff= and gets
+     * back whichever real payload was stashed for it: a token, a 2FA
+     * challenge, or a link-confirmation prompt. Single-use and short-lived.
+     */
+    public function exchange(Request $request): JsonResponse
+    {
+        $validated = $request->validate(['handoff' => ['required', 'string']]);
+
+        $payload = Cache::pull("google_handoff:{$validated['handoff']}");
+
+        if (! is_array($payload)) {
+            throw ValidationException::withMessages(['handoff' => ['This sign-in link has expired. Try again.']]);
+        }
+
+        return response()->json(['data' => $payload]);
     }
 
     private function attachSocialAccount(User $user, string $googleId): void
@@ -191,7 +248,9 @@ class SocialAuthController extends Controller
     /**
      * Bind the tenant (when known) and hand off to the same TOTP/OTP/token
      * branch a password login uses, then redirect the browser back to the
-     * SPA carrying whichever of those three states resulted.
+     * SPA carrying an opaque handoff code for whichever of those three
+     * states resulted — never the token/challenge itself (see class
+     * docblock).
      */
     private function finish(User $user, Request $request, string $frontend, ?Tenant $tenant = null): RedirectResponse
     {
@@ -201,15 +260,30 @@ class SocialAuthController extends Controller
             ? Tenancy::runAs($tenant, fn () => $this->challengeOrToken($user, $request))
             : $this->challengeOrToken($user, $request);
 
-        if (isset($result['requires_totp'])) {
-            return redirect($frontend.'/auth/google/finish?requires_totp=1&challenge='.$result['challenge']);
+        return redirect($frontend.'/auth/google/finish?handoff='.$this->stashHandoff($this->resolvePayload($result)));
+    }
+
+    private function stashHandoff(array $payload): string
+    {
+        $handoff = Str::random(40);
+        Cache::put("google_handoff:{$handoff}", $payload, now()->addMinutes(self::HANDOFF_TTL_MINUTES));
+
+        return $handoff;
+    }
+
+    /**
+     * challengeOrToken()'s 'user' entry is a UserResource — fine to return
+     * straight from a JSON controller action, but not safe to store in
+     * Cache as-is (serialization of a resource wrapping a live model is
+     * fragile across cache drivers). Resolved to a plain array once, here.
+     */
+    private function resolvePayload(array $result): array
+    {
+        if (isset($result['user']) && $result['user'] instanceof UserResource) {
+            $result['user'] = $result['user']->resolve();
         }
 
-        if (isset($result['requires_otp'])) {
-            return redirect($frontend.'/auth/google/finish?requires_otp=1&challenge='.$result['challenge']);
-        }
-
-        return redirect($frontend.'/auth/google/finish?token='.$result['token']);
+        return $result;
     }
 
     /**

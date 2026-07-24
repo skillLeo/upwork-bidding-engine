@@ -95,6 +95,12 @@ Route::get('/auth/google/callback', [\App\Http\Controllers\SocialAuthController:
     ->middleware('throttle:login');
 Route::post('/auth/google/link', [\App\Http\Controllers\SocialAuthController::class, 'link'])
     ->middleware('throttle:otp');
+// Exchanges the opaque ?handoff= code the callback redirect carries for the
+// real payload (token, 2FA challenge, or link prompt) — see
+// SocialAuthController's class docblock for why the URL never carries that
+// payload directly.
+Route::post('/auth/google/exchange', [\App\Http\Controllers\SocialAuthController::class, 'exchange'])
+    ->middleware('throttle:otp');
 
 // The "this wasn't me" link in the new-device email. Unauthenticated by
 // necessity — a mail client has no session — so the `signed` middleware is

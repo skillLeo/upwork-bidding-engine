@@ -6,8 +6,10 @@ use App\Models\SocialAccount;
 use App\Models\User;
 use App\Services\SettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Foundation\Testing\TestResponse;
+use Illuminate\Testing\TestResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\GoogleProvider;
 use Laravel\Socialite\Two\User as SocialiteUser;
@@ -77,6 +79,36 @@ class TotpAndGoogleTest extends TestCase
         Socialite::shouldReceive('driver')->with('google')->andReturn($provider);
     }
 
+    /**
+     * Seeds a valid CSRF state the same way SocialAuthController::redirect()
+     * does, then calls the callback with it — mirroring the real two-step
+     * flow instead of hitting the state check with nothing.
+     */
+    private function callGoogleCallback(): TestResponse
+    {
+        $state = Str::random(40);
+        Cache::put("google_oauth_state:{$state}", true, now()->addMinutes(10));
+
+        return $this->get('/api/auth/google/callback?state='.$state);
+    }
+
+    /**
+     * The other half of the handoff pattern the callback redirects through
+     * (see SocialAuthController's class docblock) — pulls ?handoff= out of
+     * the redirect Location and exchanges it for the real payload.
+     */
+    private function exchangeHandoff(TestResponse $callbackResponse): array
+    {
+        $location = $callbackResponse->headers->get('Location');
+        parse_str((string) parse_url($location, PHP_URL_QUERY), $query);
+
+        $this->assertArrayHasKey('handoff', $query, "callback redirect had no ?handoff=: {$location}");
+
+        return $this->postJson('/api/auth/google/exchange', ['handoff' => $query['handoff']])
+            ->assertOk()
+            ->json('data');
+    }
+
     private function enrollTotp(User $user): array
     {
         $google2fa = app(Google2FA::class);
@@ -123,26 +155,25 @@ class TotpAndGoogleTest extends TestCase
         $existing = User::factory()->bidder()->create(['email' => 'shared@example.com']);
         $this->mockGoogleUser('google-shared-1', 'shared@example.com');
 
-        $response = $this->get('/api/auth/google/callback');
+        $response = $this->callGoogleCallback();
         $response->assertRedirect();
-        $location = $response->headers->get('Location');
-
-        $this->assertStringContainsString('link_required=1', $location);
         $this->assertDatabaseMissing('social_accounts', ['provider_id' => 'google-shared-1']);
 
-        parse_str((string) parse_url($location, PHP_URL_QUERY), $query);
+        $payload = $this->exchangeHandoff($response);
+        $this->assertTrue($payload['link_required']);
+        $this->assertSame('shared@example.com', $payload['email']);
+        $linkToken = $payload['link_token'];
 
         // Wrong password: refused, no link created.
         $this->postJson('/api/auth/google/link', [
-            'link_token' => $query['link_token'],
+            'link_token' => $linkToken,
             'password' => 'definitely-wrong',
         ])->assertStatus(422);
         $this->assertDatabaseMissing('social_accounts', ['user_id' => $existing->id]);
 
         // Correct password: NOW it links.
-        $this->mockGoogleUser('google-shared-1', 'shared@example.com'); // re-arm: callback() is not re-called, but keep the mock tidy
         $this->postJson('/api/auth/google/link', [
-            'link_token' => $query['link_token'],
+            'link_token' => $linkToken,
             'password' => 'password',
         ])->assertOk();
         $this->assertDatabaseHas('social_accounts', ['user_id' => $existing->id, 'provider_id' => 'google-shared-1']);
@@ -183,17 +214,15 @@ class TotpAndGoogleTest extends TestCase
         SocialAccount::create(['user_id' => $user->id, 'provider' => 'google', 'provider_id' => 'google-777', 'linked_at' => now()]);
         $this->mockGoogleUser('google-777', 'newgoogle@example.com');
 
-        $response = $this->get('/api/auth/google/callback');
-        $location = $response->headers->get('Location');
-        parse_str((string) parse_url($location, PHP_URL_QUERY), $query);
+        $payload = $this->exchangeHandoff($this->callGoogleCallback());
 
         // Google itself succeeds (no personal 2FA of their own to challenge)...
-        $this->assertArrayHasKey('token', $query);
+        $this->assertArrayHasKey('token', $payload);
 
         // ...but the resulting session still cannot reach product routes,
         // because the WORKSPACE requires 2FA and this account has none.
         // OAuth is not a bypass for that lock either.
-        $this->asToken($query['token'])->getJson('/api/leads')
+        $this->asToken($payload['token'])->getJson('/api/leads')
             ->assertStatus(403)
             ->assertJsonPath('code', 'must_enroll_2fa');
     }
@@ -205,12 +234,42 @@ class TotpAndGoogleTest extends TestCase
         SocialAccount::create(['user_id' => $user->id, 'provider' => 'google', 'provider_id' => 'google-999', 'linked_at' => now()]);
         $this->mockGoogleUser('google-999', 'has2fa@example.com');
 
-        $response = $this->get('/api/auth/google/callback');
-        $location = $response->headers->get('Location');
+        $payload = $this->exchangeHandoff($this->callGoogleCallback());
 
         // Never a direct token — TOTP is checked FIRST, same branch a
         // password login uses.
-        $this->assertStringContainsString('requires_totp=1', $location);
-        $this->assertStringNotContainsString('token=', $location);
+        $this->assertTrue($payload['requires_totp']);
+        $this->assertArrayNotHasKey('token', $payload);
+    }
+
+    public function test_the_google_callback_refuses_a_missing_or_invalid_csrf_state(): void
+    {
+        $this->mockGoogleUser('google-csrf-1', 'csrf@example.com');
+
+        // No state at all — never even reaches Socialite.
+        $response = $this->get('/api/auth/google/callback');
+        $response->assertRedirect();
+        $this->assertStringContainsString('error=', $response->headers->get('Location'));
+
+        // An unknown/forged state — same refusal.
+        $response = $this->get('/api/auth/google/callback?state=not-a-real-state');
+        $response->assertRedirect();
+        $this->assertStringContainsString('error=', $response->headers->get('Location'));
+
+        $this->assertDatabaseMissing('social_accounts', ['provider_id' => 'google-csrf-1']);
+    }
+
+    public function test_a_google_oauth_state_is_single_use(): void
+    {
+        $this->mockGoogleUser('google-reuse-1', 'reuse@example.com');
+
+        $state = Str::random(40);
+        Cache::put("google_oauth_state:{$state}", true, now()->addMinutes(10));
+
+        $this->get('/api/auth/google/callback?state='.$state)->assertRedirect();
+
+        // Replaying the SAME state (e.g. a captured/reused callback URL) is refused.
+        $response = $this->get('/api/auth/google/callback?state='.$state);
+        $this->assertStringContainsString('error=', $response->headers->get('Location'));
     }
 }
