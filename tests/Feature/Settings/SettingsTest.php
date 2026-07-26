@@ -26,6 +26,7 @@ class SettingsTest extends TestCase
 
         // Can read settings — but secret keys are ABSENT, not masked.
         $get = $this->actingAs($bidder, 'sanctum')->getJson('/api/settings')->assertOk();
+        // Platform-owned since P8 — absent from every group, not merely from 'ai'.
         $this->assertArrayNotHasKey('anthropic_api_key', $get->json('data.ai') ?? []);
         $this->assertArrayNotHasKey('vollna_api_token', $get->json('data.vollna') ?? []);
 
@@ -34,9 +35,12 @@ class SettingsTest extends TestCase
             ->postJson('/api/settings', ['score_cutoff' => 5])
             ->assertOk();
 
-        // Cannot save a secret key — hard 403, not a silent drop.
+        // Cannot save a secret key — hard 403, not a silent drop. (The
+        // Vollna token, not the Anthropic key: since P8 the AI credentials
+        // are platform-owned and are not part of this endpoint's vocabulary
+        // at all, so they could never produce a per-key 403 here.)
         $this->actingAs($bidder, 'sanctum')
-            ->postJson('/api/settings', ['anthropic_api_key' => 'sk-should-be-refused'])
+            ->postJson('/api/settings', ['vollna_api_token' => 'vln-should-be-refused'])
             ->assertStatus(403);
     }
 

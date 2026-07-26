@@ -10,6 +10,7 @@ import CardDescription from "@/components/ui/CardDescription.vue";
 import Button from "@/components/ui/Button.vue";
 import Input from "@/components/ui/Input.vue";
 import Label from "@/components/ui/Label.vue";
+import FieldHint from "@/components/ui/FieldHint.vue";
 import Skeleton from "@/components/ui/Skeleton.vue";
 import { apiClient, apiErrorMessage } from "@/lib/api-client";
 import { useAuthStore } from "@/stores/auth";
@@ -19,7 +20,7 @@ const auth = useAuthStore();
 const loading = ref(true);
 const saving = ref(false);
 const workspace = ref(null);
-const form = ref({ name: "", slug: "" });
+const form = ref({ name: "", slug: "", specialization: "" });
 
 const members = ref([]);
 const membersLoading = ref(false);
@@ -36,7 +37,11 @@ async function load() {
   try {
     const res = await apiClient.get("/workspace");
     workspace.value = res.data.data;
-    form.value = { name: workspace.value.name, slug: workspace.value.slug };
+    form.value = {
+      name: workspace.value.name,
+      slug: workspace.value.slug,
+      specialization: workspace.value.specialization ?? "",
+    };
   } catch (error) {
     toast.error(apiErrorMessage(error, "Could not load workspace details."));
   } finally {
@@ -73,7 +78,7 @@ async function save() {
 async function transferOwnership() {
   if (!transferTargetId.value) return;
   const target = members.value.find((m) => m.id === Number(transferTargetId.value));
-  if (!confirm(`Transfer ownership to ${target?.name}? You will become an admin.`)) return;
+  if (!confirm(`Transfer ownership to ${target?.name}? You will become a bidder in this workspace.`)) return;
 
   transferring.value = true;
   try {
@@ -152,6 +157,15 @@ onMounted(() => {
               <Label>Slug</Label>
               <Input v-model="form.slug" />
             </div>
+          </div>
+          <div>
+            <Label>Specialization</Label>
+            <Input v-model="form.specialization" placeholder="Laravel + Vue, Graphic design, DevOps…" />
+            <FieldHint>
+              A label for how this workspace describes itself. It is display only — what your
+              proposals claim and how leads are scored comes from your stack lists under
+              Bidding Rules, never from this field.
+            </FieldHint>
           </div>
           <div class="grid gap-4 sm:grid-cols-3 text-sm">
             <div>

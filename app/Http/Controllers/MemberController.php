@@ -2,17 +2,21 @@
 
 namespace App\Http\Controllers;
 
+use App\Authorization\InvitationPolicy;
 use App\Authorization\Permissions;
 use App\Authorization\TenantRole;
 use App\Enums\AuthEventType;
+use App\Enums\UserRole;
 use App\Models\AuthEvent;
 use App\Models\Invitation;
 use App\Models\User;
 use App\Services\Members\InvitationService;
+use App\Services\SettingsService;
 use App\Tenancy\Tenancy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Spatie\Permission\Models\Role;
 
 /**
  * Workspace membership: who is in the tenant, what role each holds, and the
@@ -21,7 +25,10 @@ use Illuminate\Validation\Rule;
  */
 class MemberController extends Controller
 {
-    public function __construct(protected InvitationService $invitations) {}
+    public function __construct(
+        protected InvitationService $invitations,
+        protected InvitationPolicy $policy,
+    ) {}
 
     /**
      * Active members plus pending/expired invitations, for the Members tab.
@@ -63,17 +70,17 @@ class MemberController extends Controller
 
     public function invite(Request $request): JsonResponse
     {
+        // Validated against every role the enum knows, NOT against the
+        // caller's allowed set — an out-of-matrix role must reach the policy
+        // and come back as a logged 403, not as a 422 that reads like a typo.
         $validated = $request->validate([
             'email' => ['required', 'email'],
             'role' => ['required', Rule::in(TenantRole::values())],
         ]);
 
-        // Only an owner may mint another owner — otherwise an admin could
-        // grant a co-owner and hand out billing/delete powers they don't
-        // themselves fully control.
-        if ($validated['role'] === TenantRole::Owner->value && ! $request->user()->hasRole(TenantRole::Owner->value)) {
-            abort(403, 'Only an owner can invite another owner.');
-        }
+        // THE invitation matrix (P8): workspace owner → bidder/viewer only;
+        // everybody else → nobody, whatever the payload says.
+        $this->policy->assertMayInvite($request->user(), $validated['role']);
 
         $email = strtolower(trim($validated['email']));
 
@@ -122,15 +129,15 @@ class MemberController extends Controller
             return response()->json(['message' => 'Transfer ownership to someone else before changing the owner\'s role.'], 422);
         }
 
-        if ($validated['role'] === TenantRole::Owner->value && ! $request->user()->hasRole(TenantRole::Owner->value)) {
-            abort(403, 'Only an owner can grant the owner role.');
-        }
+        // Same fixed matrix as inviting: bidder ↔ viewer, nothing else. The
+        // owner role is reached by transfer, never by re-roling.
+        $this->policy->assertMayAssign($request->user(), $validated['role']);
 
         Tenancy::runAs($tenant, fn () => $user->syncRoles([$validated['role']]));
 
         // Keep the legacy display column roughly in step for the profile
         // dropdown; authorization no longer reads it.
-        $user->update(['role' => $validated['role'] === TenantRole::Admin->value ? 'admin' : 'bidder']);
+        $user->update(['role' => UserRole::Bidder->value]);
 
         AuthEvent::record(AuthEventType::RoleChanged, user: $user, request: $request);
 
@@ -185,7 +192,7 @@ class MemberController extends Controller
             $catalog[$group][] = $permission;
         }
 
-        foreach (\App\Services\SettingsService::SCHEMA as $key => $meta) {
+        foreach (SettingsService::SCHEMA as $key => $meta) {
             $catalog['setting keys: '.$meta['group']][] = Permissions::forSettingKey($key);
         }
 
@@ -196,7 +203,7 @@ class MemberController extends Controller
             // TenantTeamResolver, so this reads the CURRENT tenant's copy.
             $granted = $locked
                 ? Permissions::all()
-                : (\Spatie\Permission\Models\Role::where('name', $roleEnum->value)->first()
+                : (Role::where('name', $roleEnum->value)->first()
                     ?->permissions->pluck('name')->values()->all() ?? []);
 
             return [

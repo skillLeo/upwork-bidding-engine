@@ -43,6 +43,16 @@ export const useAuthStore = defineStore("auth", {
     // Used to HIDE actions a user can't perform (hide, not disable).
     permissions: (state) => state.user?.permissions ?? [],
     tenantRole: (state) => state.user?.tenant_role ?? state.user?.role,
+    // The workspace this session is bound to, from UserResource.
+    tenant: (state) => state.user?.tenant ?? null,
+    // Internal-only surfaces (the AI Engine tab and the OpenClaw WhatsApp
+    // bridge) belong to the company operating the platform, not to customers.
+    // Defaults to FALSE for a session that predates this field — hiding a tab
+    // from someone entitled to it is a nuisance; showing a customer a control
+    // wired to somebody else's phone is not.
+    isInternalWorkspace: (state) => state.user?.tenant?.plan === "internal",
+    // Exactly one account holds this, ever (P8).
+    isPlatformOwner: (state) => state.user?.platform_role === "platform_owner",
     // A function-style getter: auth.can('members.invite'). Falls back to the
     // legacy admin flag while a session predates the permissions payload, so
     // an admin is never wrongly locked out mid-upgrade.

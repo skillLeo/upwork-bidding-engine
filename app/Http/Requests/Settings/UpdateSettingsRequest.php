@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Settings;
 
+use App\Authorization\Permissions;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -17,7 +18,7 @@ class UpdateSettingsRequest extends FormRequest
         // The real gate is PER KEY in SettingsController::store() — every
         // posted key requires its own setting.{key} permission. This only
         // confirms the caller may see Settings at all.
-        return (bool) $this->user()?->can(\App\Authorization\Permissions::SETTINGS_VIEW);
+        return (bool) $this->user()?->can(Permissions::SETTINGS_VIEW);
     }
 
     /**
@@ -50,24 +51,25 @@ class UpdateSettingsRequest extends FormRequest
             'ai_engine_enabled' => ['sometimes', 'boolean'],
             'proposal_writing_enabled' => ['sometimes', 'boolean'],
 
-            // Direct AI layer (Anthropic/OpenAI APIs)
-            'ai_provider' => ['sometimes', 'string', 'in:anthropic,openai'],
-            'anthropic_api_key' => ['sometimes', 'nullable', 'string', 'max:300'],
-            'openai_api_key' => ['sometimes', 'nullable', 'string', 'max:300'],
-            'scoring_model' => ['sometimes', 'string', 'max:100'],
-            'proposal_model' => ['sometimes', 'string', 'max:100'],
-            'review_model' => ['sometimes', 'string', 'max:100'],
+            // Direct AI layer — ai_provider, the two API keys and the three
+            // model IDs are ABSENT ON PURPOSE (P8). They are platform-only
+            // now: the platform pays for AI out of pooled keys, and a
+            // workspace neither supplies a key nor chooses which model its
+            // pooled spend goes to. A key posted here is not validated, not
+            // saved, and not silently dropped-but-acknowledged — it simply
+            // isn't in the accepted vocabulary, and SettingsService throws on
+            // any attempt to write a tenant override for one.
+            //
+            // Likewise scoring_system_prompt / proposal_skill /
+            // stage_2_scoring_addendum: the METHODOLOGY is the product, edited
+            // by the platform owner in the platform console, identical for
+            // every workspace.
             'anthropic_funded_total' => ['sometimes', 'numeric', 'min:0', 'max:1000000'],
             'openai_funded_total' => ['sometimes', 'numeric', 'min:0', 'max:1000000'],
-            // The long, operator-pasted rule blocks — the whole point is
-            // that these are editable text, so the ceilings are generous.
-            'scoring_system_prompt' => ['sometimes', 'nullable', 'string', 'max:150000'],
             'account_stage' => ['sometimes', 'string', 'in:stage_1_new,stage_2_established'],
-            'stage_2_scoring_addendum' => ['sometimes', 'nullable', 'string', 'max:5000'],
-            // proposal_skill + project_facts are the ONLY proposal text
-            // sent to a model; proposal_reference is operator reading and
-            // never enters a prompt.
-            'proposal_skill' => ['sometimes', 'nullable', 'string', 'max:30000'],
+            // project_facts is the workspace's own track record — its data,
+            // its to edit. proposal_reference is operator reading and never
+            // enters a prompt.
             'proposal_reference' => ['sometimes', 'nullable', 'string', 'max:150000'],
             'project_facts' => ['sometimes', 'nullable', 'string', 'max:20000'],
 

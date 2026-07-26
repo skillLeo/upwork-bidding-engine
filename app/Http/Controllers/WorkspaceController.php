@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Authorization\TenantRole;
 use App\Enums\ActivityType;
 use App\Models\ActivityLog;
 use App\Models\Client;
@@ -46,6 +47,9 @@ class WorkspaceController extends Controller
                 'required', 'string', 'max:63', 'alpha_dash',
                 Rule::unique('tenants', 'slug')->ignore($tenant->id),
             ],
+            // A display label only — nothing in scoring or proposal writing
+            // reads it (see Tenant::specializationLabel).
+            'specialization' => ['sometimes', 'nullable', 'string', 'max:80'],
         ]);
 
         $tenant->update($validated);
@@ -84,8 +88,13 @@ class WorkspaceController extends Controller
             $tenant->update(['owner_user_id' => $newOwner->id]);
             // Spatie role assignments are per-team (tenant_id), resolved from
             // the SAME bound tenant this request is already running as.
-            $newOwner->syncRoles(['owner']);
-            $user->syncRoles(['admin']);
+            $newOwner->syncRoles([TenantRole::Owner->value]);
+            // The outgoing owner lands on BIDDER, not viewer: they keep
+            // working the pipeline, which is what someone handing over
+            // day-to-day ownership almost always still wants to do. (Before
+            // P8 this demoted to 'admin', a role that no longer exists.) The
+            // new owner can move them to viewer in one click.
+            $user->syncRoles([TenantRole::Bidder->value]);
         });
 
         ActivityLog::record(ActivityType::SettingUpdated, subject: $tenant, userId: $user->id, meta: [
@@ -210,6 +219,7 @@ class WorkspaceController extends Controller
         return [
             'name' => $tenant->name,
             'slug' => $tenant->slug,
+            'specialization' => $tenant->specialization,
             'plan' => $tenant->plan,
             'status' => $tenant->status,
             'member_count' => $tenant->users()->count(),

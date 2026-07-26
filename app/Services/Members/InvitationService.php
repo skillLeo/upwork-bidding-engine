@@ -110,11 +110,22 @@ class InvitationService
                 'name' => $newUserData['name'] ?? Str::before($invitation->email, '@'),
                 'email' => $invitation->email,
                 'password' => $newUserData['password'] ?? Str::random(32),
-                'role' => $invitation->role === TenantRole::Admin->value ? 'admin' : 'bidder',
+                // The legacy display column, which has only two values and no
+                // longer drives any authorization decision. A workspace owner
+                // reads as 'admin' there; bidders and viewers as 'bidder'.
+                'role' => $invitation->role === TenantRole::Owner->value ? 'admin' : 'bidder',
             ]);
         }
 
         $tenant->users()->syncWithoutDetaching([$user->id => ['joined_at' => now()]]);
+
+        // The workspace-creation path (P8) mints exactly one owner invitation
+        // for a brand-new tenant that has no owner_user_id yet. Accepting it
+        // is what makes that person the owner — this is the only way an owner
+        // invitation is ever issued, and the tenant is useless until it lands.
+        if ($invitation->role === TenantRole::Owner->value && $tenant->owner_user_id === null) {
+            $tenant->update(['owner_user_id' => $user->id]);
+        }
 
         Tenancy::runAs($tenant, function () use ($user, $invitation) {
             $user->syncRoles([$invitation->role]);

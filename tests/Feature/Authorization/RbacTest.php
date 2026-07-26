@@ -5,6 +5,7 @@ namespace Tests\Feature\Authorization;
 use App\Authorization\TenantRole;
 use App\Models\Lead;
 use App\Models\User;
+use App\Services\Auth\TokenIssuer;
 use App\Services\Members\InvitationService;
 use App\Services\SettingsService;
 use App\Tenancy\Tenancy;
@@ -32,29 +33,33 @@ class RbacTest extends TestCase
 
     public function test_a_bidder_gets_403_on_edit_secrets_and_the_secret_is_absent_not_masked(): void
     {
-        app(SettingsService::class)->set('anthropic_api_key', 'sk-ant-real-secret');
+        // The Vollna token is the workspace's own secret. (The Anthropic key
+        // used to stand here; since P8 it is platform-owned and never reaches
+        // this endpoint at all, which is proven separately in
+        // PlatformAiCustodyTest.)
+        app(SettingsService::class)->set('vollna_api_token', 'vln-real-secret');
 
         $bidder = User::factory()->bidder()->create();
 
         // GET: the key is ABSENT from the body entirely — not present with a
         // masked value.
         $body = $this->actingAs($bidder, 'sanctum')->getJson('/api/settings')->assertOk()->json('data');
-        $this->assertArrayNotHasKey('anthropic_api_key', $body['ai'] ?? []);
+        $this->assertArrayNotHasKey('vollna_api_token', $body['vollna'] ?? []);
 
         // WRITE: a secret key is a hard 403.
         $this->actingAs($bidder, 'sanctum')
-            ->postJson('/api/settings', ['anthropic_api_key' => 'sk-hijack'])
+            ->postJson('/api/settings', ['vollna_api_token' => 'vln-hijack'])
             ->assertStatus(403);
 
         // The stored value is untouched.
-        $this->assertSame('sk-ant-real-secret', app(SettingsService::class)->get('anthropic_api_key'));
+        $this->assertSame('vln-real-secret', app(SettingsService::class)->get('vollna_api_token'));
 
         // A user WITH edit_secrets does see it (masked shape), proving the
         // difference is permission, not a blanket hide.
         $owner = $this->owner();
         $ownerBody = $this->actingAs($owner, 'sanctum')->getJson('/api/settings')->assertOk()->json('data');
-        $this->assertArrayHasKey('anthropic_api_key', $ownerBody['ai']);
-        $this->assertTrue($ownerBody['ai']['anthropic_api_key']['is_set']);
+        $this->assertArrayHasKey('vollna_api_token', $ownerBody['vollna']);
+        $this->assertTrue($ownerBody['vollna']['vollna_api_token']['is_set']);
     }
 
     // ---------------------------------------------------------------- verify (b)
@@ -103,7 +108,7 @@ class RbacTest extends TestCase
         $owner = $this->owner();
         $member = User::factory()->bidder()->create();
 
-        Tenancy::runAs($this->tenant, fn () => app(\App\Services\Auth\TokenIssuer::class)->issue($member));
+        Tenancy::runAs($this->tenant, fn () => app(TokenIssuer::class)->issue($member));
         $this->assertSame(1, $member->tokens()->count());
 
         // Owner removes them.
@@ -144,19 +149,24 @@ class RbacTest extends TestCase
             ->assertStatus(403);
     }
 
-    public function test_only_an_owner_can_invite_another_owner(): void
+    /**
+     * P8 narrowed this: it used to read "only an owner can invite another
+     * owner". Nobody can now. A workspace has exactly one owner, reached by
+     * creation or transfer, and the only roles anyone hands out are bidder
+     * and viewer. The full matrix is proven in InvitationMatrixTest.
+     */
+    public function test_nobody_can_invite_another_owner(): void
     {
         Mail::fake();
         $owner = $this->owner();
-        $admin = User::factory()->admin()->create(); // has members.invite
 
-        // Admin inviting a plain bidder is fine.
-        $this->actingAs($admin, 'sanctum')
+        // The owner inviting a plain bidder is fine.
+        $this->actingAs($owner, 'sanctum')
             ->postJson('/api/members/invite', ['email' => 'b@example.com', 'role' => 'bidder'])
             ->assertOk();
 
-        // Admin inviting an owner is refused.
-        $this->actingAs($admin, 'sanctum')
+        // Even the owner cannot mint a second one.
+        $this->actingAs($owner, 'sanctum')
             ->postJson('/api/members/invite', ['email' => 'o@example.com', 'role' => 'owner'])
             ->assertStatus(403);
     }
@@ -170,7 +180,10 @@ class RbacTest extends TestCase
         $res = $this->actingAs($owner, 'sanctum')->getJson('/api/roles-matrix')->assertOk();
 
         $roles = collect($res->json('data.roles'));
-        $this->assertCount(4, $roles);
+        // Three since P8: owner, bidder, viewer. The tenant 'admin' role was
+        // removed with the final hierarchy.
+        $this->assertCount(3, $roles);
+        $this->assertSame(['owner', 'bidder', 'viewer'], $roles->pluck('value')->all());
 
         $bidder = $roles->firstWhere('value', 'bidder');
         $this->assertContains('leads.view', $bidder['granted']);

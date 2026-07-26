@@ -4,9 +4,12 @@ namespace Database\Factories;
 
 use App\Enums\UserRole;
 use App\Models\User;
+use App\Tenancy\Tenancy;
+use App\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Spatie\Permission\Models\Role;
 
 /**
  * @extends Factory<User>
@@ -45,18 +48,35 @@ class UserFactory extends Factory
         ]);
     }
 
+    /**
+     * The full-access member of the bound workspace.
+     *
+     * Grants OWNER since P8 removed the tenant 'admin' role — a workspace now
+     * has one owner and everyone else is a bidder or a viewer. The state
+     * keeps the name `admin()` because that is what dozens of existing tests
+     * call it and because the legacy users.role column really does still say
+     * 'admin' for a workspace owner; only the Spatie role moved.
+     */
     public function admin(): static
     {
         return $this->state(fn (array $attributes) => [
             'role' => UserRole::Admin,
-        ])->afterCreating(fn (\App\Models\User $user) => $this->assignTenantRole($user, 'admin'));
+        ])->afterCreating(fn (User $user) => $this->assignTenantRole($user, 'owner'));
+    }
+
+    /** Read-only member. */
+    public function viewer(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => UserRole::Bidder,
+        ])->afterCreating(fn (User $user) => $this->assignTenantRole($user, 'viewer'));
     }
 
     public function bidder(): static
     {
         return $this->state(fn (array $attributes) => [
             'role' => UserRole::Bidder,
-        ])->afterCreating(fn (\App\Models\User $user) => $this->assignTenantRole($user, 'bidder'));
+        ])->afterCreating(fn (User $user) => $this->assignTenantRole($user, 'bidder'));
     }
 
     /**
@@ -65,9 +85,9 @@ class UserFactory extends Factory
      * actually pass the permission checks in tests exactly as a real member
      * would. No-op when no tenant is bound (pure-unit contexts).
      */
-    private function assignTenantRole(\App\Models\User $user, string $role): void
+    private function assignTenantRole(User $user, string $role): void
     {
-        $tenant = app(\App\Tenancy\TenantContext::class)->get();
+        $tenant = app(TenantContext::class)->get();
 
         if ($tenant === null) {
             return;
@@ -77,8 +97,8 @@ class UserFactory extends Factory
 
         // The role rows only exist once the tenant has been provisioned; the
         // base TestCase does that in setUp before any factory runs.
-        if (\Spatie\Permission\Models\Role::where('name', $role)->exists()) {
-            \App\Tenancy\Tenancy::runAs($tenant, fn () => $user->syncRoles([$role]));
+        if (Role::where('name', $role)->exists()) {
+            Tenancy::runAs($tenant, fn () => $user->syncRoles([$role]));
         }
     }
 }

@@ -21,6 +21,7 @@ use App\Tenancy\Tenancy;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -29,7 +30,9 @@ use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Laravel\Sanctum\PersonalAccessToken;
 use PragmaRX\Google2FALaravel\Google2FA;
+use Spatie\Permission\PermissionRegistrar;
 
 class AuthController extends Controller
 {
@@ -286,7 +289,7 @@ class AuthController extends Controller
         // request carries a TransientToken, which has no row to remove.
         $token = $request->user()?->currentAccessToken();
 
-        if ($token instanceof \Laravel\Sanctum\PersonalAccessToken) {
+        if ($token instanceof PersonalAccessToken) {
             $token->delete();
         }
 
@@ -302,11 +305,11 @@ class AuthController extends Controller
         // user — see ImpersonationController::start().
         $token = $request->user()?->currentAccessToken();
 
-        if ($token instanceof \Laravel\Sanctum\PersonalAccessToken && $token->impersonator_id !== null) {
+        if ($token instanceof PersonalAccessToken && $token->impersonator_id !== null) {
             $data['impersonating'] = [
                 'reason' => $token->impersonation_reason,
                 'expires_at' => optional($token->impersonation_expires_at)
-                    ? \Illuminate\Support\Carbon::parse($token->impersonation_expires_at)->toIso8601String()
+                    ? Carbon::parse($token->impersonation_expires_at)->toIso8601String()
                     : null,
             ];
         }
@@ -425,39 +428,25 @@ class AuthController extends Controller
     }
 
     /**
-     * Provision the four roles for a brand-new workspace and make the
+     * Provision the three roles for a brand-new workspace and make the
      * registrant its owner.
      *
-     * This deliberately does NOT call RoleProvisioner::provision(): that method
-     * looks roles up with an un-team-scoped `Role::where('name', …)->first()`,
-     * which returns SOME OTHER tenant's role whenever one already exists in the
-     * process (e.g. the request that created this tenant). Self-serve sign-up
-     * is the first runtime path that provisions a *second* tenant while another
-     * tenant's roles are already loaded, so it must scope explicitly. Spatie's
-     * own findOrCreate()/syncRoles() honour the team id we pin below, so every
-     * role and the owner grant land on THIS tenant.
+     * RoleProvisioner::provision() pins the Spatie team id and filters the
+     * role lookup by it (see its docblock), so it is safe to call while
+     * ANOTHER tenant's roles are already loaded in this process — which is
+     * exactly the situation self-serve sign-up creates. The owner grant still
+     * happens here, under the same explicit pin, because provision() creates
+     * roles without assigning anyone to them.
      */
     protected function provisionNewWorkspace(Tenant $tenant, User $user): void
     {
-        $registrar = app(\Spatie\Permission\PermissionRegistrar::class);
+        app(RoleProvisioner::class)->provision($tenant);
 
-        // The global permission vocabulary is tenant-agnostic; make sure it
-        // exists before roles reference it.
-        app(RoleProvisioner::class)->ensureGlobalPermissions();
-
+        $registrar = app(PermissionRegistrar::class);
         $previousTeam = $registrar->getPermissionsTeamId();
         $registrar->setPermissionsTeamId($tenant->id);
 
         try {
-            foreach (TenantRole::cases() as $roleEnum) {
-                $permissions = $roleEnum === TenantRole::Owner
-                    ? \App\Authorization\Permissions::all()
-                    : $roleEnum->defaultPermissions();
-
-                \Spatie\Permission\Models\Role::findOrCreate($roleEnum->value, 'web')
-                    ->syncPermissions($permissions);
-            }
-
             $user->syncRoles([TenantRole::Owner->value]);
         } finally {
             $registrar->setPermissionsTeamId($previousTeam);

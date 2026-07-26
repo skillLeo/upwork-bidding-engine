@@ -3,7 +3,16 @@
 namespace App\Authorization;
 
 /**
- * The four base tenant roles and their DEFAULT permission grants.
+ * The three tenant roles and their DEFAULT permission grants.
+ *
+ * THREE, NOT FOUR (P8). The 'admin' role was removed when the product
+ * hierarchy was finalised: a workspace has exactly one owner who runs it,
+ * and everyone else is a bidder or a viewer. What earlier drafts called an
+ * "admin" is the OWNER of their own workspace — a separate workspace with
+ * its own stacks, budgets, filters and members — not a second-in-command
+ * inside someone else's. There is no role between owner and bidder, and
+ * adding one back would immediately raise "can an admin invite an admin?",
+ * which is the ambiguity this hierarchy exists to remove.
  *
  * Since the editable-permissions decision (2026-07-24) these defaults apply
  * only when a role is first created for a workspace. After that the grants
@@ -18,7 +27,6 @@ namespace App\Authorization;
 enum TenantRole: string
 {
     case Owner = 'owner';
-    case Admin = 'admin';
     case Bidder = 'bidder';
     case Viewer = 'viewer';
 
@@ -26,7 +34,6 @@ enum TenantRole: string
     {
         return match ($this) {
             self::Owner => 'Owner',
-            self::Admin => 'Admin',
             self::Bidder => 'Bidder',
             self::Viewer => 'Viewer',
         };
@@ -35,11 +42,30 @@ enum TenantRole: string
     public function description(): string
     {
         return match ($this) {
-            self::Owner => 'Full control, always. Locked — cannot be edited or removed.',
-            self::Admin => 'Everything except billing, by default. Editable.',
+            self::Owner => 'Runs this workspace. Full control, always. Locked — cannot be edited, removed, or invited.',
             self::Bidder => 'Works the pipeline and tunes the non-secret rules, by default. Editable.',
             self::Viewer => 'Read-only, by default. Editable.',
         };
+    }
+
+    /**
+     * The roles a workspace owner may hand out — the only two that can be
+     * invited or assigned inside a workspace. Owner is absent by design: it
+     * exists from workspace creation or by transfer, never by invitation.
+     *
+     * @return array<int, self>
+     */
+    public static function invitable(): array
+    {
+        return [self::Bidder, self::Viewer];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public static function invitableValues(): array
+    {
+        return array_map(fn (self $role) => $role->value, self::invitable());
     }
 
     /**
@@ -52,11 +78,6 @@ enum TenantRole: string
     {
         return match ($this) {
             self::Owner => Permissions::all(),
-
-            self::Admin => array_values(array_filter(
-                Permissions::all(),
-                fn (string $p) => $p !== Permissions::BILLING_MANAGE,
-            )),
 
             // The pipeline, every AI feature, and the non-secret settings
             // keys (rules, thresholds, toggles) — but no secret key, no

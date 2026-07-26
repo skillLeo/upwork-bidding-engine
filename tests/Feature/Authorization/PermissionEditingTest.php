@@ -3,6 +3,9 @@
 namespace Tests\Feature\Authorization;
 
 use App\Authorization\Permissions;
+use App\Authorization\RoleProvisioner;
+use App\Models\Lead;
+use App\Models\PermissionDeny;
 use App\Models\User;
 use App\Services\SettingsService;
 use App\Tenancy\Tenancy;
@@ -83,7 +86,7 @@ class PermissionEditingTest extends TestCase
 
         // A deploy re-runs the provisioner. The custom viewer config must
         // survive; only owner is re-synced.
-        app(\App\Authorization\RoleProvisioner::class)->provision($this->tenant);
+        app(RoleProvisioner::class)->provision($this->tenant);
 
         $granted = Role::where('name', 'viewer')->first()->permissions->pluck('name')->all();
         $this->assertSame([Permissions::LEADS_VIEW], $granted);
@@ -97,16 +100,16 @@ class PermissionEditingTest extends TestCase
         $bidder = User::factory()->bidder()->create();
 
         // Bidder's role does not include the Anthropic key.
-        $this->assertFalse($bidder->can('setting.anthropic_api_key'));
+        $this->assertFalse($bidder->can('setting.vollna_api_token'));
 
         $this->actingAs($admin, 'sanctum')
             ->putJson("/api/members/{$bidder->id}/overrides", [
-                'grants' => ['setting.anthropic_api_key'],
+                'grants' => ['setting.vollna_api_token'],
                 'denies' => [],
             ])
             ->assertOk();
 
-        $this->assertTrue($bidder->fresh()->can('setting.anthropic_api_key'));
+        $this->assertTrue($bidder->fresh()->can('setting.vollna_api_token'));
     }
 
     public function test_a_personal_deny_beats_the_role_grant(): void
@@ -124,7 +127,7 @@ class PermissionEditingTest extends TestCase
             ])
             ->assertOk();
 
-        \App\Models\PermissionDeny::flushRequestCache();
+        PermissionDeny::flushRequestCache();
 
         $this->assertFalse($bidder->fresh()->can(Permissions::PROPOSALS_AI_REWRITE));
 
@@ -137,7 +140,7 @@ class PermissionEditingTest extends TestCase
     {
         $admin = User::factory()->admin()->create();
         $bidder = User::factory()->bidder()->create();
-        $lead = \App\Models\Lead::factory()->ready()->create();
+        $lead = Lead::factory()->ready()->create();
 
         $this->actingAs($admin, 'sanctum')
             ->putJson("/api/members/{$bidder->id}/overrides", [
@@ -145,7 +148,7 @@ class PermissionEditingTest extends TestCase
                 'denies' => [Permissions::LEADS_UPDATE_STATUS],
             ])->assertOk();
 
-        \App\Models\PermissionDeny::flushRequestCache();
+        PermissionDeny::flushRequestCache();
 
         $this->actingAs($bidder, 'sanctum')
             ->postJson("/api/leads/{$lead->id}/status", ['status' => 'sent'])
@@ -176,11 +179,13 @@ class PermissionEditingTest extends TestCase
             ->postJson('/api/settings', ['score_cutoff' => 6])
             ->assertOk();
 
-        // A secret key: refused, naming the key.
+        // A secret key: refused, naming the key. (A workspace secret — the
+        // Anthropic key is platform-owned since P8 and never reaches this
+        // endpoint at all.)
         $res = $this->actingAs($bidder, 'sanctum')
-            ->postJson('/api/settings', ['anthropic_api_key' => 'sk-x'])
+            ->postJson('/api/settings', ['vollna_api_token' => 'vln-x'])
             ->assertStatus(403);
-        $this->assertStringContainsString('anthropic_api_key', $res->json('message'));
+        $this->assertStringContainsString('vollna_api_token', $res->json('message'));
 
         // Deny ONE specific rules key for this person; the rest still work.
         $admin = User::factory()->admin()->create();
@@ -189,7 +194,7 @@ class PermissionEditingTest extends TestCase
                 'grants' => [], 'denies' => ['setting.score_cutoff'],
             ])->assertOk();
 
-        \App\Models\PermissionDeny::flushRequestCache();
+        PermissionDeny::flushRequestCache();
 
         $this->actingAs($bidder, 'sanctum')
             ->postJson('/api/settings', ['score_cutoff' => 8])
@@ -201,26 +206,26 @@ class PermissionEditingTest extends TestCase
 
     public function test_secret_visibility_follows_the_per_key_permission(): void
     {
-        app(SettingsService::class)->set('anthropic_api_key', 'sk-real');
+        app(SettingsService::class)->set('vollna_api_token', 'vln-real');
         $admin = User::factory()->admin()->create();
         $bidder = User::factory()->bidder()->create();
 
         // Absent for the bidder…
         $body = $this->actingAs($bidder, 'sanctum')->getJson('/api/settings')->json('data');
-        $this->assertArrayNotHasKey('anthropic_api_key', $body['ai'] ?? []);
+        $this->assertArrayNotHasKey('vollna_api_token', $body['vollna'] ?? []);
 
         // …until someone grants exactly that key.
         $this->actingAs($admin, 'sanctum')
             ->putJson("/api/members/{$bidder->id}/overrides", [
-                'grants' => ['setting.anthropic_api_key'], 'denies' => [],
+                'grants' => ['setting.vollna_api_token'], 'denies' => [],
             ])->assertOk();
 
         // fresh(): actingAs reuses the same model instance, whose permissions
         // relation was cached (empty) before the grant. A real HTTP request
         // re-resolves the user from the database, which fresh() mirrors.
         $body = $this->actingAs($bidder->fresh(), 'sanctum')->getJson('/api/settings')->json('data');
-        $this->assertArrayHasKey('anthropic_api_key', $body['ai']);
-        $this->assertTrue($body['ai']['anthropic_api_key']['is_set']);
+        $this->assertArrayHasKey('vollna_api_token', $body['vollna']);
+        $this->assertTrue($body['vollna']['vollna_api_token']['is_set']);
     }
 
     public function test_the_matrix_endpoint_reports_live_grants_and_the_owner_lock(): void

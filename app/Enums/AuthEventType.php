@@ -26,6 +26,12 @@ enum AuthEventType: string
     /** P6: a Google identity was linked to an existing password account (never silent — see SocialAuthController). */
     case SocialAccountLinked = 'social_account_linked';
     case SocialAccountUnlinked = 'social_account_unlinked';
+    /**
+     * P8: the single platform ownership moved from one account to another.
+     * The most consequential event this table can hold — it is the only way
+     * the platform owner changes, and it can never happen silently.
+     */
+    case PlatformOwnershipTransferred = 'platform_ownership_transferred';
 
     public function label(): string
     {
@@ -43,6 +49,7 @@ enum AuthEventType: string
             self::ImpersonationEnded => 'Impersonation ended',
             self::SocialAccountLinked => 'Google account linked',
             self::SocialAccountUnlinked => 'Google account unlinked',
+            self::PlatformOwnershipTransferred => 'Platform ownership transferred',
         };
     }
 

@@ -18,12 +18,17 @@ import { relativeTime } from "@/lib/utils";
 
 const auth = useAuthStore();
 
+// EXACTLY TWO INVITABLE ROLES (P8). A workspace has one owner — you — and
+// everyone you bring in is a bidder or a viewer. Owner is reached by
+// transferring the workspace, never by invitation, so it is not an option
+// here and the server refuses it regardless of what is posted.
 const ROLE_OPTIONS = [
-  { value: "admin", label: "Admin", hint: "Settings, API keys, and members. No billing." },
-  { value: "bidder", label: "Bidder", hint: "Works the pipeline. No secret keys, no billing." },
-  { value: "viewer", label: "Viewer", hint: "Read-only. For a manager watching output." },
-  { value: "owner", label: "Owner", hint: "Full control, including billing." },
+  { value: "bidder", label: "Bidder", hint: "Works the pipeline: leads, proposals, clients. No secret keys, no members." },
+  { value: "viewer", label: "Viewer", hint: "Read-only. For someone watching output without touching it." },
 ];
+
+// Shown on the members list, where an existing owner still has to render.
+const ROLE_LABELS = { owner: "Owner", bidder: "Bidder", viewer: "Viewer" };
 
 const members = ref([]);
 const invitations = ref([]);
@@ -34,8 +39,10 @@ const inviting = ref(false);
 const busyId = ref(null);
 const overridesFor = ref(null); // member whose personal-permissions panel is open
 
-// Only an owner may grant the owner role.
-const roleChoices = () => (auth.tenantRole === "owner" ? ROLE_OPTIONS : ROLE_OPTIONS.filter((r) => r.value !== "owner"));
+// The same two, always. Kept as a function so the template reads the same as
+// before; there is no longer any branch on who is asking, because only the
+// owner can reach this endpoint at all.
+const roleChoices = () => ROLE_OPTIONS;
 
 async function load() {
   loading.value = true;
@@ -174,9 +181,20 @@ onMounted(load);
                 >
                   <SlidersHorizontal class="h-3.5 w-3.5" /> Permissions
                 </Button>
+                <!-- The owner is a label, not a dropdown: 'owner' is not one
+                     of the two assignable roles, so a select would render
+                     blank against it. Ownership moves through Transfer
+                     ownership on the Workspace tab. -->
+                <span
+                  v-if="m.is_owner"
+                  class="rounded-md border border-border bg-neutral-bg px-2 py-1 text-xs font-medium text-text-secondary"
+                >
+                  Owner
+                </span>
                 <select
+                  v-else
                   :value="m.role"
-                  :disabled="m.is_owner || busyId === m.id || !auth.can('members.assign_role')"
+                  :disabled="busyId === m.id || !auth.can('members.assign_role')"
                   @change="changeRole(m, $event.target.value)"
                   class="h-8 rounded-md border border-border-strong bg-white px-2 text-xs font-medium text-text-secondary focus:border-primary focus:outline-none disabled:opacity-60"
                 >
@@ -206,7 +224,7 @@ onMounted(load);
                 <div class="min-w-0">
                   <p class="truncate text-sm text-text-primary">{{ inv.email }}</p>
                   <p class="text-xs text-text-tertiary">
-                    {{ inv.role }} ·
+                    {{ ROLE_LABELS[inv.role] ?? inv.role }} ·
                     <span :class="inv.status === 'expired' ? 'text-danger' : 'text-warning'">{{ inv.status }}</span>
                   </p>
                 </div>

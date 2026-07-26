@@ -8,6 +8,8 @@ use App\Models\AppNotification;
 use App\Models\Lead;
 use App\Services\NotificationService;
 use App\Services\SettingsService;
+use App\Services\WhatsApp\WhatsAppCloudService;
+use App\Tenancy\Tenancy;
 
 /**
  * The single place a lead alert is decided and fanned out.
@@ -88,7 +90,7 @@ class NotificationDispatcher
 
         // Meta's Cloud API first when configured: no Mac, no tunnel, nothing
         // to go offline. Only fall back to the OpenClaw bridge when it isn't.
-        $cloud = app(\App\Services\WhatsApp\WhatsAppCloudService::class);
+        $cloud = app(WhatsAppCloudService::class);
 
         if ($cloud->isConfigured()) {
             $channels[] = 'whatsapp_cloud';
@@ -202,8 +204,29 @@ class NotificationDispatcher
         );
     }
 
+    /**
+     * The OpenClaw bridge is INTERNAL-ONLY (P8).
+     *
+     * It is not a product feature and cannot become one: it drives a QR-paired
+     * WhatsApp Web companion session on a specific Mac behind a specific
+     * tunnel. There is exactly one of those, it belongs to the company
+     * operating the platform, and a customer workspace pointing at it would
+     * send its lead alerts to somebody else's phone.
+     *
+     * So the resolution is explicit rather than incidental: plan 'internal'
+     * may use it, every other plan never attempts it. Those workspaces are
+     * not left silent — the bell, Web Push and their OWN Meta Cloud API
+     * number (a per-workspace credential, checked separately above) all still
+     * fire. Only this one shared, physical bridge is withheld.
+     */
     protected function whatsappAvailable(): bool
     {
+        $tenant = Tenancy::current();
+
+        if ($tenant === null || ! $tenant->isInternal()) {
+            return false;
+        }
+
         return (bool) $this->settings->bidderWhatsapp() && (bool) $this->settings->openClawUrl();
     }
 

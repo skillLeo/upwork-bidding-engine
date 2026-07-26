@@ -1,17 +1,32 @@
 <?php
 
+use App\Http\Controllers\AgentApiController;
 use App\Http\Controllers\AgentScoreController;
+use App\Http\Controllers\AiUsageController;
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\DiagnosticsController;
 use App\Http\Controllers\HealthPingController;
+use App\Http\Controllers\InvitationAcceptController;
 use App\Http\Controllers\LeadController;
+use App\Http\Controllers\MemberController;
+use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\PermissionEditorController;
+use App\Http\Controllers\Platform\HealthController;
+use App\Http\Controllers\Platform\ImpersonationController;
+use App\Http\Controllers\Platform\OwnershipController;
+use App\Http\Controllers\Platform\TenantController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\PushController;
 use App\Http\Controllers\SavedFilterController;
 use App\Http\Controllers\SessionController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\SocialAuthController;
+use App\Http\Controllers\TotpController;
 use App\Http\Controllers\VollnaWebhookController;
+use App\Http\Controllers\WhatsAppWebhookController;
+use App\Http\Controllers\WorkspaceController;
 use App\Http\Middleware\VerifyVollnaSecret;
 use Illuminate\Support\Facades\Route;
 
@@ -34,13 +49,13 @@ Route::post('/agent/score', AgentScoreController::class)
 // plus one status POST; deliberately nothing else (no settings, no
 // keys, no deletes). Every call is logged by the middleware.
 Route::prefix('agent')->middleware(['agent', 'throttle:60,1'])->group(function () {
-    Route::get('/leads', [\App\Http\Controllers\AgentApiController::class, 'leads']);
-    Route::get('/leads/{lead}', [\App\Http\Controllers\AgentApiController::class, 'lead']);
-    Route::get('/summary', [\App\Http\Controllers\AgentApiController::class, 'summary']);
-    Route::get('/clients/{client}', [\App\Http\Controllers\AgentApiController::class, 'client']);
-    Route::post('/leads/{lead}/status', [\App\Http\Controllers\AgentApiController::class, 'updateStatus']);
-    Route::post('/leads/{lead}/rescore', [\App\Http\Controllers\AgentApiController::class, 'rescore']);
-    Route::post('/leads/{lead}/rewrite', [\App\Http\Controllers\AgentApiController::class, 'rewrite']);
+    Route::get('/leads', [AgentApiController::class, 'leads']);
+    Route::get('/leads/{lead}', [AgentApiController::class, 'lead']);
+    Route::get('/summary', [AgentApiController::class, 'summary']);
+    Route::get('/clients/{client}', [AgentApiController::class, 'client']);
+    Route::post('/leads/{lead}/status', [AgentApiController::class, 'updateStatus']);
+    Route::post('/leads/{lead}/rescore', [AgentApiController::class, 'rescore']);
+    Route::post('/leads/{lead}/rewrite', [AgentApiController::class, 'rewrite']);
 });
 
 // Product name + logo — the sign-in screen needs these before anyone has
@@ -65,9 +80,9 @@ Route::get('/health/ping', HealthPingController::class)
 | possible at all — the OpenClaw path can only send, never receive.
 |----------------------------------------------------------------------
 */
-Route::get('/webhooks/whatsapp', [\App\Http\Controllers\WhatsAppWebhookController::class, 'verify'])
+Route::get('/webhooks/whatsapp', [WhatsAppWebhookController::class, 'verify'])
     ->middleware('throttle:webhooks');
-Route::post('/webhooks/whatsapp', [\App\Http\Controllers\WhatsAppWebhookController::class, 'handle'])
+Route::post('/webhooks/whatsapp', [WhatsAppWebhookController::class, 'handle'])
     ->middleware('throttle:webhooks');
 
 /*
@@ -107,17 +122,17 @@ Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])
 | see SocialAuthController's docblock for why that step is not optional.
 |----------------------------------------------------------------------
 */
-Route::get('/auth/google/redirect', [\App\Http\Controllers\SocialAuthController::class, 'redirect'])
+Route::get('/auth/google/redirect', [SocialAuthController::class, 'redirect'])
     ->middleware('throttle:login');
-Route::get('/auth/google/callback', [\App\Http\Controllers\SocialAuthController::class, 'callback'])
+Route::get('/auth/google/callback', [SocialAuthController::class, 'callback'])
     ->middleware('throttle:login');
-Route::post('/auth/google/link', [\App\Http\Controllers\SocialAuthController::class, 'link'])
+Route::post('/auth/google/link', [SocialAuthController::class, 'link'])
     ->middleware('throttle:otp');
 // Exchanges the opaque ?handoff= code the callback redirect carries for the
 // real payload (token, 2FA challenge, or link prompt) — see
 // SocialAuthController's class docblock for why the URL never carries that
 // payload directly.
-Route::post('/auth/google/exchange', [\App\Http\Controllers\SocialAuthController::class, 'exchange'])
+Route::post('/auth/google/exchange', [SocialAuthController::class, 'exchange'])
     ->middleware('throttle:otp');
 
 // The "this wasn't me" link in the new-device email. Unauthenticated by
@@ -131,9 +146,9 @@ Route::get('/auth/revoke-all/{user}', [SessionController::class, 'revokeAllFromE
 // Invitation accept — reached from the email link with no session. The raw
 // token is the credential (looked up by hash, single-use). Rate limited
 // because it is public and token-guessable in theory.
-Route::get('/invitations/show', [\App\Http\Controllers\InvitationAcceptController::class, 'show'])
+Route::get('/invitations/show', [InvitationAcceptController::class, 'show'])
     ->middleware('throttle:webhooks');
-Route::post('/invitations/accept', [\App\Http\Controllers\InvitationAcceptController::class, 'accept'])
+Route::post('/invitations/accept', [InvitationAcceptController::class, 'accept'])
     ->middleware('throttle:webhooks');
 
 // P5: an impersonation token acts as the tenant user across the WHOLE app,
@@ -158,10 +173,10 @@ Route::middleware(['auth:sanctum', 'impersonation.guard', 'enforce.2fa'])->group
 
     // Authenticator-app TOTP (P6) — enrol, confirm (the one place
     // two_factor_confirmed_at is ever set), regenerate recovery codes, disable.
-    Route::post('/profile/totp/enroll', [\App\Http\Controllers\TotpController::class, 'enroll']);
-    Route::post('/profile/totp/confirm', [\App\Http\Controllers\TotpController::class, 'confirm']);
-    Route::post('/profile/totp/recovery-codes/regenerate', [\App\Http\Controllers\TotpController::class, 'regenerateRecoveryCodes']);
-    Route::post('/profile/totp/disable', [\App\Http\Controllers\TotpController::class, 'disable']);
+    Route::post('/profile/totp/enroll', [TotpController::class, 'enroll']);
+    Route::post('/profile/totp/confirm', [TotpController::class, 'confirm']);
+    Route::post('/profile/totp/recovery-codes/regenerate', [TotpController::class, 'regenerateRecoveryCodes']);
+    Route::post('/profile/totp/disable', [TotpController::class, 'disable']);
 
     // Connected accounts (P6) — Google today.
     Route::get('/profile/social-accounts', [ProfileController::class, 'socialAccounts']);
@@ -186,7 +201,7 @@ Route::middleware(['auth:sanctum', 'impersonation.guard', 'enforce.2fa'])->group
     // ImpersonationGuard's route-name exemption) since it's how that state
     // ends. Not gated by platform.staff: the caller here is the
     // IMPERSONATED tenant user's token, not a platform-staff account.
-    Route::post('/platform/impersonate/end', [\App\Http\Controllers\Platform\ImpersonationController::class, 'end'])
+    Route::post('/platform/impersonate/end', [ImpersonationController::class, 'end'])
         ->name('platform.impersonation.end');
 
     /*
@@ -197,12 +212,12 @@ Route::middleware(['auth:sanctum', 'impersonation.guard', 'enforce.2fa'])->group
     |----------------------------------------------------------------------
     */
     Route::middleware('permission:workspace.manage')->group(function () {
-        Route::get('/workspace', [\App\Http\Controllers\WorkspaceController::class, 'show']);
-        Route::put('/workspace', [\App\Http\Controllers\WorkspaceController::class, 'update']);
-        Route::get('/workspace/export', [\App\Http\Controllers\WorkspaceController::class, 'exportData']);
+        Route::get('/workspace', [WorkspaceController::class, 'show']);
+        Route::put('/workspace', [WorkspaceController::class, 'update']);
+        Route::get('/workspace/export', [WorkspaceController::class, 'exportData']);
     });
-    Route::post('/workspace/transfer-ownership', [\App\Http\Controllers\WorkspaceController::class, 'transferOwnership']);
-    Route::delete('/workspace', [\App\Http\Controllers\WorkspaceController::class, 'destroy']);
+    Route::post('/workspace/transfer-ownership', [WorkspaceController::class, 'transferOwnership']);
+    Route::delete('/workspace', [WorkspaceController::class, 'destroy']);
 
     /*
     |----------------------------------------------------------------------
@@ -242,15 +257,15 @@ Route::middleware(['auth:sanctum', 'impersonation.guard', 'enforce.2fa'])->group
     |----------------------------------------------------------------------
     */
     Route::middleware('permission:notifications.view')->group(function () {
-        Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'index']);
-        Route::post('/notifications/read-all', [\App\Http\Controllers\NotificationController::class, 'markAllRead']);
-        Route::post('/notifications/{notification}/read', [\App\Http\Controllers\NotificationController::class, 'markRead']);
+        Route::get('/notifications', [NotificationController::class, 'index']);
+        Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
+        Route::post('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
     });
 
     // Web Push (lock-screen / closed-browser notifications).
-    Route::get('/push/vapid-key', [\App\Http\Controllers\PushController::class, 'vapidKey']);
-    Route::post('/push/subscribe', [\App\Http\Controllers\PushController::class, 'subscribe']);
-    Route::post('/push/unsubscribe', [\App\Http\Controllers\PushController::class, 'unsubscribe']);
+    Route::get('/push/vapid-key', [PushController::class, 'vapidKey']);
+    Route::post('/push/subscribe', [PushController::class, 'subscribe']);
+    Route::post('/push/unsubscribe', [PushController::class, 'unsubscribe']);
 
     Route::get('/saved-filters', [SavedFilterController::class, 'index']);
     Route::post('/saved-filters', [SavedFilterController::class, 'store']);
@@ -296,7 +311,7 @@ Route::middleware(['auth:sanctum', 'impersonation.guard', 'enforce.2fa'])->group
     Route::post('/settings/test/{service}', [SettingsController::class, 'testConnection'])
         ->middleware('permission:settings.test_connections');
 
-    Route::get('/ai-usage', \App\Http\Controllers\AiUsageController::class)
+    Route::get('/ai-usage', AiUsageController::class)
         ->middleware('permission:ai_usage.view');
 
     Route::middleware('permission:analytics.view')->group(function () {
@@ -311,9 +326,9 @@ Route::middleware(['auth:sanctum', 'impersonation.guard', 'enforce.2fa'])->group
     |----------------------------------------------------------------------
     */
     Route::middleware('permission:permissions.edit')->group(function () {
-        Route::put('/roles/{role}/permissions', [\App\Http\Controllers\PermissionEditorController::class, 'updateRole']);
-        Route::get('/members/{user}/overrides', [\App\Http\Controllers\PermissionEditorController::class, 'showOverrides']);
-        Route::put('/members/{user}/overrides', [\App\Http\Controllers\PermissionEditorController::class, 'updateOverrides']);
+        Route::put('/roles/{role}/permissions', [PermissionEditorController::class, 'updateRole']);
+        Route::get('/members/{user}/overrides', [PermissionEditorController::class, 'showOverrides']);
+        Route::put('/members/{user}/overrides', [PermissionEditorController::class, 'updateOverrides']);
     });
 
     /*
@@ -323,18 +338,18 @@ Route::middleware(['auth:sanctum', 'impersonation.guard', 'enforce.2fa'])->group
     |----------------------------------------------------------------------
     */
     Route::middleware('permission:members.invite')->group(function () {
-        Route::get('/members', [\App\Http\Controllers\MemberController::class, 'index']);
-        Route::post('/members/invite', [\App\Http\Controllers\MemberController::class, 'invite']);
-        Route::post('/members/{invitation}/resend', [\App\Http\Controllers\MemberController::class, 'resend']);
+        Route::get('/members', [MemberController::class, 'index']);
+        Route::post('/members/invite', [MemberController::class, 'invite']);
+        Route::post('/members/{invitation}/resend', [MemberController::class, 'resend']);
     });
-    Route::put('/members/{user}/role', [\App\Http\Controllers\MemberController::class, 'changeRole'])
+    Route::put('/members/{user}/role', [MemberController::class, 'changeRole'])
         ->middleware('permission:members.assign_role');
-    Route::delete('/members/{user}', [\App\Http\Controllers\MemberController::class, 'remove'])
+    Route::delete('/members/{user}', [MemberController::class, 'remove'])
         ->middleware('permission:members.remove');
 
     // The read-only Roles matrix — any member who can see Settings can see
     // what each role can do.
-    Route::get('/roles-matrix', [\App\Http\Controllers\MemberController::class, 'rolesMatrix'])
+    Route::get('/roles-matrix', [MemberController::class, 'rolesMatrix'])
         ->middleware('permission:settings.view');
 
     /*
@@ -347,14 +362,25 @@ Route::middleware(['auth:sanctum', 'impersonation.guard', 'enforce.2fa'])->group
     |----------------------------------------------------------------------
     */
     Route::prefix('platform')->middleware('platform.staff')->group(function () {
-        Route::get('/tenants', [\App\Http\Controllers\Platform\TenantController::class, 'index']);
-        Route::get('/tenants/{tenant}', [\App\Http\Controllers\Platform\TenantController::class, 'show']);
+        Route::get('/tenants', [TenantController::class, 'index']);
+        // The closed-signup door: create a workspace and invite its owner.
+        // Platform-owner only (checked in the controller, not just here).
+        Route::post('/tenants', [TenantController::class, 'store']);
+        Route::get('/tenants/{tenant}', [TenantController::class, 'show']);
 
-        Route::post('/tenants/{tenant}/users/{user}/impersonate', [\App\Http\Controllers\Platform\ImpersonationController::class, 'start']);
+        // Platform ownership — exactly one holder, moved only by the holder,
+        // and only after re-entering their password (plus TOTP if enrolled).
+        Route::get('/ownership', [OwnershipController::class, 'show']);
+        Route::post('/ownership/transfer', [OwnershipController::class, 'transfer']);
 
-        Route::get('/settings', [\App\Http\Controllers\Platform\SettingsController::class, 'show']);
-        Route::put('/settings', [\App\Http\Controllers\Platform\SettingsController::class, 'update']);
+        Route::post('/tenants/{tenant}/users/{user}/impersonate', [ImpersonationController::class, 'start']);
 
-        Route::get('/health', \App\Http\Controllers\Platform\HealthController::class);
+        Route::get('/settings', [App\Http\Controllers\Platform\SettingsController::class, 'show']);
+        Route::put('/settings', [App\Http\Controllers\Platform\SettingsController::class, 'update']);
+        // SMTP moved to platform custody with the rest of the platform-only
+        // keys (P8), and its "does this actually deliver" check came with it.
+        Route::post('/settings/test-mail', [App\Http\Controllers\Platform\SettingsController::class, 'testMail']);
+
+        Route::get('/health', HealthController::class);
     });
 });

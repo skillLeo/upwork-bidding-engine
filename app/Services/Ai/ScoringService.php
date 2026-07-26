@@ -40,7 +40,7 @@ class ScoringService
     {
         $system = $this->systemPrompt();
         $user = $this->jobContent($lead);
-        $model = (string) $this->settings->get('scoring_model', 'claude-haiku-4-5');
+        $model = (string) $this->settings->platform('scoring_model', 'claude-haiku-4-5');
 
         $response = $this->ai->complete('scoring', $system, $user, $model, self::MAX_TOKENS, $lead->id);
         $parsed = $this->parse($response->text);

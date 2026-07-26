@@ -2,15 +2,20 @@
 
 namespace App\Http\Controllers;
 
+use App\Authorization\Permissions;
 use App\Enums\ActivityType;
 use App\Http\Requests\Settings\UpdateSettingsRequest;
 use App\Models\ActivityLog;
 use App\Services\OpenClawService;
 use App\Services\SettingsService;
+use App\Services\WhatsApp\WhatsAppCloudService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class SettingsController extends Controller
 {
@@ -39,7 +44,7 @@ class SettingsController extends Controller
             // to change exactly this field and nothing else. A key the caller
             // doesn't hold is a hard 403 NAMING the key — never a silent drop
             // that looks like a save that worked.
-            if (! $user?->can(\App\Authorization\Permissions::forSettingKey($key))) {
+            if (! $user?->can(Permissions::forSettingKey($key))) {
                 abort(403, "You do not have permission to change [{$key}].");
             }
 
@@ -105,7 +110,7 @@ class SettingsController extends Controller
      */
     public function regenerateAgentToken(): JsonResponse
     {
-        $token = \Illuminate\Support\Str::random(48);
+        $token = Str::random(48);
         $this->settings->set('agent_api_token', $token);
 
         ActivityLog::record('agent_token_regenerated');
@@ -170,7 +175,7 @@ class SettingsController extends Controller
      * present on this host, no new dependency) rather than trusting upload
      * size to stay reasonable.
      */
-    private function storeOptimizedLogo(\Illuminate\Http\UploadedFile $file): string
+    private function storeOptimizedLogo(UploadedFile $file): string
     {
         $maxDimension = 512;
         $info = getimagesize($file->getRealPath());
@@ -181,7 +186,7 @@ class SettingsController extends Controller
             IMAGETYPE_WEBP => 'webp',
             default => 'jpg',
         };
-        $filename = 'branding/'.\Illuminate\Support\Str::random(40).'.'.$extension;
+        $filename = 'branding/'.Str::random(40).'.'.$extension;
 
         if ($width <= $maxDimension && $height <= $maxDimension) {
             Storage::disk('public')->put($filename, file_get_contents($file->getRealPath()));
@@ -242,21 +247,21 @@ class SettingsController extends Controller
             'openclaw' => $openClaw->testConnection(),
             // Prefer Meta's Cloud API when it's configured — that's the path
             // real alerts take, so it's the one worth proving.
-            'whatsapp' => app(\App\Services\WhatsApp\WhatsAppCloudService::class)->isConfigured()
-                ? app(\App\Services\WhatsApp\WhatsAppCloudService::class)->testConnection()
+            'whatsapp' => app(WhatsAppCloudService::class)->isConfigured()
+                ? app(WhatsAppCloudService::class)->testConnection()
                 : $openClaw->testWhatsAppConnection(),
             'vollna' => $this->testVollna(),
             'mail' => $this->testMail($request),
             'heartbeat' => $this->testHeartbeat(),
             'anthropic' => $this->testAiProvider(
                 'https://api.anthropic.com/v1/models',
-                ['x-api-key' => (string) $this->settings->get('anthropic_api_key'), 'anthropic-version' => '2023-06-01'],
-                filled($this->settings->get('anthropic_api_key')),
+                ['x-api-key' => (string) $this->settings->platform('anthropic_api_key'), 'anthropic-version' => '2023-06-01'],
+                filled($this->settings->platform('anthropic_api_key')),
             ),
             'openai' => $this->testAiProvider(
                 'https://api.openai.com/v1/models',
-                ['Authorization' => 'Bearer '.$this->settings->get('openai_api_key')],
-                filled($this->settings->get('openai_api_key')),
+                ['Authorization' => 'Bearer '.$this->settings->platform('openai_api_key')],
+                filled($this->settings->platform('openai_api_key')),
             ),
         };
 
@@ -283,7 +288,7 @@ class SettingsController extends Controller
         }
 
         try {
-            $response = \Illuminate\Support\Facades\Http::withHeaders($headers)->timeout(15)->get($url);
+            $response = Http::withHeaders($headers)->timeout(15)->get($url);
 
             if ($response->successful()) {
                 return ['success' => true, 'message' => 'API key works — models endpoint responded OK.'];
@@ -342,7 +347,7 @@ class SettingsController extends Controller
         // Slightly longer than the scheduler's own 3s budget: this one is a
         // human waiting on a button, not a tick that must not be delayed.
         try {
-            $response = \Illuminate\Support\Facades\Http::timeout(5)->connectTimeout(3)->get($url);
+            $response = Http::timeout(5)->connectTimeout(3)->get($url);
 
             if ($response->successful()) {
                 return ['success' => true, 'message' => "Ping delivered — monitor answered HTTP {$response->status()}."];
@@ -400,10 +405,24 @@ class SettingsController extends Controller
         // value is merely hidden.
         $user = $request?->user();
 
+        // PLATFORM-ONLY KEYS ARE ABSENT FROM THE TENANT PAYLOAD ENTIRELY (P8).
+        // The pooled AI credentials and model IDs, the scoring rubric and
+        // drafting skill, the SMTP credentials, signup_mode and the plan
+        // catalog are the platform's, not the workspace's — a workspace owner
+        // cannot see or edit them, and they are edited in the platform
+        // console instead. Omitted rather than shown read-only for the same
+        // reason a secret they lack permission for is omitted: shipping the
+        // shape invites the assumption the value is merely hidden.
+        $platformOnly = (array) config('tenancy.platform_only_keys', []);
+
         foreach (SettingsService::SCHEMA as $key => $meta) {
             $value = $all[$key] ?? null;
 
-            if ($meta['secret'] && ! $user?->can(\App\Authorization\Permissions::forSettingKey($key))) {
+            if (in_array($key, $platformOnly, true)) {
+                continue;
+            }
+
+            if ($meta['secret'] && ! $user?->can(Permissions::forSettingKey($key))) {
                 continue;
             }
 

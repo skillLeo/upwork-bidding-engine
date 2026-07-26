@@ -93,8 +93,8 @@ class ProposalService
 
         $system = $this->systemPrompt();
         $jobBlock = $this->jobBlock($lead, $scoring);
-        $writerModel = (string) $this->settings->get('proposal_model', 'claude-sonnet-5');
-        $reviewModel = (string) $this->settings->get('review_model', 'claude-sonnet-5');
+        $writerModel = (string) $this->settings->platform('proposal_model', 'claude-sonnet-5');
+        $reviewModel = (string) $this->settings->platform('review_model', 'claude-sonnet-5');
         $gate = $this->settings->proposalGate();
 
         $response = $this->ai->complete(

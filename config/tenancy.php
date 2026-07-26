@@ -61,12 +61,27 @@ return [
     | and improved for everyone. Mail credentials are infrastructure, not a
     | tenant concern. Writing a tenant override for any of these throws.
     |
+    | P8 added the AI provider credentials and model choices. The platform now
+    | pays for AI centrally out of one pooled set of keys, so a workspace can
+    | neither see nor supply one — spend is governed instead by that
+    | workspace's own ai_monthly_token_cap, enforced in AiManager before every
+    | call. A tenant that could set its own model could also point pooled
+    | spend at the most expensive model available, which is the same hole from
+    | a different direction; hence the model IDs move too.
+    |
     */
     'platform_only_keys' => [
         'signup_mode',
         'scoring_system_prompt',
         'proposal_skill',
         'stage_2_scoring_addendum',
+        // P8 — pooled AI credentials and the models they may be spent on.
+        'ai_provider',
+        'anthropic_api_key',
+        'openai_api_key',
+        'scoring_model',
+        'proposal_model',
+        'review_model',
         'mail_host',
         'mail_port',
         'mail_username',

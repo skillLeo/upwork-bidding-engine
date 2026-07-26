@@ -1,13 +1,15 @@
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { toast } from "vue-sonner";
-import { Search } from "@lucide/vue";
+import { Plus, Search } from "@lucide/vue";
 import PlatformShell from "@/components/platform/PlatformShell.vue";
 import { apiClient, apiErrorMessage } from "@/lib/api-client";
 import { relativeTime } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth";
 
 const router = useRouter();
+const auth = useAuthStore();
 const loading = ref(true);
 const tenants = ref([]);
 const search = ref("");
@@ -41,6 +43,51 @@ const healthDot = (status) => ({
   billing_blocked: "bg-danger",
 }[status] ?? "bg-white/30");
 
+// ---------------------------------------------------------- new workspace
+// The closed-signup door: the platform owner opens a workspace for a
+// customer and the owner invitation goes out by email. This is the only
+// place an owner invitation is ever minted.
+const creating = ref(false);
+const saving = ref(false);
+const form = reactive({ name: "", slug: "", specialization: "", owner_email: "" });
+
+// Slug suggested from the name, but only until it is typed into by hand —
+// silently rewriting somebody's deliberate slug is worse than a blank field.
+const slugTouched = ref(false);
+watch(
+  () => form.name,
+  (name) => {
+    if (!slugTouched.value) {
+      form.slug = name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    }
+  },
+);
+
+function openCreate() {
+  Object.assign(form, { name: "", slug: "", specialization: "", owner_email: "" });
+  slugTouched.value = false;
+  creating.value = true;
+}
+
+async function createWorkspace() {
+  saving.value = true;
+  try {
+    const res = await apiClient.post("/platform/tenants", {
+      name: form.name.trim(),
+      slug: form.slug.trim(),
+      specialization: form.specialization.trim() || null,
+      owner_email: form.owner_email.trim(),
+    });
+    toast.success(res.data.data.message);
+    creating.value = false;
+    await load();
+  } catch (error) {
+    toast.error(apiErrorMessage(error, "Could not create the workspace."));
+  } finally {
+    saving.value = false;
+  }
+}
+
 onMounted(load);
 </script>
 
@@ -67,6 +114,79 @@ onMounted(load);
         <option value="past_due">Past due</option>
         <option value="suspended">Suspended</option>
       </select>
+
+      <button
+        v-if="auth.isPlatformOwner"
+        type="button"
+        @click="openCreate"
+        class="ml-auto flex h-9 items-center gap-1.5 rounded-md bg-amber-500 px-3 text-sm font-medium text-black hover:bg-amber-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+      >
+        <Plus class="h-4 w-4" /> New workspace
+      </button>
+    </div>
+
+    <div v-if="creating" class="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+      <h2 class="mb-1 text-sm font-semibold text-white">New workspace</h2>
+      <p class="mb-4 text-xs text-white/50">
+        Creates the workspace on a trial and emails its owner an invitation. They become the
+        owner when they accept — nobody else can be made an owner of it afterwards.
+      </p>
+
+      <div class="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label class="mb-1 block text-xs font-medium text-white/70">Workspace name</label>
+          <input
+            v-model="form.name"
+            placeholder="Northwind Design"
+            class="h-9 w-full rounded-md border border-white/10 bg-white/5 px-3 text-sm text-white placeholder:text-white/25 focus:border-amber-500 focus:outline-none"
+          />
+        </div>
+        <div>
+          <label class="mb-1 block text-xs font-medium text-white/70">Slug</label>
+          <input
+            v-model="form.slug"
+            @input="slugTouched = true"
+            placeholder="northwind-design"
+            class="h-9 w-full rounded-md border border-white/10 bg-white/5 px-3 font-mono text-sm text-white placeholder:text-white/25 focus:border-amber-500 focus:outline-none"
+          />
+        </div>
+        <div>
+          <label class="mb-1 block text-xs font-medium text-white/70">Specialization <span class="text-white/30">(optional)</span></label>
+          <input
+            v-model="form.specialization"
+            placeholder="Graphic design"
+            class="h-9 w-full rounded-md border border-white/10 bg-white/5 px-3 text-sm text-white placeholder:text-white/25 focus:border-amber-500 focus:outline-none"
+          />
+          <p class="mt-1 text-xs text-white/40">A label for this list. Scoring reads their stack lists, never this.</p>
+        </div>
+        <div>
+          <label class="mb-1 block text-xs font-medium text-white/70">Owner email</label>
+          <input
+            v-model="form.owner_email"
+            type="email"
+            placeholder="owner@northwind.com"
+            class="h-9 w-full rounded-md border border-white/10 bg-white/5 px-3 text-sm text-white placeholder:text-white/25 focus:border-amber-500 focus:outline-none"
+          />
+        </div>
+      </div>
+
+      <div class="mt-4 flex items-center gap-2">
+        <button
+          type="button"
+          :disabled="saving || !form.name || !form.slug || !form.owner_email"
+          @click="createWorkspace"
+          class="h-9 rounded-md bg-amber-500 px-3 text-sm font-medium text-black hover:bg-amber-400 disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+        >
+          {{ saving ? "Creating…" : "Create and invite owner" }}
+        </button>
+        <button
+          type="button"
+          @click="creating = false"
+          class="h-9 rounded-md border border-white/10 px-3 text-sm text-white/70 hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+        >
+          Cancel
+        </button>
+      </div>
     </div>
 
     <div class="overflow-hidden rounded-lg border border-white/10">
@@ -74,6 +194,7 @@ onMounted(load);
         <thead class="bg-white/5 text-left text-xs tracking-wide text-white/50 uppercase">
           <tr>
             <th class="px-3 py-2 font-medium">Name</th>
+            <th class="px-3 py-2 font-medium">Specialization</th>
             <th class="px-3 py-2 font-medium">Plan</th>
             <th class="px-3 py-2 font-medium">Status</th>
             <th class="px-3 py-2 font-medium">Members</th>
@@ -84,8 +205,8 @@ onMounted(load);
           </tr>
         </thead>
         <tbody class="divide-y divide-white/5">
-          <tr v-if="loading"><td colspan="8" class="px-3 py-6 text-center text-white/40">Loading…</td></tr>
-          <tr v-else-if="!tenants.length"><td colspan="8" class="px-3 py-6 text-center text-white/40">No tenants match.</td></tr>
+          <tr v-if="loading"><td colspan="9" class="px-3 py-6 text-center text-white/40">Loading…</td></tr>
+          <tr v-else-if="!tenants.length"><td colspan="9" class="px-3 py-6 text-center text-white/40">No tenants match.</td></tr>
           <tr
             v-for="t in tenants"
             :key="t.id"
@@ -93,6 +214,7 @@ onMounted(load);
             @click="router.push(`/platform/tenants/${t.id}`)"
           >
             <td class="px-3 py-2.5 font-medium text-white">{{ t.name }}<span class="ml-1.5 text-xs text-white/30">{{ t.slug }}</span></td>
+            <td class="px-3 py-2.5 text-white/60">{{ t.specialization || "—" }}</td>
             <td class="px-3 py-2.5 capitalize">{{ t.plan }}</td>
             <td class="px-3 py-2.5 capitalize">{{ t.status }}</td>
             <td class="px-3 py-2.5">{{ t.members }}</td>

@@ -3,6 +3,8 @@
 namespace App\Services\Ai;
 
 use App\Services\SettingsService;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -45,7 +47,7 @@ class AnthropicProvider implements AiProvider
 
     public function isConfigured(): bool
     {
-        return filled($this->settings->get('anthropic_api_key'));
+        return filled($this->settings->platform('anthropic_api_key'));
     }
 
     public function complete(string $systemPrompt, string $userContent, string $model, int $maxTokens): AiResponse
@@ -56,7 +58,7 @@ class AnthropicProvider implements AiProvider
         // so the same shape is valid on every model in the dropdown (Sonnet 5
         // and Opus 4.8 reject sampling params outright).
         $response = Http::withHeaders([
-            'x-api-key' => (string) $this->settings->get('anthropic_api_key'),
+            'x-api-key' => (string) $this->settings->platform('anthropic_api_key'),
             'anthropic-version' => '2023-06-01',
         ])
             ->acceptJson()
@@ -64,8 +66,8 @@ class AnthropicProvider implements AiProvider
             // Same reasoning as OpenAiProvider: a 429 is usually a
             // self-clearing token-bucket limit, worth retrying before it
             // counts as a real failure toward AiManager's failover.
-            ->retry([3000, 8000, 20000], 0, fn ($e) => $e instanceof \Illuminate\Http\Client\ConnectionException
-                || ($e instanceof \Illuminate\Http\Client\RequestException && $e->response->status() === 429))
+            ->retry([3000, 8000, 20000], 0, fn ($e) => $e instanceof ConnectionException
+                || ($e instanceof RequestException && $e->response->status() === 429))
             ->post('https://api.anthropic.com/v1/messages', [
                 'model' => $model,
                 'max_tokens' => $maxTokens,

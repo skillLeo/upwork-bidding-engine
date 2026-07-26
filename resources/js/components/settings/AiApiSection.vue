@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed, watch } from "vue";
+import { ref, reactive } from "vue";
 import { toast } from "vue-sonner";
 import Card from "@/components/ui/Card.vue";
 import Input from "@/components/ui/Input.vue";
@@ -12,121 +12,53 @@ import Button from "@/components/ui/Button.vue";
 import Label from "@/components/ui/Label.vue";
 import FieldHint from "@/components/ui/FieldHint.vue";
 import Textarea from "@/components/ui/Textarea.vue";
-import SecretField from "@/components/ui/SecretField.vue";
-import TestConnectionButton from "@/components/settings/TestConnectionButton.vue";
 import { saveSettings } from "@/composables/useSettings";
 import { apiErrorMessage } from "@/lib/api-client";
+
+// WHAT IS NOT ON THIS SCREEN, AND WHY (P8).
+//
+// The AI provider, the two API keys, and the three model IDs used to live
+// here. They are platform-level now: the platform pays for AI centrally out
+// of pooled keys, and governs each workspace's share through that
+// workspace's own monthly token cap. A workspace that could choose its own
+// model could point pooled spend at the most expensive one available, so the
+// models moved with the keys.
+//
+// The scoring rules and the drafting skill are gone for a different reason.
+// They are the METHODOLOGY — how to score, how to write — and that is the
+// product itself, identical for every workspace and edited only by the
+// platform owner. What stays here is everything specific to THIS workspace:
+// its track record, its signature, its word counts, its banned phrases.
+//
+// The server enforces both: the six AI keys and the prompt bodies are absent
+// from the settings payload entirely, and writing a tenant override for one
+// throws.
 
 const props = defineProps({ settings: { type: Object, required: true } });
 const emit = defineEmits(["saved"]);
 
-// Verified against the current Anthropic model catalog — never guessed.
-const anthropicModels = [
-  { id: "claude-haiku-4-5", label: "Claude Haiku 4.5 — $1/$5 per MTok (fast, cheap)" },
-  { id: "claude-sonnet-5", label: "Claude Sonnet 5 — $3/$15 per MTok (best writing)" },
-  { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6 — $3/$15 per MTok" },
-  { id: "claude-opus-4-8", label: "Claude Opus 4.8 — $5/$25 per MTok (most capable)" },
-];
-
-const openaiModels = [
-  { id: "gpt-4o-mini", label: "GPT-4o mini — $0.15/$0.60 per MTok (fast, cheap)" },
-  { id: "gpt-4o", label: "GPT-4o — $2.50/$10 per MTok" },
-];
-
-const anthropicKey = ref("");
-const openaiKey = ref("");
 const form = reactive({
-  ai_provider: props.settings.ai_provider ?? "anthropic",
-  scoring_model: props.settings.scoring_model ?? "claude-haiku-4-5",
-  proposal_model: props.settings.proposal_model ?? "claude-sonnet-5",
-  review_model: props.settings.review_model ?? "claude-sonnet-5",
-  scoring_system_prompt: props.settings.scoring_system_prompt ?? "",
   account_stage: props.settings.account_stage ?? "stage_1_new",
-  stage_2_scoring_addendum: props.settings.stage_2_scoring_addendum ?? "",
-  proposal_skill: props.settings.proposal_skill ?? "",
   project_facts: props.settings.project_facts ?? "",
   proposal_reference: props.settings.proposal_reference ?? "",
-  training_system_prompt: props.settings.training_system_prompt ?? "",
   proposal_writing_enabled: props.settings.proposal_writing_enabled ?? true,
   proposal_quality_gate: props.settings.proposal_quality_gate ?? true,
-  proposal_min_words: props.settings.proposal_min_words ?? 110,
-  proposal_max_words: props.settings.proposal_max_words ?? 180,
+  proposal_min_words: props.settings.proposal_min_words ?? 90,
+  proposal_max_words: props.settings.proposal_max_words ?? 150,
   proposal_signature: props.settings.proposal_signature ?? "",
   proposal_required_phrases: [...(props.settings.proposal_required_phrases ?? [])],
   proposal_banned_phrases: [...(props.settings.proposal_banned_phrases ?? [])],
 });
 const saving = ref(false);
 
-const modelOptions = computed(() =>
-  form.ai_provider === "openai" ? openaiModels : anthropicModels,
-);
-
-// The server's actual live values — deliberately read straight from the
-// prop, never from `form`, so this can never drift even if the reactive
-// form object is mutated. This is what genuinely runs right now, as
-// opposed to whatever is sitting unsaved in the dropdowns below.
-const liveProviderLabel = computed(() =>
-  props.settings.ai_provider === "openai" ? "OpenAI" : "Anthropic (Claude)",
-);
-
-const allModels = computed(() => [...anthropicModels, ...openaiModels]);
-const modelLabel = (id) => allModels.value.find((m) => m.id === id)?.label ?? id;
-
-// Named so a switch that never reaches Save (Test Connection succeeding
-// felt like confirmation enough, then the page was closed) is impossible
-// to miss — this is exactly the bug that shipped once already: the
-// dropdown showed OpenAI while the database still said Anthropic, silently,
-// for hours.
-const unsavedChanges = computed(() => {
-  const changes = [];
-  if (form.ai_provider !== (props.settings.ai_provider ?? "anthropic")) {
-    changes.push(`Provider → ${form.ai_provider === "openai" ? "OpenAI" : "Anthropic"}`);
-  }
-  if (form.scoring_model !== props.settings.scoring_model) {
-    changes.push(`Scoring model → ${modelLabel(form.scoring_model)}`);
-  }
-  if (form.proposal_model !== props.settings.proposal_model) {
-    changes.push(`Proposal model → ${modelLabel(form.proposal_model)}`);
-  }
-  if (form.review_model !== props.settings.review_model) {
-    changes.push(`Review model → ${modelLabel(form.review_model)}`);
-  }
-  return changes;
-});
-
-// Switching provider swaps the model lists — snap any model that belongs
-// to the other provider onto this provider's equivalent tier, so what you
-// see is exactly what the backend will run.
-watch(
-  () => form.ai_provider,
-  (provider) => {
-    const list = provider === "openai" ? openaiModels : anthropicModels;
-    if (!list.some((m) => m.id === form.scoring_model)) {
-      form.scoring_model = provider === "openai" ? "gpt-4o-mini" : "claude-haiku-4-5";
-    }
-    if (!list.some((m) => m.id === form.proposal_model)) {
-      form.proposal_model = provider === "openai" ? "gpt-4o" : "claude-sonnet-5";
-    }
-    if (!list.some((m) => m.id === form.review_model)) {
-      form.review_model = provider === "openai" ? "gpt-4o" : "claude-sonnet-5";
-    }
-  },
-);
-
 async function handleSave() {
   saving.value = true;
   try {
-    await saveSettings({
-      ...form,
-      anthropic_api_key: anthropicKey.value,
-      openai_api_key: openaiKey.value,
-    });
-    anthropicKey.value = "";
-    openaiKey.value = "";
-    toast.success("AI settings saved.");
+    await saveSettings({ ...form });
+    toast.success("Proposal settings saved.");
     emit("saved");
   } catch (error) {
-    toast.error(apiErrorMessage(error, "Could not save AI settings."));
+    toast.error(apiErrorMessage(error, "Could not save proposal settings."));
   } finally {
     saving.value = false;
   }
@@ -136,207 +68,57 @@ async function handleSave() {
 <template>
   <Card>
     <CardHeader>
-      <CardTitle>AI models &amp; prompts</CardTitle>
+      <CardTitle>Proposals &amp; facts</CardTitle>
     </CardHeader>
     <CardContent class="space-y-4">
       <CardDescription>
-        Scoring and proposals run directly against the AI provider's API from this server. The
-        rules below are the entire brain — edit them here any time, no deploy needed.
+        Everything here is yours alone — your track record, your signature, your word counts.
+        How proposals are scored and written is the same for every workspace and is set by the
+        platform, so it isn't editable here.
       </CardDescription>
 
-      <div
-        v-if="unsavedChanges.length"
-        class="flex flex-wrap items-center gap-2 rounded-md border border-warning-border bg-warning-bg px-3 py-2 text-xs font-medium text-warning"
-      >
-        <span>Not yet live — nothing below has taken effect until you click Save:</span>
-        <span v-for="change in unsavedChanges" :key="change" class="rounded-pill bg-white/60 px-2 py-0.5">
-          {{ change }}
-        </span>
-      </div>
-
-      <div class="grid gap-4 sm:grid-cols-2">
-        <div>
-          <div class="flex items-center justify-between gap-2">
-            <Label>Provider</Label>
-            <span class="text-xs text-text-tertiary">
-              Currently running: <span class="font-semibold text-text-secondary">{{ liveProviderLabel }}</span>
-            </span>
-          </div>
-          <select
-            v-model="form.ai_provider"
-            class="h-10 w-full rounded-md border border-border-strong bg-white px-3 text-sm text-text-secondary focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none"
-          >
-            <option value="anthropic">Anthropic (Claude)</option>
-            <option value="openai">OpenAI</option>
-          </select>
-          <FieldHint>
-            Changing this does nothing until you click "Save AI settings" below — testing a key's
-            connection is a separate action and does not switch the live provider.
-            If the primary fails 3 times in a row, calls fail over to the other provider for 15
-            minutes automatically (needs its key set).
-          </FieldHint>
-        </div>
-        <div>
-          <Label>Scoring model</Label>
-          <select
-            v-model="form.scoring_model"
-            class="h-10 w-full rounded-md border border-border-strong bg-white px-3 text-sm text-text-secondary focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none"
-          >
-            <option v-for="m in modelOptions" :key="m.id" :value="m.id">{{ m.label }}</option>
-          </select>
-          <FieldHint>Runs on every lead that passes the free hard filters — keep it cheap.</FieldHint>
-        </div>
-      </div>
-
-      <div class="grid gap-4 sm:grid-cols-2">
-        <div>
-          <Label>Proposal model</Label>
-          <select
-            v-model="form.proposal_model"
-            class="h-10 w-full rounded-md border border-border-strong bg-white px-3 text-sm text-text-secondary focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none"
-          >
-            <option v-for="m in modelOptions" :key="m.id" :value="m.id">{{ m.label }}</option>
-          </select>
-          <FieldHint>
-            Only runs when the score clears your cutoff — below-cutoff leads never pay for a
-            proposal.
-          </FieldHint>
-        </div>
-        <div>
-          <Label>Review model</Label>
-          <select
-            v-model="form.review_model"
-            class="h-10 w-full rounded-md border border-border-strong bg-white px-3 text-sm text-text-secondary focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none"
-          >
-            <option v-for="m in modelOptions" :key="m.id" :value="m.id">{{ m.label }}</option>
-          </select>
-          <FieldHint>
-            Grades every draft against your rules before it ships — keep this strong; a weak
-            model grading its own homework is how violations slip through.
-          </FieldHint>
-        </div>
-      </div>
-
-      <div class="grid gap-4 sm:grid-cols-2">
-        <div class="space-y-2">
-          <SecretField
-            label="Anthropic API key"
-            :is-set="settings.anthropic_api_key.is_set"
-            :masked="settings.anthropic_api_key.masked"
-            v-model="anthropicKey"
-            hint="console.anthropic.com → API keys."
-          />
-          <TestConnectionButton service="anthropic" />
-        </div>
-        <div class="space-y-2">
-          <SecretField
-            label="OpenAI API key (failover)"
-            :is-set="settings.openai_api_key.is_set"
-            :masked="settings.openai_api_key.masked"
-            v-model="openaiKey"
-            hint="Optional — enables automatic failover."
-          />
-          <TestConnectionButton service="openai" />
-        </div>
-      </div>
-
-      <div class="flex justify-end border-b border-border pb-4">
-        <Button @click="handleSave" :loading="saving" variant="secondary">
-          Save provider &amp; models
-        </Button>
-      </div>
-
       <div>
-        <Label>Scoring rules (system prompt)</Label>
-        <Textarea
-          v-model="form.scoring_system_prompt"
-          rows="14"
-          class="font-mono text-xs"
-          placeholder="Paste your full scoring rules here — hard auto-rejects, weights, score definitions, and the JSON output line."
-        />
+        <Label>Account stage</Label>
+        <select
+          v-model="form.account_stage"
+          class="h-10 w-full rounded-md border border-border-strong bg-white px-3 text-sm text-text-secondary focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none"
+        >
+          <option value="stage_1_new">Stage 1 — new account (no reviews yet)</option>
+          <option value="stage_2_established">Stage 2 — established (has reviews + JSS)</option>
+        </select>
         <FieldHint>
-          Must end by asking for JSON only:
-          {"score": n, "bid": true/false, "boost": true/false, "reason": "one line"}
-        </FieldHint>
-      </div>
-
-      <div class="grid gap-4 sm:grid-cols-2">
-        <div>
-          <Label>Account stage</Label>
-          <select
-            v-model="form.account_stage"
-            class="h-10 w-full rounded-md border border-border-strong bg-white px-3 text-sm text-text-secondary focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none"
-          >
-            <option value="stage_1_new">Stage 1 — new account (no reviews yet)</option>
-            <option value="stage_2_established">Stage 2 — established (has reviews + JSS)</option>
-          </select>
-          <FieldHint>
-            Stage 1 scores exactly as today and force-disables BOOST (the rubric's own Stage 1
-            advice). Flip to Stage 2 once the account has reviews — it appends the addendum on
-            the right to the scoring rules.
-          </FieldHint>
-        </div>
-        <div>
-          <Label>Stage 2 scoring addendum</Label>
-          <Textarea
-            v-model="form.stage_2_scoring_addendum"
-            rows="6"
-            class="font-mono text-xs"
-            placeholder="Appended to the scoring rules only while Account stage is Stage 2."
-          />
-          <FieldHint>Ignored while in Stage 1 — future plumbing until the first reviews land.</FieldHint>
-        </div>
-      </div>
-
-      <div>
-        <Label>Proposal skill (SENT to the AI — the only proposal rules the model sees)</Label>
-        <Textarea
-          v-model="form.proposal_skill"
-          rows="14"
-          class="font-mono text-xs"
-          placeholder="SKILL.md v2 — the operative drafting procedure. Keep it lean: the model obeys a short skill far better than a buried one."
-        />
-        <FieldHint>
-          Deliberately small (~9KB). The model imitates whatever it reads, so only the drafting
-          procedure goes in — never the teaching document below.
+          Stage 1 scores with tight budget floors and no BOOST recommendations. Switch to Stage 2
+          once this account has reviews and a Job Success Score — scoring then raises its floors
+          and allows boosting.
         </FieldHint>
       </div>
 
       <div>
-        <Label>Project facts (SENT to the AI — the only source of truth about your track record)</Label>
+        <Label>Project facts (sent to the AI — the only source of truth about your track record)</Label>
         <Textarea
           v-model="form.project_facts"
-          rows="8"
+          rows="10"
           class="font-mono text-xs"
           placeholder="One line per real project: name, what it is, exact stack, what you personally built. Anything not on this sheet must never be claimed."
         />
+        <FieldHint>
+          A proposal can only claim what this sheet backs. Leave a project off and it will never
+          be mentioned; describe a stack it didn't use and the claim will be caught before the
+          draft ships.
+        </FieldHint>
       </div>
 
       <div>
-        <Label>Proposal reference (NEVER sent to the AI — your reading copy)</Label>
+        <Label>Proposal reference (never sent to the AI — your reading copy)</Label>
         <Textarea
           v-model="form.proposal_reference"
           rows="8"
           class="font-mono text-xs"
-          placeholder="The full teaching document — research, psychology, examples. Stored for you to read; excluded from every prompt on purpose."
+          placeholder="Your own notes, research, and examples. Stored for you to read; excluded from every prompt on purpose."
         />
         <FieldHint>
-          Excluded on purpose: it's written in the exact analytical, em-dash-heavy style the rules
-          ban, and models copy the style of their context more than they obey instructions in it.
-        </FieldHint>
-      </div>
-
-      <div>
-        <Label>Training system prompt (used only by the training-data export)</Label>
-        <Textarea
-          v-model="form.training_system_prompt"
-          rows="6"
-          class="font-mono text-xs"
-          placeholder="Optional. The system message written into every exported (brief → final proposal) training example. Leave blank to reuse the Proposal skill above — the same voice the writer was given."
-        />
-        <FieldHint>
-          Only affects <span class="font-mono">proposals:export-training-data</span>. Blank falls
-          back to the Proposal skill, so exported pairs teach the same rules the live writer follows.
+          Excluded on purpose: models copy the style of whatever they read far more than they
+          obey instructions in it, so long analytical prose never enters a drafting prompt.
         </FieldHint>
       </div>
 
@@ -359,10 +141,9 @@ async function handleSave() {
           </span>
         </label>
         <FieldHint>
-          Turn off to pause proposals everywhere — the auto pipeline, the dashboard Rewrite
-          button, and WhatsApp — while leaving scoring running. Leads still arrive, still get a
-          bid/no-bid verdict, and still show on the dashboard; they just ship without a written
-          proposal until this is back on. Use this to control spend without losing lead flow.
+          Turn off to pause proposals everywhere while leaving scoring running. Leads still
+          arrive, still get a bid/no-bid verdict, and still show on the dashboard; they just
+          ship without a written proposal until this is back on.
         </FieldHint>
       </div>
 
@@ -380,7 +161,7 @@ async function handleSave() {
           </label>
           <FieldHint>
             Every proposal is mechanically checked (banned phrases, word count, signature,
-            required elements, contact info) AND re-reviewed by the AI against your full rules,
+            required elements, contact info) AND re-reviewed by the AI against the full rules,
             then revised up to 4 times until it complies. Turn off to accept first drafts as-is.
           </FieldHint>
         </div>
@@ -396,7 +177,7 @@ async function handleSave() {
           </div>
           <div>
             <Label>Must end with</Label>
-            <Input v-model="form.proposal_signature" placeholder="Hassam" />
+            <Input v-model="form.proposal_signature" placeholder="Your first name" />
             <FieldHint>First name alone on the last line. Leave empty to skip.</FieldHint>
           </div>
         </div>
@@ -424,7 +205,7 @@ async function handleSave() {
       </div>
 
       <div class="flex justify-end">
-        <Button @click="handleSave" :loading="saving">Save AI settings</Button>
+        <Button @click="handleSave" :loading="saving">Save proposal settings</Button>
       </div>
     </CardContent>
   </Card>

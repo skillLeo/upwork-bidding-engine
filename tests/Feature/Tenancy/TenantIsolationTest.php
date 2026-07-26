@@ -10,8 +10,8 @@ use App\Models\DeletedLeadExternalId;
 use App\Models\Lead;
 use App\Models\SavedFilter;
 use App\Models\Setting;
-use App\Models\Tenant;
 use App\Models\Template;
+use App\Models\Tenant;
 use App\Services\SettingsService;
 use App\Tenancy\MissingTenantException;
 use App\Tenancy\TenantContext;
@@ -156,22 +156,28 @@ class TenantIsolationTest extends TestCase
      * rememberForever() against one global key holding DECRYPTED values,
      * including the Anthropic and Vollna credentials — so tenant B was
      * served whatever tenant A warmed the cache with.
+     *
+     * The credential used here is the VOLLNA token, not the Anthropic key.
+     * Since P8 the AI keys are pooled and platform-owned — there is no such
+     * thing as tenant A's Anthropic key to leak, and writing one throws. The
+     * Vollna token is a real per-workspace secret, so it is the honest
+     * subject for a per-tenant-secret isolation test.
      */
     public function test_tenant_b_never_receives_tenant_as_decrypted_api_key(): void
     {
         $settings = app(SettingsService::class);
 
-        $this->as($this->a, fn () => $settings->set('anthropic_api_key', 'sk-ant-AAAA-alpha-secret'));
-        $this->as($this->b, fn () => $settings->set('anthropic_api_key', 'sk-ant-BBBB-beta-secret'));
+        $this->as($this->a, fn () => $settings->set('vollna_api_token', 'vln-AAAA-alpha-secret'));
+        $this->as($this->b, fn () => $settings->set('vollna_api_token', 'vln-BBBB-beta-secret'));
 
         // A reads first, warming the cache.
-        $this->as($this->a, fn () => $this->assertSame('sk-ant-AAAA-alpha-secret', $settings->get('anthropic_api_key')));
+        $this->as($this->a, fn () => $this->assertSame('vln-AAAA-alpha-secret', $settings->get('vollna_api_token')));
 
         // B must NOT get A's key back out of a shared cache entry.
-        $this->as($this->b, fn () => $this->assertSame('sk-ant-BBBB-beta-secret', $settings->get('anthropic_api_key')));
+        $this->as($this->b, fn () => $this->assertSame('vln-BBBB-beta-secret', $settings->get('vollna_api_token')));
 
         // And back again, to prove the first read did not poison the second.
-        $this->as($this->a, fn () => $this->assertSame('sk-ant-AAAA-alpha-secret', $settings->get('anthropic_api_key')));
+        $this->as($this->a, fn () => $this->assertSame('vln-AAAA-alpha-secret', $settings->get('vollna_api_token')));
     }
 
     public function test_a_real_tenant_cannot_override_a_platform_only_key(): void

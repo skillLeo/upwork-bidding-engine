@@ -7,7 +7,6 @@ import {
   Bot,
   Brain,
   Building2,
-  Mail as MailIcon,
   MessageCircle,
   Palette,
   ShieldCheck,
@@ -26,7 +25,6 @@ import OpenClawSection from "@/components/settings/OpenClawSection.vue";
 import AiApiSection from "@/components/settings/AiApiSection.vue";
 import AiUsageSection from "@/components/settings/AiUsageSection.vue";
 import NotificationsSection from "@/components/settings/NotificationsSection.vue";
-import MailSection from "@/components/settings/MailSection.vue";
 import RulesSection from "@/components/settings/RulesSection.vue";
 import MembersSection from "@/components/settings/MembersSection.vue";
 import RolesMatrixSection from "@/components/settings/RolesMatrixSection.vue";
@@ -42,21 +40,34 @@ const router = useRouter();
 // `need` is the permission a tab requires; a tab with no `need` is visible to
 // anyone who can open Settings. Tabs the user lacks permission for are HIDDEN
 // (not shown disabled) — a control that can never work is never rendered.
+//
+// `internalOnly` is the same idea one level up (P8): the AI Engine tab drives
+// the OpenClaw bridge, which is one physical WhatsApp session belonging to the
+// company operating the platform. It is not a product feature and never
+// appears for a customer workspace. The server refuses it too — this only
+// decides what is worth rendering.
+//
+// Mail is absent entirely: SMTP is deployment infrastructure, not a
+// workspace's setting, and moved to the platform console with the other
+// platform-only keys.
 const allSections = [
   { id: "branding", label: "Branding", icon: Palette },
   { id: "diagnostics", label: "Diagnostics", icon: Activity },
   { id: "vollna", label: "Vollna", icon: Webhook, need: "setting.vollna_api_token" },
-  { id: "openclaw", label: "AI Engine", icon: Bot, need: "setting.openclaw_token" },
-  { id: "ai", label: "AI Models & Prompts", icon: Brain },
+  { id: "openclaw", label: "AI Engine", icon: Bot, need: "setting.openclaw_token", internalOnly: true },
+  { id: "ai", label: "Proposals & Facts", icon: Brain },
   { id: "ai-usage", label: "AI Usage & Cost", icon: Wallet, need: "ai_usage.view" },
   { id: "notifications", label: "Notifications", icon: Bell },
-  { id: "mail", label: "Mail", icon: MailIcon, need: "setting.mail_host" },
   { id: "rules", label: "Bidding Rules", icon: SlidersHorizontal },
   { id: "workspace", label: "Workspace", icon: Building2, need: "workspace.manage" },
   { id: "members", label: "Members", icon: Users, need: "members.invite" },
   { id: "roles", label: "Roles & permissions", icon: ShieldCheck },
 ];
-const sections = computed(() => allSections.filter((s) => !s.need || auth.can(s.need)));
+const sections = computed(() =>
+  allSections.filter(
+    (s) => (!s.need || auth.can(s.need)) && (!s.internalOnly || auth.isInternalWorkspace),
+  ),
+);
 const sectionIds = computed(() => sections.value.map((s) => s.id));
 
 // One section rendered at a time, like a real settings app (Stripe/GitHub/
@@ -88,7 +99,8 @@ const activeLabel = computed(() => allSections.find((s) => s.id === activeSectio
     <div class="mb-5">
       <h1 class="text-xl font-semibold text-text-primary">Settings</h1>
       <p class="text-sm text-text-secondary">
-        API keys, tokens, and bidding rules — nothing here is stored in .env.
+        Your workspace: its integrations, bidding rules, members, and the facts your proposals
+        are allowed to claim.
       </p>
     </div>
 
@@ -146,7 +158,6 @@ const activeLabel = computed(() => allSections.find((s) => s.id === activeSectio
               :settings="{ ...settings.rules, ...settings.whatsapp }"
               @saved="refetch"
             />
-            <MailSection v-else-if="activeSection === 'mail'" :settings="settings.mail" @saved="refetch" />
             <RulesSection v-else-if="activeSection === 'rules'" :settings="settings.rules" @saved="refetch" />
             <WorkspaceSection v-else-if="activeSection === 'workspace'" />
             <MembersSection v-else-if="activeSection === 'members'" />

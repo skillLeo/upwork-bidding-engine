@@ -6,10 +6,15 @@ use App\Console\Concerns\RunsForTenants;
 use App\Enums\ActivityType;
 use App\Enums\LeadStatus;
 use App\Models\ActivityLog;
+use App\Models\AppNotification;
 use App\Models\Lead;
+use App\Services\NotificationService;
 use App\Services\OpenClawService;
 use App\Services\SettingsService;
+use App\Services\WhatsApp\WhatsAppCloudService;
+use App\Tenancy\Tenancy;
 use Illuminate\Console\Command;
+use Illuminate\Support\Carbon;
 
 /**
  * A fresh, high-scoring lead's value decays fast — this is the safety net
@@ -89,7 +94,14 @@ class SendLeadRemindersCommand extends Command
         $dashboardUrl = rtrim((string) config('skillleo.frontend_url'), '/');
 
         // WhatsApp is optional extra reach; its absence must not stop anything.
-        $whatsappAvailable = (bool) $settings->bidderWhatsapp() && (bool) $settings->openClawUrl();
+        // The OpenClaw bridge is internal-only (P8) — it drives one physical,
+        // company-owned WhatsApp session, so a customer workspace must never
+        // reach it. Same resolution as NotificationDispatcher::whatsappAvailable().
+        $tenant = Tenancy::current();
+        $whatsappAvailable = $tenant !== null
+            && $tenant->isInternal()
+            && (bool) $settings->bidderWhatsapp()
+            && (bool) $settings->openClawUrl();
 
         foreach ($leads as $lead) {
             $this->maybeSendReminder($lead, $openClaw, $dashboardUrl, $whatsappAvailable);
@@ -132,7 +144,7 @@ class SendLeadRemindersCommand extends Command
         $delivered = false;
 
         try {
-            app(\App\Services\NotificationService::class)->reminder($lead, $message);
+            app(NotificationService::class)->reminder($lead, $message);
             $delivered = true;
         } catch (\Throwable $e) {
             report($e);
@@ -152,7 +164,7 @@ class SendLeadRemindersCommand extends Command
         // SECONDARY: a convenience copy on WhatsApp. Isolated in its own
         // try/catch AFTER the primary send, so an offline tunnel is logged
         // and forgotten rather than taking the reminder down with it.
-        $cloud = app(\App\Services\WhatsApp\WhatsAppCloudService::class);
+        $cloud = app(WhatsAppCloudService::class);
 
         if ($cloud->isConfigured()) {
             try {
@@ -213,9 +225,9 @@ class SendLeadRemindersCommand extends Command
      * reminder clock starts even when WhatsApp is down. Falls back to the
      * old BidderNotified activity log for leads alerted before this existed.
      */
-    protected function firstAlertedAt(Lead $lead): ?\Illuminate\Support\Carbon
+    protected function firstAlertedAt(Lead $lead): ?Carbon
     {
-        $notifiedAt = \App\Models\AppNotification::query()
+        $notifiedAt = AppNotification::query()
             ->where('type', 'lead')
             ->where('lead_id', $lead->id)
             ->value('created_at');
@@ -226,6 +238,6 @@ class SendLeadRemindersCommand extends Command
             ->where('subject_id', $lead->id)
             ->value('created_at');
 
-        return $notifiedAt === null ? null : \Illuminate\Support\Carbon::parse($notifiedAt);
+        return $notifiedAt === null ? null : Carbon::parse($notifiedAt);
     }
 }

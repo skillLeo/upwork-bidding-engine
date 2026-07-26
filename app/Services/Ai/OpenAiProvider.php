@@ -3,6 +3,8 @@
 namespace App\Services\Ai;
 
 use App\Services\SettingsService;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -36,14 +38,14 @@ class OpenAiProvider implements AiProvider
 
     public function isConfigured(): bool
     {
-        return filled($this->settings->get('openai_api_key'));
+        return filled($this->settings->platform('openai_api_key'));
     }
 
     public function complete(string $systemPrompt, string $userContent, string $model, int $maxTokens): AiResponse
     {
         $startedAt = microtime(true);
 
-        $response = Http::withToken((string) $this->settings->get('openai_api_key'))
+        $response = Http::withToken((string) $this->settings->platform('openai_api_key'))
             ->acceptJson()
             ->timeout(120)
             // Live tokens-per-minute limits (verified: this org's gpt-4o tier
@@ -52,8 +54,8 @@ class OpenAiProvider implements AiProvider
             // this is worth three attempts before surfacing as a failure. A
             // 429 must never count toward AiManager's 3-strike failover on
             // its own; every other 4xx still fails on the first attempt.
-            ->retry([3000, 8000, 20000], 0, fn ($e) => $e instanceof \Illuminate\Http\Client\ConnectionException
-                || ($e instanceof \Illuminate\Http\Client\RequestException && $e->response->status() === 429))
+            ->retry([3000, 8000, 20000], 0, fn ($e) => $e instanceof ConnectionException
+                || ($e instanceof RequestException && $e->response->status() === 429))
             ->post('https://api.openai.com/v1/chat/completions', [
                 'model' => $model,
                 'max_completion_tokens' => $maxTokens,

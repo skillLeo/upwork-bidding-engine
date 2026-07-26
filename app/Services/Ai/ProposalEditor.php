@@ -69,7 +69,7 @@ class ProposalEditor
     }
 
     /**
-     * @return array{0: string, 1: \App\Services\Ai\AiResponse}
+     * @return array{0: string, 1: AiResponse}
      *
      * @throws ProposalEditFailedException
      */
@@ -92,7 +92,7 @@ class ProposalEditor
             'proposal_ai_edit',
             self::SELECTION_SYSTEM,
             $user,
-            (string) $this->settings->get('proposal_model', 'claude-sonnet-5'),
+            (string) $this->settings->platform('proposal_model', 'claude-sonnet-5'),
             self::MAX_TOKENS,
             $lead->id,
         );
@@ -104,7 +104,7 @@ class ProposalEditor
     }
 
     /**
-     * @return array{0: string, 1: \App\Services\Ai\AiResponse}
+     * @return array{0: string, 1: AiResponse}
      */
     protected function wholeEdit(Lead $lead, string $body, string $instruction): array
     {
@@ -120,7 +120,7 @@ class ProposalEditor
             'proposal_ai_edit',
             $system,
             $user,
-            (string) $this->settings->get('proposal_model', 'claude-sonnet-5'),
+            (string) $this->settings->platform('proposal_model', 'claude-sonnet-5'),
             self::MAX_TOKENS,
             $lead->id,
         );

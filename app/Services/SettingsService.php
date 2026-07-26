@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\Setting;
+use App\Models\Tenant;
+use App\Tenancy\Tenancy;
 use App\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
@@ -463,6 +465,61 @@ class SettingsService
     }
 
     /**
+     * Read a PLATFORM-only key from the platform layer, whatever tenant
+     * happens to be bound (P8).
+     *
+     * The pooled AI credentials must resolve to the same value for every
+     * workspace. get() would already do that today — after the custody
+     * migration no tenant row exists for these keys, and writing one throws —
+     * but "correct because no counter-example currently exists in the
+     * database" is not the same as "cannot be otherwise". This ignores the
+     * tenant layer outright, so a stray row (a bad restore, a hand-edited
+     * table, a future bug) can never let one workspace bill its calls to a
+     * different key than its neighbour.
+     *
+     * Refuses non-platform keys rather than quietly returning a tenant value
+     * from a platform-shaped call.
+     */
+    public function platform(string $key, mixed $default = null): mixed
+    {
+        if (! array_key_exists($key, self::SCHEMA)) {
+            throw new \InvalidArgumentException("Unknown setting key [{$key}].");
+        }
+
+        if (! $this->isPlatformOnly($key)) {
+            throw new \InvalidArgumentException(
+                "[{$key}] is not a platform-level setting — read it with get() so the tenant's own value is honoured."
+            );
+        }
+
+        // Its OWN cache key, not cacheKey(null). That key is written by
+        // all() as well, and all() run in platform context caches every row
+        // it can see — tenant rows included, overwriting the platform ones.
+        // Sharing the key would let one unscoped read anywhere in the app
+        // poison this one with a single tenant's values.
+        //
+        // TENANCY: the platform layer is tenant_id IS NULL by definition, and
+        // the Setting model's scope would otherwise add the bound tenant's
+        // rows back in. This is the platform default, read as platform.
+        $rows = Cache::remember(self::CACHE_KEY.':platform-layer', 3600, fn () => Tenancy::asPlatform(
+            fn () => Setting::query()
+                ->whereNull('tenant_id')
+                ->get(['key', 'value', 'is_secret'])
+                ->keyBy('key')
+                ->map(fn (Setting $setting) => [
+                    'value' => $setting->value,
+                    'is_secret' => (bool) $setting->is_secret,
+                ])
+                ->all()
+        ));
+
+        $row = $rows[$key] ?? null;
+        $value = $row ? $this->decode($row['value'], $row['is_secret']) : null;
+
+        return $value ?? $default ?? self::SCHEMA[$key]['default'];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function forGroup(string $group): array
@@ -535,11 +592,12 @@ class SettingsService
     public function forgetAllCaches(): void
     {
         Cache::forget($this->cacheKey(null));
+        Cache::forget(self::CACHE_KEY.':platform-layer');
 
         // TENANCY: deliberately cross-tenant — a platform default changed, so
         // every tenant that inherits it must re-read.
-        \App\Tenancy\Tenancy::asPlatform(function () {
-            foreach (\App\Models\Tenant::query()->pluck('id') as $id) {
+        Tenancy::asPlatform(function () {
+            foreach (Tenant::query()->pluck('id') as $id) {
                 Cache::forget($this->cacheKey((int) $id));
             }
         });
@@ -567,6 +625,44 @@ class SettingsService
      */
 
     /**
+     * Write platform-only keys to the PLATFORM layer explicitly (P8).
+     *
+     * setMany() infers the layer from the bound tenant, and for a
+     * platform-only key that inference only lands on the platform row when
+     * the request happens to be running as the internal workspace. The
+     * platform console must not depend on which subdomain the platform owner
+     * reached it through, so it says where the write goes instead of hoping.
+     *
+     * Refuses anything that is not platform-only — this is not a back door
+     * for writing a tenant's settings without a tenant.
+     *
+     * @param  array<string, mixed>  $values
+     */
+    public function setManyOnPlatformLayer(array $values): void
+    {
+        foreach ($values as $key => $value) {
+            if (! array_key_exists($key, self::SCHEMA)) {
+                continue;
+            }
+
+            if (! $this->isPlatformOnly($key)) {
+                throw new \InvalidArgumentException(
+                    "[{$key}] is a tenant setting — write it with set()/setMany() so it lands on the workspace that owns it."
+                );
+            }
+
+            $meta = self::SCHEMA[$key];
+
+            // TENANCY: a platform default is tenant_id NULL by definition.
+            Tenancy::asPlatform(
+                fn () => $this->writeRow($key, $this->encode($value, $meta['secret']), $meta, forceTenantId: null, forced: true)
+            );
+        }
+
+        $this->forgetAllCaches();
+    }
+
+    /**
      * Upsert one settings row on the correct layer.
      *
      * Hand-rolled rather than updateOrCreate() for one specific reason:
@@ -578,9 +674,9 @@ class SettingsService
      *
      * @param  array{group: string, secret: bool, default: mixed}  $meta
      */
-    protected function writeRow(string $key, string $encoded, array $meta): void
+    protected function writeRow(string $key, string $encoded, array $meta, ?int $forceTenantId = null, bool $forced = false): void
     {
-        $tenantId = $this->writeTenantId($key);
+        $tenantId = $forced ? $forceTenantId : $this->writeTenantId($key);
 
         $row = Setting::query()
             ->where('key', $key)

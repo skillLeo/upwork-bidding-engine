@@ -47,9 +47,9 @@ class AiTestScoreCommand extends Command
 
         $this->line('── Request ─────────────────────────────');
         $this->line('Lead:            #'.$lead->id.' '.$lead->title);
-        $this->line('Provider:        '.$settings->get('ai_provider', 'anthropic'));
-        $this->line('Scoring model:   '.$settings->get('scoring_model', 'claude-haiku-4-5'));
-        $this->line('Proposal model:  '.$settings->get('proposal_model', 'claude-sonnet-5'));
+        $this->line('Provider:        '.$settings->platform('ai_provider', 'anthropic'));
+        $this->line('Scoring model:   '.$settings->platform('scoring_model', 'claude-haiku-4-5'));
+        $this->line('Proposal model:  '.$settings->platform('proposal_model', 'claude-sonnet-5'));
         $this->line('System prompt:   '.strlen($systemPrompt).' chars (sha1 '.substr(sha1($systemPrompt), 0, 8).') from Settings');
         $this->line('Score cutoff:    '.$cutoff);
 

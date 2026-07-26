@@ -19,10 +19,18 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * cascading DELETE across a dozen tables. The platform console explicitly
  * withTrashed()s to still show it existed.
  */
-#[Fillable(['name', 'slug', 'plan', 'status', 'owner_user_id', 'trial_ends_at'])]
+#[Fillable(['name', 'slug', 'specialization', 'plan', 'status', 'owner_user_id', 'trial_ends_at'])]
 class Tenant extends Model
 {
     use SoftDeletes;
+
+    /**
+     * The plan the platform's own workspace runs on. Features that exist only
+     * for the company operating the product — the OpenClaw bridge and the AI
+     * Engine settings tab — key off this and must never appear for a customer
+     * workspace (P8).
+     */
+    public const PLAN_INTERNAL = 'internal';
 
     public const STATUS_TRIALING = 'trialing';
 
@@ -46,6 +54,29 @@ class Tenant extends Model
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'owner_user_id');
+    }
+
+    /**
+     * Internal-only features (OpenClaw / the AI Engine tab) are on for this
+     * workspace and off for every other. Deliberately a plan check and not a
+     * settings flag: a settings flag is something a workspace could be handed
+     * by accident, whereas the plan is set by the platform owner.
+     */
+    public function isInternal(): bool
+    {
+        return $this->plan === self::PLAN_INTERNAL;
+    }
+
+    /**
+     * DISPLAY ONLY. `specialization` is a label the workspace picks for
+     * itself ("Laravel + Vue", "Graphic design") and nothing reads it to make
+     * a decision. Real scoring behaviour comes from the workspace's
+     * core/secondary/excluded stack lists — see the column's migration for
+     * why there is deliberately no second source of truth here.
+     */
+    public function specializationLabel(): ?string
+    {
+        return $this->specialization;
     }
 
     public function users(): BelongsToMany

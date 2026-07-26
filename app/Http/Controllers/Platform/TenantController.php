@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers\Platform;
 
+use App\Authorization\PlatformRole;
+use App\Authorization\RoleProvisioner;
+use App\Authorization\TenantRole;
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\AiCall;
@@ -9,6 +12,7 @@ use App\Models\AuthEvent;
 use App\Models\Lead;
 use App\Models\Tenant;
 use App\Services\Ai\AiQuotaService;
+use App\Services\Members\InvitationService;
 use App\Services\SettingsService;
 use App\Tenancy\Tenancy;
 use Illuminate\Http\JsonResponse;
@@ -67,6 +71,7 @@ class TenantController extends Controller
             'id' => $t->id,
             'name' => $t->name,
             'slug' => $t->slug,
+            'specialization' => $t->specialization,
             'plan' => $t->plan,
             'status' => $t->status,
             'members' => (int) ($members[$t->id] ?? 0),
@@ -77,6 +82,78 @@ class TenantController extends Controller
         ])->values();
 
         return response()->json(['data' => ['tenants' => $data]]);
+    }
+
+    /**
+     * Create a workspace and invite its owner (P8).
+     *
+     * This is the CLOSED-SIGNUP path: the platform owner opens a workspace
+     * for a customer and mails them an owner invitation. It coexists with the
+     * signup_mode setting — self-serve registration is a separate door and
+     * this does not replace it.
+     *
+     * The tenant is created with NO owner_user_id. Accepting the invitation
+     * is what stamps it (see InvitationService::accept), which is why an
+     * owner invitation can only ever be minted here: there is no other place
+     * in the app that creates an ownerless tenant needing one.
+     */
+    public function store(Request $request): JsonResponse
+    {
+        $actor = $request->user();
+
+        abort_unless(
+            $actor->platformRole() === PlatformRole::Owner,
+            403,
+            'Only the platform owner can create a workspace.',
+        );
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'slug' => ['required', 'string', 'max:63', 'alpha_dash', 'unique:tenants,slug'],
+            'specialization' => ['sometimes', 'nullable', 'string', 'max:80'],
+            'owner_email' => ['required', 'email', 'max:255'],
+        ]);
+
+        // TENANCY: creating a tenant is inherently a platform act — there is
+        // no tenant to be scoped to yet, and the tenants table is never
+        // tenant-scoped in the first place.
+        $tenant = Tenancy::asPlatform(fn () => Tenant::create([
+            'name' => $validated['name'],
+            'slug' => $validated['slug'],
+            'plan' => 'free',
+            'status' => Tenant::STATUS_TRIALING,
+        ]));
+
+        if (array_key_exists('specialization', $validated)) {
+            $tenant->update(['specialization' => $validated['specialization']]);
+        }
+
+        app(RoleProvisioner::class)->provision($tenant);
+
+        app(InvitationService::class)->invite(
+            $tenant,
+            $validated['owner_email'],
+            TenantRole::Owner,
+            $actor,
+        );
+
+        ActivityLog::record('workspace_created', meta: [
+            'tenant_id' => $tenant->id,
+            'slug' => $tenant->slug,
+            'owner_email' => strtolower(trim($validated['owner_email'])),
+        ], userId: $actor->id);
+
+        return response()->json(['data' => [
+            'message' => "Workspace created. An owner invitation is on its way to {$validated['owner_email']}.",
+            'tenant' => [
+                'id' => $tenant->id,
+                'name' => $tenant->name,
+                'slug' => $tenant->slug,
+                'specialization' => $tenant->specialization,
+                'plan' => $tenant->plan,
+                'status' => $tenant->status,
+            ],
+        ]], 201);
     }
 
     public function show(int $tenant): JsonResponse
@@ -130,6 +207,7 @@ class TenantController extends Controller
                 'id' => $t->id,
                 'name' => $t->name,
                 'slug' => $t->slug,
+                'specialization' => $t->specialization,
                 'plan' => $t->plan,
                 'status' => $t->status,
                 'created_at' => $t->created_at?->toIso8601String(),

@@ -9,8 +9,8 @@ use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
 /**
- * Creates the four base roles for a tenant and keeps the permission rows in
- * step with the code vocabulary.
+ * Creates the three tenant roles (owner, bidder, viewer) and keeps the
+ * permission rows in step with the code vocabulary.
  *
  * SEMANTICS CHANGED with the editable-permissions decision, and the change
  * is the whole point:
@@ -45,34 +45,59 @@ class RoleProvisioner
         app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
 
+    /**
+     * Create/refresh the three roles for one workspace.
+     *
+     * THE TEAM ID IS PINNED EXPLICITLY, and the role lookup filters on it by
+     * hand. Both are required, for two different reasons:
+     *
+     *   - Spatie's Role model does NOT apply a team scope to an ordinary
+     *     `Role::where('name', …)` query. Provisioning a SECOND tenant in one
+     *     process (workspace creation, a migration looping every tenant, a
+     *     test) would otherwise find the FIRST tenant's role and conclude
+     *     "already exists", leaving the new workspace with no roles at all.
+     *   - TenantTeamResolver falls back to the bound tenant only when no
+     *     override is set; pinning makes the target unambiguous regardless of
+     *     what any caller left behind.
+     */
     public function provision(Tenant $tenant): void
     {
         $this->ensureGlobalPermissions();
 
-        Tenancy::runAs($tenant, function () {
-            foreach (TenantRole::cases() as $roleEnum) {
-                $existing = Role::where('name', $roleEnum->value)->first();
+        $registrar = app(PermissionRegistrar::class);
+        $teamKey = config('permission.column_names.team_foreign_key', 'tenant_id');
+        $previousTeam = $registrar->getPermissionsTeamId();
+        $registrar->setPermissionsTeamId($tenant->id);
 
-                if ($roleEnum === TenantRole::Owner) {
-                    // Always everything, even when the role already exists —
-                    // this is the lock and the recovery path in one.
-                    $role = $existing ?? Role::findOrCreate($roleEnum->value, 'web');
-                    $role->syncPermissions(Permissions::all());
+        try {
+            Tenancy::runAs($tenant, function () use ($tenant, $teamKey) {
+                foreach (TenantRole::cases() as $roleEnum) {
+                    $existing = Role::where('name', $roleEnum->value)
+                        ->where($teamKey, $tenant->id)
+                        ->first();
 
-                    continue;
+                    if ($roleEnum === TenantRole::Owner) {
+                        // Always everything, even when the role already exists —
+                        // this is the lock and the recovery path in one.
+                        $role = $existing ?? Role::findOrCreate($roleEnum->value, 'web');
+                        $role->syncPermissions(Permissions::all());
+
+                        continue;
+                    }
+
+                    if ($existing !== null) {
+                        // A workspace's edits are its own. Never overwritten.
+                        continue;
+                    }
+
+                    Role::findOrCreate($roleEnum->value, 'web')
+                        ->syncPermissions($roleEnum->defaultPermissions());
                 }
-
-                if ($existing !== null) {
-                    // A workspace's edits are its own. Never overwritten.
-                    continue;
-                }
-
-                Role::findOrCreate($roleEnum->value, 'web')
-                    ->syncPermissions($roleEnum->defaultPermissions());
-            }
-        });
-
-        app(PermissionRegistrar::class)->forgetCachedPermissions();
+            });
+        } finally {
+            $registrar->setPermissionsTeamId($previousTeam);
+            $registrar->forgetCachedPermissions();
+        }
     }
 
     /**

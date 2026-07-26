@@ -6,6 +6,7 @@ use App\Exceptions\AiQuotaExceededException;
 use App\Mail\LeadNotificationMail;
 use App\Models\ActivityLog;
 use App\Models\AiCall;
+use App\Models\Tenant;
 use App\Services\OpsAlertService;
 use App\Services\SettingsService;
 use App\Tenancy\Tenancy;
@@ -48,7 +49,12 @@ class AiManager
     {
         $this->enforceQuota();
 
-        $primary = $this->provider($this->settings->get('ai_provider', 'anthropic'));
+        // PLATFORM-LEVEL, for every tenant's calls (P8). The platform pays for
+        // AI out of one pooled set of keys, so the provider and the models are
+        // the platform's choice, identical in every workspace. What IS per
+        // tenant is the spend limit — enforceQuota() above ran first and
+        // charged this call against THIS workspace's own ai_monthly_token_cap.
+        $primary = $this->provider($this->settings->platform('ai_provider', 'anthropic'));
         $secondary = $primary->name() === 'anthropic' ? $this->openAi : $this->anthropic;
 
         // Model IDs are provider-specific. If the configured model belongs
@@ -129,7 +135,7 @@ class AiManager
      * bell (AppNotification has no per-user targeting today), because the
      * spec asks to notify THE OWNER, not the workspace at large.
      */
-    protected function notifyOwnerOfQuota(\App\Models\Tenant $tenant, array $summary): void
+    protected function notifyOwnerOfQuota(Tenant $tenant, array $summary): void
     {
         $owner = $tenant->owner;
 
@@ -160,7 +166,7 @@ class AiManager
     {
         if (! $provider->isConfigured()) {
             throw new \RuntimeException(
-                ucfirst($provider->name())." API key is not set — add it in Settings → AI models & prompts."
+                ucfirst($provider->name()).' API key is not set — add it in Settings → AI models & prompts.'
             );
         }
 
