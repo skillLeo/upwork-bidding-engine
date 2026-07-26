@@ -32,14 +32,30 @@ onMounted(async () => {
   initLeadAlerts();
   initNotifications();
 
-  // Rehydrates the impersonation banner after a page refresh — the
-  // persisted token alone doesn't say whether IT is an impersonation
-  // token; only /me (reading the token's own row) knows.
-  if (auth.token && !auth.impersonating) {
+  // Re-read the whole identity on every boot, not just the impersonation
+  // flag.
+  //
+  // The stored user is written once, at sign-in, and used from then on to
+  // decide which navigation items and controls exist. So anything that
+  // changes server-side afterwards — a role granted, a permission ticked in
+  // the Roles matrix, or the workspace the session belongs to — stayed
+  // invisible until the person happened to sign out and back in. That is how
+  // a workspace owner ended up staring at a page with NO navigation at all:
+  // their session had been repointed to their own workspace, they held all
+  // 120 permissions there, and the browser was still reading a snapshot
+  // taken when they had none.
+  //
+  // /me is one request against the token's own row, so refreshing it here
+  // costs a boot round trip and removes a whole class of "log out and back
+  // in and it works" bugs.
+  if (auth.token) {
     try {
-      const res = await apiClient.get("/me");
-      if (res.data.data.impersonating) {
-        auth.setImpersonatingFromMe(res.data.data.impersonating);
+      const me = (await apiClient.get("/me")).data.data;
+
+      auth.setUser(me);
+
+      if (me.impersonating) {
+        auth.setImpersonatingFromMe(me.impersonating);
       }
     } catch {
       // A dead token here is handled by the response interceptor already.

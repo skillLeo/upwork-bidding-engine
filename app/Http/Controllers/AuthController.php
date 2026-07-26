@@ -492,15 +492,28 @@ class AuthController extends Controller
         // row and the new-device alert cannot be present on one route and
         // forgotten on another — AND so the token is always stamped with a
         // workspace this person actually belongs to.
-        $issued = Tenancy::runAs(
-            $this->workspaceFor($user),
-            fn () => $this->tokens->issue($user, $request),
-        );
+        $workspace = $this->workspaceFor($user);
 
-        return [
-            'token' => $issued['token'],
-            'user' => new UserResource($user->fresh()),
-        ];
+        // The UserResource is built INSIDE the binding, not after it.
+        //
+        // It reports tenant_role and the flat permission list, and both are
+        // resolved through Spatie's team resolver at the moment they are
+        // read. Building it outside meant they were computed against
+        // whatever tenant the request had fallen back to — so the sign-in
+        // response handed the browser an identity with ZERO permissions, and
+        // the app, which hides any control the user cannot use, rendered no
+        // navigation at all. It only appeared after a manual reload, when
+        // /me happened to be asked again under the right workspace.
+        return Tenancy::runAs($workspace, function () use ($user, $request, $workspace) {
+            $issued = $this->tokens->issue($user, $request);
+
+            $resource = TenantTeamResolver::pinnedTo(
+                $workspace->id,
+                fn () => (new UserResource($user->fresh()))->toArray($request ?? request()),
+            );
+
+            return ['token' => $issued['token'], 'user' => $resource];
+        });
     }
 
     /**

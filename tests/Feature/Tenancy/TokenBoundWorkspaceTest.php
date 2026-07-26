@@ -208,4 +208,37 @@ class TokenBoundWorkspaceTest extends TestCase
             ->assertJsonPath('data.tenant.slug', 'northwind')
             ->assertJsonPath('data.tenant_role', 'owner');
     }
+
+    /**
+     * The sign-in RESPONSE itself must already describe the right workspace.
+     *
+     * The app hides any control the user cannot use, so it renders its
+     * navigation straight from this payload. Computing the role and
+     * permissions after the workspace binding was released produced an
+     * identity with none of either — and a signed-in owner staring at a page
+     * with no navigation on it, until a manual reload asked /me again.
+     */
+    public function test_the_sign_in_response_already_carries_the_right_role_and_permissions(): void
+    {
+        $this->otherOwner->forceFill(['password' => Hash::make('password123')])->save();
+
+        Auth::forgetGuards();
+
+        $response = $this->postJson('/api/auth/login', [
+            'email' => 'nora@northwind.test',
+            'password' => 'password123',
+        ])->assertOk();
+
+        $response->assertJsonPath('data.user.tenant_role', 'owner');
+        $response->assertJsonPath('data.user.tenant.slug', 'northwind');
+
+        $permissions = $response->json('data.user.permissions');
+
+        $this->assertNotEmpty($permissions, 'the sign-in response carried an identity with no permissions');
+
+        // The specific ones the navigation and Settings are drawn from.
+        foreach (['leads.view', 'analytics.view', 'settings.view', 'workspace.manage'] as $permission) {
+            $this->assertContains($permission, $permissions);
+        }
+    }
 }
