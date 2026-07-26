@@ -129,6 +129,8 @@ class UpdateSettingsRequest extends FormRequest
             'followup_days' => ['sometimes', 'integer', 'min:1', 'max:30'],
             'notification_freshness_hours' => ['sometimes', 'integer', 'min:0', 'max:168'],
             'notify_score_min' => ['sometimes', 'integer', 'min:1', 'max:10'],
+            'quiet_hours_start' => ['sometimes', 'integer', 'min:0', 'max:23'],
+            'quiet_hours_end' => ['sometimes', 'integer', 'min:0', 'max:23'],
             'max_posted_age_days' => ['sometimes', 'integer', 'min:1', 'max:90'],
         ];
     }

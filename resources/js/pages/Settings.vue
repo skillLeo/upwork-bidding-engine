@@ -25,8 +25,7 @@ import VollnaSection from "@/components/settings/VollnaSection.vue";
 import OpenClawSection from "@/components/settings/OpenClawSection.vue";
 import AiApiSection from "@/components/settings/AiApiSection.vue";
 import AiUsageSection from "@/components/settings/AiUsageSection.vue";
-import WhatsAppSection from "@/components/settings/WhatsAppSection.vue";
-import BrowserAlertsSection from "@/components/settings/BrowserAlertsSection.vue";
+import NotificationsSection from "@/components/settings/NotificationsSection.vue";
 import MailSection from "@/components/settings/MailSection.vue";
 import RulesSection from "@/components/settings/RulesSection.vue";
 import MembersSection from "@/components/settings/MembersSection.vue";
@@ -50,8 +49,7 @@ const allSections = [
   { id: "openclaw", label: "AI Engine", icon: Bot, need: "setting.openclaw_token" },
   { id: "ai", label: "AI Models & Prompts", icon: Brain },
   { id: "ai-usage", label: "AI Usage & Cost", icon: Wallet, need: "ai_usage.view" },
-  { id: "whatsapp", label: "WhatsApp", icon: MessageCircle },
-  { id: "browser-alerts", label: "Browser Alerts", icon: Bell },
+  { id: "notifications", label: "Notifications", icon: Bell },
   { id: "mail", label: "Mail", icon: MailIcon, need: "setting.mail_host" },
   { id: "rules", label: "Bidding Rules", icon: SlidersHorizontal },
   { id: "workspace", label: "Workspace", icon: Building2, need: "workspace.manage" },
@@ -143,8 +141,11 @@ const activeLabel = computed(() => allSections.find((s) => s.id === activeSectio
             <OpenClawSection v-else-if="activeSection === 'openclaw'" :settings="settings.openclaw" @saved="refetch" />
             <AiApiSection v-else-if="activeSection === 'ai'" :settings="settings.ai" @saved="refetch" />
             <AiUsageSection v-else-if="activeSection === 'ai-usage'" />
-            <WhatsAppSection v-else-if="activeSection === 'whatsapp'" :settings="settings.whatsapp" @saved="refetch" />
-            <BrowserAlertsSection v-else-if="activeSection === 'browser-alerts'" />
+            <NotificationsSection
+              v-else-if="activeSection === 'notifications'"
+              :settings="{ ...settings.rules, ...settings.whatsapp }"
+              @saved="refetch"
+            />
             <MailSection v-else-if="activeSection === 'mail'" :settings="settings.mail" @saved="refetch" />
             <RulesSection v-else-if="activeSection === 'rules'" :settings="settings.rules" @saved="refetch" />
             <WorkspaceSection v-else-if="activeSection === 'workspace'" />

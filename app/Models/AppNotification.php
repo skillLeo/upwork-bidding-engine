@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Model;
  * One row in the in-app notification centre (the bell). See the
  * create_app_notifications_table migration for why it's account-wide.
  */
-#[Fillable(['type', 'level', 'title', 'body', 'url', 'lead_id', 'read_at'])]
+#[Fillable(['type', 'level', 'silent', 'title', 'body', 'url', 'lead_id', 'read_at'])]
 class AppNotification extends Model
 {
     use BelongsToTenant;

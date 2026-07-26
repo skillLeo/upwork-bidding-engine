@@ -113,6 +113,9 @@ class NotificationController extends Controller
             'id' => $n->id,
             'type' => $n->type,
             'level' => $n->level,
+            // The dispatcher's own decision: a silenced row is shown in the
+            // bell but must never pop a toast or ring the phone.
+            'silent' => (bool) $n->silent,
             'title' => $n->title,
             'body' => $n->body,
             'url' => $n->url,

@@ -1,6 +1,8 @@
 import { reactive } from "vue";
+import { toast } from "vue-sonner";
 import { apiClient } from "@/lib/api-client";
 import { useAuthStore } from "@/stores/auth";
+import router from "@/router";
 
 // In-app notification centre (the bell). Lives at the app root and polls, so
 // new leads/reminders show up with no page refresh. Hostinger shared hosting
@@ -12,16 +14,54 @@ export const notifications = reactive({ items: [], unreadCount: 0 });
 
 let timer = null;
 
+// Ids already seen by this tab, so a fresh lead toasts exactly once. null
+// until the first successful fetch: that first response seeds the set without
+// toasting, otherwise every notification already on the board would pop the
+// moment the dashboard loads.
+let seenIds = null;
+
+// Non-blocking toast for a lead that arrived while the operator is looking at
+// the dashboard. Deliberately driven by the SAME notification stream the bell
+// reads — which NotificationDispatcher populates — so the score threshold,
+// freshness gate and mute switch are applied server-side, once, and never
+// re-implemented here. `silent` rows are the dispatcher saying "show this in
+// the list, but do not interrupt".
+function toastNewLeads(items) {
+  if (seenIds === null) {
+    seenIds = new Set(items.map((n) => n.id));
+    return;
+  }
+
+  // Oldest first, so a burst reads in the order it arrived.
+  for (const n of [...items].reverse()) {
+    if (seenIds.has(n.id)) continue;
+    seenIds.add(n.id);
+
+    if (n.type !== "lead" || n.silent) continue;
+
+    toast(n.title, {
+      description: n.body,
+      duration: 10_000,
+      action: {
+        label: "View",
+        onClick: () => router.push(n.url || `/leads/${n.lead_id}`),
+      },
+    });
+  }
+}
+
 async function fetchNotifications() {
   if (!useAuthStore().token) {
     notifications.items = [];
     notifications.unreadCount = 0;
+    seenIds = null;
     return;
   }
   try {
     const res = await apiClient.get("/notifications");
     notifications.items = res.data.data;
     notifications.unreadCount = res.data.meta.unread_count;
+    toastNewLeads(res.data.data);
   } catch {
     // Best-effort — the next tick retries.
   }
@@ -59,6 +99,7 @@ let listenersBound = false;
 
 export function initNotifications() {
   clearInterval(timer);
+  seenIds = null;
   fetchNotifications();
   timer = setInterval(fetchNotifications, POLL_MS);
 

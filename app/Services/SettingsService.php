@@ -303,6 +303,14 @@ class SettingsService
         // NotificationDispatcher and by the reminder sweep, so the alert bar
         // and the reminder bar can never drift apart.
         'notify_score_min' => ['group' => 'rules', 'secret' => false, 'default' => 8],
+        // Reminder quiet window, in Pakistan time (Asia/Karachi) regardless of
+        // the app's UTC storage timezone. Start > end wraps midnight, which is
+        // the normal case (23 -> 7). Set both to the same hour to disable.
+        // A reminder buzzing the operator's phone at 2am is worse than no
+        // reminder at all; brand new lead alerts are NOT gated by this,
+        // because a fresh lead at 2am is still worth knowing about.
+        'quiet_hours_start' => ['group' => 'rules', 'secret' => false, 'default' => 23],
+        'quiet_hours_end' => ['group' => 'rules', 'secret' => false, 'default' => 7],
         // A stale posting is a spend-saving pre-check, not a visibility
         // rule — a lead that fails this still saves, still shows up in the
         // dashboard as Archived, and is never deleted. It only skips the

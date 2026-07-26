@@ -74,10 +74,9 @@ class SendLeadRemindersCommand extends Command
 
         // Pakistan-time quiet hours, independent of the app's storage
         // timezone (UTC) — a reminder buzzing the operator's phone at 2am
-        // is worse than no reminder at all.
-        $karachiHour = now()->setTimezone('Asia/Karachi')->hour;
-
-        if ($karachiHour >= 23 || $karachiHour < 7) {
+        // is worse than no reminder at all. Operator-configurable; the
+        // default 23->7 wraps midnight.
+        if ($this->inQuietHours($settings)) {
             return self::SUCCESS;
         }
 
@@ -162,6 +161,28 @@ class SendLeadRemindersCommand extends Command
         } catch (\Throwable $e) {
             report($e);
         }
+    }
+
+    /**
+     * Is it currently inside the operator's quiet window, in Pakistan time?
+     * start > end wraps midnight (23 -> 7, the default). start == end means
+     * the window is disabled rather than 24 hours long — a config that
+     * silenced every reminder forever would be a foot-gun.
+     */
+    protected function inQuietHours(SettingsService $settings): bool
+    {
+        $start = (int) $settings->get('quiet_hours_start', 23);
+        $end = (int) $settings->get('quiet_hours_end', 7);
+
+        if ($start === $end) {
+            return false;
+        }
+
+        $hour = now()->setTimezone('Asia/Karachi')->hour;
+
+        return $start > $end
+            ? ($hour >= $start || $hour < $end)   // wraps midnight
+            : ($hour >= $start && $hour < $end);  // same-day window
     }
 
     /**

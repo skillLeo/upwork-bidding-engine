@@ -79,23 +79,10 @@ async function handleSave() {
           <Input type="number" v-model.number="form.max_posted_age_days" />
           <FieldHint>Older postings are archived without an AI call — they stay visible, just unscored.</FieldHint>
         </div>
-        <div>
-          <Label>Alert me at score</Label>
-          <Input type="number" v-model.number="form.notify_score_min" />
-          <FieldHint>
-            1–10. Leads at or above this ring your phone and get reminders. Lower-scoring
-            leads are still scored and listed, they just don't interrupt you.
-          </FieldHint>
-        </div>
-        <div>
-          <Label>Alert freshness (hours)</Label>
-          <Input type="number" v-model.number="form.notification_freshness_hours" />
-          <FieldHint>
-            Leads older than this at scoring time are still scored, written and shown in your
-            notification list, but never ring your phone — fresh leads are the strategy.
-            0 disables the gate.
-          </FieldHint>
-        </div>
+        <!-- Alerting thresholds (when to ring your phone, freshness gate and
+             quiet hours) deliberately live in Settings > Notifications, so
+             there is exactly one place to check before trusting alerts. -->
+
       </div>
 
       <div class="space-y-4 rounded-md border border-border bg-neutral-bg/40 p-4">

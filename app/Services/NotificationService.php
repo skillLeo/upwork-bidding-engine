@@ -38,16 +38,22 @@ class NotificationService
      */
     public function push(string $type, string $title, array $opts = []): AppNotification
     {
+        $push = $opts['push'] ?? true;
+
         $notification = AppNotification::create([
             'type' => $type,
             'level' => $opts['level'] ?? 'info',
+            // Recorded so the client can honour the same decision (no toast
+            // for a lead the server chose not to interrupt anyone about),
+            // without re-deriving the freshness/mute rules in JavaScript.
+            'silent' => ! $push,
             'title' => $title,
             'body' => $opts['body'] ?? null,
             'url' => $opts['url'] ?? null,
             'lead_id' => $opts['lead_id'] ?? null,
         ]);
 
-        if (($opts['push'] ?? true) === false) {
+        if ($push === false) {
             return $notification;
         }
 
