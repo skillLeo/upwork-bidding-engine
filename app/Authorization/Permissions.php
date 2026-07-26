@@ -158,15 +158,31 @@ final class Permissions
 
     /**
      * The setting.{key} permissions for keys whose SCHEMA entry is NOT
-     * secret — the safe-to-delegate half (rules, thresholds, toggles).
+     * secret AND that belong to the workspace — the safe-to-delegate half
+     * (rules, thresholds, toggles).
+     *
+     * PLATFORM-ONLY KEYS ARE EXCLUDED. They used not to be, purely because
+     * this filtered on `secret` alone: signup_mode, the plan catalog, the
+     * platform model defaults and the Google client id are all non-secret,
+     * so a bidder was being granted permission over settings that belong to
+     * the platform rather than to their workspace. The write was refused
+     * further down by SettingsService, so nothing leaked — but a permission
+     * that exists only to be overruled elsewhere is a trap for whoever reads
+     * the Roles matrix next.
      *
      * @return array<int, string>
      */
     public static function nonSecretSettingKeys(): array
     {
+        $platformOnly = (array) config('tenancy.platform_only_keys', []);
+
         return array_values(array_map(
             fn (string $key) => self::forSettingKey($key),
-            array_keys(array_filter(SettingsService::SCHEMA, fn (array $meta) => ! $meta['secret'])),
+            array_keys(array_filter(
+                SettingsService::SCHEMA,
+                fn (array $meta, string $key) => ! $meta['secret'] && ! in_array($key, $platformOnly, true),
+                ARRAY_FILTER_USE_BOTH,
+            )),
         ));
     }
 }
