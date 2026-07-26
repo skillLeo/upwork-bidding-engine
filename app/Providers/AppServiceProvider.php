@@ -29,6 +29,16 @@ class AppServiceProvider extends ServiceProvider
             \App\Services\Mail\Mailbox::class,
             \App\Services\Mail\ImapMailbox::class,
         );
+
+        // Workspace SMTP settings are tenant-scoped, so they cannot be read at
+        // boot (no tenant is bound until middleware runs). This manager applies
+        // them when mail is actually resolved instead — see
+        // TenantAwareMailManager for the bug this replaced. extend(), not
+        // singleton(), because Laravel's own MailServiceProvider is deferred
+        // and would otherwise re-bind over the top of us.
+        $this->app->extend('mail.manager', function ($manager, $app) {
+            return new \App\Mail\TenantAwareMailManager($app);
+        });
     }
 
     /**
@@ -89,7 +99,9 @@ class AppServiceProvider extends ServiceProvider
                 ->enforce($accessToken, $isValid)
         );
 
-        $this->configureDynamicMail();
+        // NOTE: mail is deliberately NOT configured here. Its settings are
+        // tenant-scoped and no tenant is bound at boot — see
+        // TenantAwareMailManager, registered in register() above.
         $this->configureDynamicGoogleOAuth();
 
         // The default notification points at a named `password.reset` web
@@ -103,47 +115,10 @@ class AppServiceProvider extends ServiceProvider
     }
 
     /**
-     * Pulls SMTP creds from Settings (not .env) so they're changeable from
-     * the UI without a redeploy. Guarded on the table existing so a fresh
-     * `migrate` (before the settings table exists) never breaks boot, and
-     * on a host actually being set so an unconfigured install just keeps
-     * .env's inert `log` mailer instead of half-applying empty SMTP config.
-     */
-    protected function configureDynamicMail(): void
-    {
-        // This runs on EVERY request boot, so it must not add a database
-        // round-trip on the happy path. mailConfig() reads the cached settings;
-        // on a fresh install where the settings table doesn't exist yet the
-        // read throws, and we simply bail - no per-request Schema::hasTable()
-        // metadata query (that query alone was ~1 DB round-trip on every hit).
-        try {
-            $mail = app(SettingsService::class)->mailConfig();
-        } catch (\Throwable) {
-            return;
-        }
-
-        if ($mail['host'] === '') {
-            return;
-        }
-
-        Config::set('mail.default', 'smtp');
-        Config::set('mail.mailers.smtp', [
-            'transport' => 'smtp',
-            'host' => $mail['host'],
-            'port' => $mail['port'],
-            'encryption' => $mail['encryption'] ?: null,
-            'username' => $mail['username'],
-            'password' => $mail['password'],
-        ]);
-        Config::set('mail.from', [
-            'address' => $mail['from_address'] ?: $mail['username'],
-            'name' => $mail['from_name'],
-        ]);
-    }
-
-    /**
-     * Same rationale and same fail-open-on-fresh-install guard as
-     * configureDynamicMail() — Google OAuth (P6) is configured from
+     * Configured from Settings > Platform console, not .env, so the client
+     * id/secret can be added without a redeploy. Unlike mail (see
+     * TenantAwareMailManager), these are platform-level keys that resolve
+     * fine at boot with no tenant bound.
      * Settings > Platform console, not .env, so the client id/secret can be
      * added without a redeploy.
      */
