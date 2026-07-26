@@ -91,8 +91,22 @@ class PlatformAiCustodyTest extends TestCase
 
     public function test_the_pooled_keys_are_absent_from_the_tenant_settings_payload(): void
     {
-        app(RoleProvisioner::class)->provision($this->tenant);
-        $owner = $this->owner($this->tenant);
+        // A CUSTOMER workspace, not the founding one. The platform-owning
+        // workspace is deliberately exempt from the omission — its writes are
+        // redirected to the platform layer, so it is where these are edited.
+        $customer = Tenancy::asPlatform(fn () => Tenant::create([
+            'name' => 'Customer', 'slug' => 'payload-customer',
+            'plan' => 'free', 'status' => Tenant::STATUS_ACTIVE,
+        ]));
+
+        app(RoleProvisioner::class)->provision($customer);
+        $owner = $this->owner($customer);
+
+        // Tenant resolution reads the host, and Laravel's test client builds
+        // its request from a relative URI — so without this the request lands
+        // on the FOUNDING workspace (the configured fallback), which is
+        // exempt from the omission, and the test would quietly assert nothing.
+        config(['tenancy.default_tenant_slug' => $customer->slug]);
 
         $response = $this->asToken($owner)->getJson('/api/settings')->assertOk();
         $body = $response->json('data');
@@ -113,8 +127,16 @@ class PlatformAiCustodyTest extends TestCase
 
     public function test_posting_a_pooled_key_to_the_tenant_settings_endpoint_changes_nothing(): void
     {
-        app(RoleProvisioner::class)->provision($this->tenant);
-        $owner = $this->owner($this->tenant);
+        // A CUSTOMER workspace, not the founding one. The platform-owning
+        // workspace is deliberately exempt from the omission — its writes are
+        // redirected to the platform layer, so it is where these are edited.
+        $customer = Tenancy::asPlatform(fn () => Tenant::create([
+            'name' => 'Customer', 'slug' => 'payload-customer',
+            'plan' => 'free', 'status' => Tenant::STATUS_ACTIVE,
+        ]));
+
+        app(RoleProvisioner::class)->provision($customer);
+        $owner = $this->owner($customer);
         $this->setPlatform(['anthropic_api_key' => 'sk-ant-platform']);
 
         $this->asToken($owner)->postJson('/api/settings', [

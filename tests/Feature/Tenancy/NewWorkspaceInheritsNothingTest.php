@@ -55,7 +55,6 @@ class NewWorkspaceInheritsNothingTest extends TestCase
             'excluded_stacks' => ['Go', 'Rust'],
             'project_facts' => 'PatrolTick: guard-management SaaS. Laravel + Vue.',
             'proposal_signature' => 'Hassam',
-            'gmail_address' => 'founder@skillleo.test',
         ]);
 
         Tenancy::runAs($this->freshWorkspace(), function () {
@@ -66,7 +65,6 @@ class NewWorkspaceInheritsNothingTest extends TestCase
             $this->assertSame([], $s->get('excluded_stacks'));
             $this->assertSame('', $s->get('project_facts'), 'a new workspace must not inherit anyone\'s track record');
             $this->assertSame('', $s->get('proposal_signature'));
-            $this->assertSame('', $s->get('gmail_address'));
         });
     }
 
@@ -77,11 +75,12 @@ class NewWorkspaceInheritsNothingTest extends TestCase
      */
     public function test_a_new_workspace_inherits_no_credential_of_any_kind(): void
     {
+        // The lead source (Vollna, the intake mailbox) is deliberately NOT
+        // here: it is platform-owned now — one subscription feeds every
+        // workspace — so resolving it is correct, not a leak. What must never
+        // happen is a workspace SEEING it, which
+        // WorkspaceOwnerCapabilitiesTest asserts against the API payload.
         app(SettingsService::class)->setMany([
-            'vollna_api_token' => 'vln-founder-token',
-            'vollna_filter_id' => '99887',
-            'vollna_webhook_secret' => 'whsec-founder',
-            'gmail_app_password' => 'abcd efgh ijkl mnop',
             'openclaw_url' => 'https://founder-openclaw.test',
             'openclaw_token' => 'oc-founder',
             'agent_api_token' => 'agent-founder',
@@ -94,10 +93,8 @@ class NewWorkspaceInheritsNothingTest extends TestCase
             $s = app(SettingsService::class);
 
             foreach ([
-                'vollna_api_token', 'vollna_filter_id', 'vollna_webhook_secret',
-                'gmail_app_password', 'openclaw_url', 'openclaw_token',
-                'agent_api_token', 'bidder_whatsapp', 'whatsapp_access_token',
-                'vapid_private_key',
+                'openclaw_url', 'openclaw_token', 'agent_api_token',
+                'bidder_whatsapp', 'whatsapp_access_token', 'vapid_private_key',
             ] as $key) {
                 $this->assertEmpty(
                     $s->get($key),

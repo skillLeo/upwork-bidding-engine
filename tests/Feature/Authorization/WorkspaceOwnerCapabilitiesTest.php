@@ -112,7 +112,6 @@ class WorkspaceOwnerCapabilitiesTest extends TestCase
             'alert mode' => ['whatsapp_alert_mode' => 'paused'],
             'their track record' => ['project_facts' => 'Northwind brand system.', 'proposal_signature' => 'Nora'],
             'proposal shape' => ['proposal_min_words' => 100, 'proposal_max_words' => 160],
-            'their own Vollna keys' => ['vollna_api_token' => 'vln-northwind', 'vollna_filter_id' => '4242'],
             'workspace 2FA policy' => ['require_2fa' => true],
             'their AI spend cap' => ['ai_monthly_token_cap' => 500000, 'ai_hard_stop_on_cap' => true],
         ];
@@ -130,7 +129,6 @@ class WorkspaceOwnerCapabilitiesTest extends TestCase
             $this->assertSame(['Figma'], $settings->get('core_stacks'));
             $this->assertSame(9, (int) $settings->get('notify_score_min'));
             $this->assertSame('Nora', $settings->get('proposal_signature'));
-            $this->assertSame('vln-northwind', $settings->get('vollna_api_token'));
         });
     }
 
@@ -188,6 +186,11 @@ class WorkspaceOwnerCapabilitiesTest extends TestCase
             'scoring_model' => 'claude-opus-4-8',
             'signup_mode' => 'open',
             'mail_host' => 'smtp.mine.test',
+            // The lead source is the platform's single subscription, not a
+            // per-workspace integration.
+            'vollna_api_token' => 'vln-mine',
+            'vollna_webhook_secret' => 'whsec-mine',
+            'gmail_app_password' => 'mine mine mine mine',
         ];
 
         foreach ($platformProperty as $key => $value) {
@@ -233,5 +236,69 @@ class WorkspaceOwnerCapabilitiesTest extends TestCase
         $this->withToken(Tenancy::runAs($this->tenant, fn () => $founder->createToken('t')->plainTextToken))
             ->postJson('/api/settings', ['mail_host' => 'smtp.platform.test'])
             ->assertOk();
+    }
+
+    /**
+     * An admin's Settings payload must not contain the platform's
+     * credentials at all — not even masked.
+     *
+     * A workspace owner holds every permission in their own workspace, which
+     * includes the setting.{key} permission for keys that are not theirs.
+     * That was enough to put the platform's Vollna token and pooled AI keys
+     * into their response as masked entries: the last four characters of a
+     * credential funding every workspace, plus proof of which are set. A
+     * masked secret is still a secret partly disclosed.
+     */
+    public function test_no_platform_credential_reaches_an_admins_settings_payload(): void
+    {
+        // Give the platform real values to leak.
+        Tenancy::runAs($this->tenant, fn () => app(SettingsService::class)->setMany([
+            'vollna_api_token' => 'vln-PLATFORM-SECRET',
+            'vollna_webhook_secret' => 'whsec-PLATFORM',
+            'gmail_app_password' => 'abcd efgh ijkl mnop',
+            'anthropic_api_key' => 'sk-ant-PLATFORM',
+            'mail_password' => 'smtp-PLATFORM',
+        ]));
+
+        $body = $this->asAdmin()->getJson('/api/settings')->assertOk()->getContent();
+        $payload = json_decode($body, true)['data'];
+
+        foreach ((array) config('tenancy.platform_only_keys') as $key) {
+            foreach ($payload as $group => $entries) {
+                $this->assertArrayNotHasKey(
+                    $key,
+                    $entries,
+                    "[{$key}] belongs to the platform and must not appear in a workspace's settings payload",
+                );
+            }
+        }
+
+        // And no fragment of any of them is anywhere in the response.
+        foreach (['vln-PLATFORM-SECRET', 'whsec-PLATFORM', 'ijkl mnop', 'sk-ant-PLATFORM', 'smtp-PLATFORM'] as $secret) {
+            $this->assertStringNotContainsString($secret, $body);
+            $this->assertStringNotContainsString(substr($secret, -4), $body);
+        }
+    }
+
+    /**
+     * The platform-owning workspace keeps them, and has to: writes from it
+     * are redirected to the platform layer, so this is where they are edited.
+     */
+    public function test_the_platform_owner_still_sees_the_platform_settings(): void
+    {
+        app(TenantContext::class)->set($this->tenant);
+        config(['tenancy.default_tenant_slug' => $this->tenant->slug]);
+
+        $founder = User::factory()->create(['platform_role' => 'platform_owner']);
+        $this->tenant->users()->syncWithoutDetaching([$founder->id => ['joined_at' => now()]]);
+        TenantTeamResolver::pinnedTo($this->tenant->id, fn () => $founder->syncRoles([TenantRole::Owner->value]));
+
+        Auth::forgetGuards();
+        $payload = $this->withToken(Tenancy::runAs($this->tenant, fn () => $founder->createToken('t')->plainTextToken))
+            ->getJson('/api/settings')->assertOk()->json('data');
+
+        $this->assertArrayHasKey('vollna_api_token', $payload['vollna']);
+        $this->assertArrayHasKey('anthropic_api_key', $payload['ai']);
+        $this->assertArrayHasKey('mail_host', $payload['mail']);
     }
 }

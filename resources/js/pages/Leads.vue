@@ -22,6 +22,7 @@ import { useSavedFilters } from "@/composables/useSavedFilters";
 import { useSpeechRecognition } from "@/composables/useSpeechRecognition";
 import { bulkToggleLeadFavorite, bulkUpdateLeadStatus } from "@/composables/useLead";
 import { apiClient, apiErrorMessage } from "@/lib/api-client";
+import { useAuthStore } from "@/stores/auth";
 import { cn } from "@/lib/utils";
 import LeadRow from "@/components/leads/LeadRow.vue";
 import LeadCard from "@/components/leads/LeadCard.vue";
@@ -132,6 +133,7 @@ function sortIcon(column) {
   return sortDirection.value === "desc" ? ChevronDown : ChevronUp;
 }
 
+const auth = useAuthStore();
 const route = useRoute();
 const router = useRouter();
 
@@ -300,6 +302,13 @@ const leadGroups = computed(() => {
 // has actually run (meta comes back empty on a plain unfiltered browse).
 const searchChips = computed(() => (search.value ? (meta.value?.search_chips ?? []) : []));
 
+// Settings sections that only the platform owner can open (see Settings.vue).
+// Kept in step with that list by hand — it is five entries, and a shared
+// constant across a page and a settings screen would be a heavier coupling
+// than the duplication saves.
+const PLATFORM_ONLY_SECTIONS = new Set(["branding", "diagnostics", "vollna", "openclaw", "ai"]);
+const canReach = (section) => !PLATFORM_ONLY_SECTIONS.has(section) || auth.isPlatformOwner;
+
 function clearFilters() {
   status.value = "all";
   scoreMin.value = undefined;
@@ -419,12 +428,18 @@ async function handleSync() {
         <li v-for="item in meta.setup.missing" :key="item.key" class="flex items-center gap-2 text-sm">
           <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-warning" />
           <span class="text-text-primary">{{ item.label }}</span>
+          <!-- Only link to a screen this person can actually open. Some of
+               these live in platform-owner-only sections, and sending
+               someone to a tab that will not render for them is worse than
+               saying plainly who sets it. -->
           <RouterLink
+            v-if="canReach(item.section)"
             :to="`/settings?section=${item.section}`"
             class="font-medium text-primary hover:underline"
           >
             Set it up
           </RouterLink>
+          <span v-else class="text-text-tertiary">— your platform owner sets this</span>
         </li>
       </ul>
     </div>

@@ -157,27 +157,29 @@ class TenantIsolationTest extends TestCase
      * including the Anthropic and Vollna credentials — so tenant B was
      * served whatever tenant A warmed the cache with.
      *
-     * The credential used here is the VOLLNA token, not the Anthropic key.
-     * Since P8 the AI keys are pooled and platform-owned — there is no such
-     * thing as tenant A's Anthropic key to leak, and writing one throws. The
-     * Vollna token is a real per-workspace secret, so it is the honest
-     * subject for a per-tenant-secret isolation test.
+     * The credential used here is the workspace's own WHATSAPP token.
+     *
+     * It has to be a secret that genuinely still belongs to a workspace, and
+     * the list keeps shrinking: the AI keys became pooled and platform-owned,
+     * then so did the Vollna token and intake mailbox (one lead source funds
+     * the platform). Writing either now throws. Each workspace does connect
+     * its OWN Meta number, so its access token is the honest subject.
      */
     public function test_tenant_b_never_receives_tenant_as_decrypted_api_key(): void
     {
         $settings = app(SettingsService::class);
 
-        $this->as($this->a, fn () => $settings->set('vollna_api_token', 'vln-AAAA-alpha-secret'));
-        $this->as($this->b, fn () => $settings->set('vollna_api_token', 'vln-BBBB-beta-secret'));
+        $this->as($this->a, fn () => $settings->set('whatsapp_access_token', 'EAAG-AAAA-alpha-secret'));
+        $this->as($this->b, fn () => $settings->set('whatsapp_access_token', 'EAAG-BBBB-beta-secret'));
 
         // A reads first, warming the cache.
-        $this->as($this->a, fn () => $this->assertSame('vln-AAAA-alpha-secret', $settings->get('vollna_api_token')));
+        $this->as($this->a, fn () => $this->assertSame('EAAG-AAAA-alpha-secret', $settings->get('whatsapp_access_token')));
 
         // B must NOT get A's key back out of a shared cache entry.
-        $this->as($this->b, fn () => $this->assertSame('vln-BBBB-beta-secret', $settings->get('vollna_api_token')));
+        $this->as($this->b, fn () => $this->assertSame('EAAG-BBBB-beta-secret', $settings->get('whatsapp_access_token')));
 
         // And back again, to prove the first read did not poison the second.
-        $this->as($this->a, fn () => $this->assertSame('vln-AAAA-alpha-secret', $settings->get('vollna_api_token')));
+        $this->as($this->a, fn () => $this->assertSame('EAAG-AAAA-alpha-secret', $settings->get('whatsapp_access_token')));
     }
 
     public function test_a_real_tenant_cannot_override_a_platform_only_key(): void

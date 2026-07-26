@@ -454,7 +454,15 @@ class SettingsController extends Controller
         // console instead. Omitted rather than shown read-only for the same
         // reason a secret they lack permission for is omitted: shipping the
         // shape invites the assumption the value is merely hidden.
-        $platformOnly = (array) config('tenancy.platform_only_keys', []);
+        //
+        // THE PLATFORM-OWNING WORKSPACE IS EXEMPT, and has to be: writes from
+        // it are already redirected to the platform layer by
+        // SettingsService::writeTenantId(), so this is where the platform
+        // owner actually edits these. Omitting them here as well would leave
+        // the lead-source credentials editable from nowhere at all.
+        $platformOnly = Tenancy::current()?->plan === 'internal'
+            ? []
+            : (array) config('tenancy.platform_only_keys', []);
 
         foreach (SettingsService::SCHEMA as $key => $meta) {
             $value = $all[$key] ?? null;

@@ -72,6 +72,22 @@ return [
     */
     'platform_only_keys' => [
         'signup_mode',
+        // The lead source is the PLATFORM's account, not a customer's. One
+        // Vollna subscription feeds the product; a workspace never supplies
+        // its own token, never sees the one in use, and cannot point intake
+        // at a different account. Same reasoning as the pooled AI keys.
+        'vollna_webhook_secret',
+        'vollna_api_token',
+        'vollna_filter_id',
+        'vollna_silence_alert_hours',
+        // The email intake path is the same source by another door.
+        'gmail_address',
+        'gmail_app_password',
+        'imap_host',
+        'imap_port',
+        'imap_folder',
+        'vollna_sender_filter',
+        'imap_poll_enabled',
         'scoring_system_prompt',
         'proposal_skill',
         'stage_2_scoring_addendum',

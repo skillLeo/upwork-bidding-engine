@@ -2,9 +2,24 @@
 
 namespace Tests\Feature\Tenancy;
 
+use App\Models\ActivityLog;
+use App\Models\AiCall;
+use App\Models\AppNotification;
+use App\Models\Client;
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\BelongsToTenantOrPlatform;
+use App\Models\DeletedLeadExternalId;
+use App\Models\Invitation;
+use App\Models\Lead;
+use App\Models\Message;
+use App\Models\NotificationPreference;
+use App\Models\ProposalVersion;
+use App\Models\PushSubscription;
+use App\Models\SavedFilter;
+use App\Models\Setting;
+use App\Models\Template;
 use App\Models\Tenant;
+use App\Models\User;
 use App\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -33,20 +48,20 @@ class TenancyGuardTest extends TestCase
      * @var array<int, class-string<Model>>
      */
     private const TENANT_MODELS = [
-        \App\Models\ActivityLog::class,
-        \App\Models\AiCall::class,
-        \App\Models\AppNotification::class,
-        \App\Models\Client::class,
-        \App\Models\DeletedLeadExternalId::class,
-        \App\Models\Invitation::class,
-        \App\Models\Lead::class,
-        \App\Models\Message::class,
-        \App\Models\NotificationPreference::class,
-        \App\Models\ProposalVersion::class,
-        \App\Models\PushSubscription::class,
-        \App\Models\SavedFilter::class,
-        \App\Models\Setting::class,
-        \App\Models\Template::class,
+        ActivityLog::class,
+        AiCall::class,
+        AppNotification::class,
+        Client::class,
+        DeletedLeadExternalId::class,
+        Invitation::class,
+        Lead::class,
+        Message::class,
+        NotificationPreference::class,
+        ProposalVersion::class,
+        PushSubscription::class,
+        SavedFilter::class,
+        Setting::class,
+        Template::class,
     ];
 
     /**
@@ -164,14 +179,21 @@ class TenancyGuardTest extends TestCase
         $context = app(TenantContext::class);
 
         foreach (self::TENANT_MODELS as $class) {
-            $context->runAs($b, fn () => $this->seedOne($class));
+            $row = $context->runAs($b, fn () => $this->seedOne($class));
 
-            $countForA = $context->runAs($a, fn () => $class::count());
+            // The SPECIFIC row, not a count of everything visible.
+            //
+            // A bare count() answers "how many rows can A see", which is a
+            // different question: Setting deliberately resolves "this tenant
+            // OR the platform default", so one legitimate platform row makes
+            // the count non-zero and the test fails while nothing has
+            // leaked. Asking whether B's actual row is reachable is the
+            // isolation guarantee, and it holds for every model here.
+            $leaked = $context->runAs($a, fn () => $class::whereKey($row->getKey())->exists());
 
-            $this->assertSame(
-                0,
-                $countForA,
-                "[{$class}] returned {$countForA} of tenant B's rows while tenant A was bound."
+            $this->assertFalse(
+                $leaked,
+                "[{$class}] returned tenant B's row #{$row->getKey()} while tenant A was bound."
             );
         }
     }
@@ -263,7 +285,7 @@ class TenancyGuardTest extends TestCase
         $this->assertSame(
             [],
             $offenders,
-            "Un-labelled tenant-scope bypass(es) found. Each needs an inline comment starting with \"TENANCY:\" "
+            'Un-labelled tenant-scope bypass(es) found. Each needs an inline comment starting with "TENANCY:" '
             ."explaining why it is safe:\n  ".implode("\n  ", $offenders)
         );
     }
@@ -287,36 +309,36 @@ class TenancyGuardTest extends TestCase
     private function seedOne(string $class): Model
     {
         return match ($class) {
-            \App\Models\ActivityLog::class => \App\Models\ActivityLog::create(['type' => 'lead_received']),
-            \App\Models\AiCall::class => \App\Models\AiCall::create(['purpose' => 'scoring', 'provider' => 'anthropic', 'model' => 'm']),
-            \App\Models\AppNotification::class => \App\Models\AppNotification::create(['type' => 'lead', 'title' => 't', 'body' => 'b']),
-            \App\Models\Client::class => \App\Models\Client::factory()->create(),
-            \App\Models\DeletedLeadExternalId::class => \App\Models\DeletedLeadExternalId::create(['external_id' => 'x'.uniqid()]),
-            \App\Models\Invitation::class => \App\Models\Invitation::create([
+            ActivityLog::class => ActivityLog::create(['type' => 'lead_received']),
+            AiCall::class => AiCall::create(['purpose' => 'scoring', 'provider' => 'anthropic', 'model' => 'm']),
+            AppNotification::class => AppNotification::create(['type' => 'lead', 'title' => 't', 'body' => 'b']),
+            Client::class => Client::factory()->create(),
+            DeletedLeadExternalId::class => DeletedLeadExternalId::create(['external_id' => 'x'.uniqid()]),
+            Invitation::class => Invitation::create([
                 'email' => uniqid().'@example.com', 'role' => 'bidder',
                 'token_hash' => hash('sha256', uniqid()), 'expires_at' => now()->addDay(),
             ]),
-            \App\Models\Lead::class => \App\Models\Lead::factory()->create(),
-            \App\Models\Message::class => \App\Models\Message::create([
-                'client_id' => \App\Models\Client::factory()->create()->id,
+            Lead::class => Lead::factory()->create(),
+            Message::class => Message::create([
+                'client_id' => Client::factory()->create()->id,
                 'direction' => 'in', 'text' => 'hello',
             ]),
-            \App\Models\NotificationPreference::class => \App\Models\NotificationPreference::create([
-                'user_id' => \App\Models\User::factory()->create()->id,
+            NotificationPreference::class => NotificationPreference::create([
+                'user_id' => User::factory()->create()->id,
             ]),
-            \App\Models\ProposalVersion::class => \App\Models\ProposalVersion::create([
-                'lead_id' => \App\Models\Lead::factory()->create()->id,
+            ProposalVersion::class => ProposalVersion::create([
+                'lead_id' => Lead::factory()->create()->id,
                 'version_number' => 1, 'body' => 'text', 'edit_type' => 'generated',
             ]),
-            \App\Models\PushSubscription::class => \App\Models\PushSubscription::create([
+            PushSubscription::class => PushSubscription::create([
                 'endpoint' => $e = 'https://fcm.googleapis.com/'.uniqid(),
                 'endpoint_hash' => hash('sha256', $e), 'p256dh' => 'k', 'auth_key' => 'a',
             ]),
-            \App\Models\SavedFilter::class => \App\Models\SavedFilter::factory()->create(),
-            \App\Models\Setting::class => \App\Models\Setting::create([
+            SavedFilter::class => SavedFilter::factory()->create(),
+            Setting::class => Setting::create([
                 'key' => 'k'.uniqid(), 'value' => '1', 'group' => 'rules', 'is_secret' => false,
             ]),
-            \App\Models\Template::class => \App\Models\Template::factory()->create(),
+            Template::class => Template::factory()->create(),
             default => $this->fail("No seed defined for [{$class}] in TenancyGuardTest::seedOne()."),
         };
     }

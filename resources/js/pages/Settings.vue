@@ -51,11 +51,21 @@ const router = useRouter();
 // workspace's setting, and moved to the platform console with the other
 // platform-only keys.
 const allSections = [
-  { id: "branding", label: "Branding", icon: Palette },
-  { id: "diagnostics", label: "Diagnostics", icon: Activity },
-  { id: "vollna", label: "Vollna", icon: Webhook, need: "setting.vollna_api_token" },
-  { id: "openclaw", label: "AI Engine", icon: Bot, need: "setting.openclaw_token", internalOnly: true },
-  { id: "ai", label: "Proposals & Facts", icon: Brain },
+  // PLATFORM-OWNER ONLY. These five are the product's own machinery, not a
+  // customer's configuration:
+  //   branding     — the product's name and logo, identical everywhere
+  //   diagnostics  — integration health and error detail for the platform's
+  //                  own plumbing
+  //   vollna       — the lead source: ONE subscription funds every workspace
+  //   openclaw     — the internal AI bridge
+  //   ai           — how proposals are written and what they may claim
+  // A workspace owner runs their workspace (bidding rules, notifications,
+  // members, filters, their own leads); they do not run the product.
+  { id: "branding", label: "Branding", icon: Palette, platformOnly: true },
+  { id: "diagnostics", label: "Diagnostics", icon: Activity, platformOnly: true },
+  { id: "vollna", label: "Vollna", icon: Webhook, platformOnly: true },
+  { id: "openclaw", label: "AI Engine", icon: Bot, platformOnly: true, internalOnly: true },
+  { id: "ai", label: "Proposals & Facts", icon: Brain, platformOnly: true },
   { id: "ai-usage", label: "AI Usage & Cost", icon: Wallet, need: "ai_usage.view" },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "rules", label: "Bidding Rules", icon: SlidersHorizontal },
@@ -65,7 +75,10 @@ const allSections = [
 ];
 const sections = computed(() =>
   allSections.filter(
-    (s) => (!s.need || auth.can(s.need)) && (!s.internalOnly || auth.isInternalWorkspace),
+    (s) =>
+      (!s.need || auth.can(s.need)) &&
+      (!s.internalOnly || auth.isInternalWorkspace) &&
+      (!s.platformOnly || auth.isPlatformOwner),
   ),
 );
 const sectionIds = computed(() => sections.value.map((s) => s.id));
