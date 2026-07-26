@@ -98,6 +98,58 @@ async function setMode(mode) {
   }
 }
 
+// Cloud API credentials. Secrets start blank and are only sent when the
+// operator actually types a new value — resubmitting an empty string must
+// never wipe a stored token (SecretField + the controller both honour this).
+const cloud = ref({
+  whatsapp_cloud_enabled: !!props.settings.whatsapp_cloud_enabled,
+  whatsapp_phone_number_id: props.settings.whatsapp_phone_number_id ?? "",
+  whatsapp_waba_id: props.settings.whatsapp_waba_id ?? "",
+  whatsapp_template_name: props.settings.whatsapp_template_name ?? "fresh_lead",
+  whatsapp_template_language: props.settings.whatsapp_template_language ?? "en",
+  whatsapp_access_token: "",
+  whatsapp_app_secret: "",
+  whatsapp_verify_token: "",
+});
+
+watch(
+  () => props.settings,
+  (v) => {
+    cloud.value = {
+      whatsapp_cloud_enabled: !!v.whatsapp_cloud_enabled,
+      whatsapp_phone_number_id: v.whatsapp_phone_number_id ?? "",
+      whatsapp_waba_id: v.whatsapp_waba_id ?? "",
+      whatsapp_template_name: v.whatsapp_template_name ?? "fresh_lead",
+      whatsapp_template_language: v.whatsapp_template_language ?? "en",
+      whatsapp_access_token: "",
+      whatsapp_app_secret: "",
+      whatsapp_verify_token: "",
+    };
+  },
+);
+
+const webhookUrl = `${window.location.origin}/api/webhooks/whatsapp`;
+
+const savingCloud = ref(false);
+
+async function saveCloud() {
+  savingCloud.value = true;
+  try {
+    const payload = { ...cloud.value };
+    // Blank secret = "leave what's stored alone".
+    for (const k of ["whatsapp_access_token", "whatsapp_app_secret", "whatsapp_verify_token"]) {
+      if (!payload[k]) delete payload[k];
+    }
+    await saveSettings(payload);
+    toast.success("Cloud API settings saved.");
+    emit("saved");
+  } catch (error) {
+    toast.error(apiErrorMessage(error, "Could not save the Cloud API settings."));
+  } finally {
+    savingCloud.value = false;
+  }
+}
+
 const bidderNumber = ref("");
 const savingWhatsapp = ref(false);
 
@@ -222,6 +274,87 @@ async function saveWhatsapp() {
         />
         <div class="flex justify-end">
           <Button @click="saveWhatsapp" :loading="savingWhatsapp">Save WhatsApp number</Button>
+        </div>
+      </CardContent>
+    </Card>
+
+    <!-- 5. Official Cloud API — the path that needs no Mac and no tunnel -->
+    <Card>
+      <CardHeader>
+        <div>
+          <CardTitle>WhatsApp Cloud API (recommended)</CardTitle>
+          <CardDescription class="mt-1">
+            Meta's official API. Sends straight from this server — no Mac, no tunnel, nothing to
+            go offline — and it's the only way replies like BID or PAUSE can reach the app.
+            Leave it off to keep using the old bridge.
+          </CardDescription>
+        </div>
+      </CardHeader>
+      <CardContent class="space-y-4">
+        <label class="flex items-center gap-2 text-sm text-text-secondary select-none">
+          <input
+            type="checkbox"
+            v-model="cloud.whatsapp_cloud_enabled"
+            class="h-4 w-4 rounded border-border-strong text-primary focus:ring-2 focus:ring-primary/30"
+          />
+          Use the Cloud API for WhatsApp alerts
+        </label>
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div>
+            <Label>Phone number ID</Label>
+            <Input v-model="cloud.whatsapp_phone_number_id" placeholder="1234567890" />
+            <FieldHint>From your Meta app → WhatsApp → API setup.</FieldHint>
+          </div>
+          <div>
+            <Label>WhatsApp Business Account ID</Label>
+            <Input v-model="cloud.whatsapp_waba_id" placeholder="1234567890" />
+          </div>
+          <div>
+            <Label>Template name</Label>
+            <Input v-model="cloud.whatsapp_template_name" />
+            <FieldHint>An approved <strong>Utility</strong> template, not Marketing.</FieldHint>
+          </div>
+          <div>
+            <Label>Template language</Label>
+            <Input v-model="cloud.whatsapp_template_language" />
+            <FieldHint>e.g. en or en_US — must match the approved template.</FieldHint>
+          </div>
+        </div>
+
+        <SecretField
+          label="Access token"
+          :is-set="settings.whatsapp_access_token.is_set"
+          :masked="settings.whatsapp_access_token.masked"
+          v-model="cloud.whatsapp_access_token"
+          hint="Use a permanent System User token, not the 24-hour test token."
+        />
+        <SecretField
+          label="App secret"
+          :is-set="settings.whatsapp_app_secret.is_set"
+          :masked="settings.whatsapp_app_secret.masked"
+          v-model="cloud.whatsapp_app_secret"
+          hint="Verifies inbound webhooks are genuinely from Meta."
+        />
+        <SecretField
+          label="Webhook verify token"
+          :is-set="settings.whatsapp_verify_token.is_set"
+          :masked="settings.whatsapp_verify_token.masked"
+          v-model="cloud.whatsapp_verify_token"
+          hint="Any random string. Paste the same value into Meta's webhook setup."
+        />
+
+        <div class="rounded-md border border-border bg-bg p-3 text-xs text-text-secondary">
+          <p class="font-semibold text-text-primary">Webhook callback URL</p>
+          <p class="mt-1 font-mono break-all">{{ webhookUrl }}</p>
+          <p class="mt-1.5">
+            Paste this into Meta → WhatsApp → Configuration, subscribe to the
+            <span class="font-mono">messages</span> field, and use the verify token above.
+          </p>
+        </div>
+
+        <div class="flex justify-end">
+          <Button @click="saveCloud" :loading="savingCloud">Save Cloud API settings</Button>
         </div>
       </CardContent>
     </Card>

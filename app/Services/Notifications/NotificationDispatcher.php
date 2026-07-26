@@ -83,11 +83,25 @@ class NotificationDispatcher
             return $this->outcome(false, $reason, ['bell']);
         }
 
-        // WhatsApp last, as its own job so a dead tunnel retries in the
-        // background instead of holding up anything above.
+        // WhatsApp last, and never able to affect anything above it.
         $channels = ['bell', 'push'];
 
-        if ($this->whatsappAvailable()) {
+        // Meta's Cloud API first when configured: no Mac, no tunnel, nothing
+        // to go offline. Only fall back to the OpenClaw bridge when it isn't.
+        $cloud = app(\App\Services\WhatsApp\WhatsAppCloudService::class);
+
+        if ($cloud->isConfigured()) {
+            $channels[] = 'whatsapp_cloud';
+
+            try {
+                $cloud->sendAlert(
+                    $this->headline($lead).' — '.$this->summary($lead),
+                    $this->templateParams($lead),
+                );
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        } elseif ($this->whatsappAvailable()) {
             $channels[] = 'whatsapp';
 
             try {
@@ -108,6 +122,23 @@ class NotificationDispatcher
         }
 
         return $this->outcome(true, null, $channels);
+    }
+
+    /**
+     * Ordered body parameters for the approved UTILITY template, used when
+     * we're outside Meta's 24-hour service window: {{1}} score, {{2}} title,
+     * {{3}} budget, {{4}} age.
+     *
+     * @return array<int, string>
+     */
+    public function templateParams(Lead $lead): array
+    {
+        return [
+            (string) ((int) ($lead->score ?? 0)).'/10',
+            (string) $lead->title,
+            (string) ($lead->budget ?: 'budget not stated'),
+            $lead->posted_at?->diffForHumans() ?? 'just now',
+        ];
     }
 
     /**

@@ -131,6 +131,14 @@ class UpdateSettingsRequest extends FormRequest
             'notify_score_min' => ['sometimes', 'integer', 'min:1', 'max:10'],
             'quiet_hours_start' => ['sometimes', 'integer', 'min:0', 'max:23'],
             'quiet_hours_end' => ['sometimes', 'integer', 'min:0', 'max:23'],
+            'whatsapp_cloud_enabled' => ['sometimes', 'boolean'],
+            'whatsapp_phone_number_id' => ['sometimes', 'string', 'max:64'],
+            'whatsapp_waba_id' => ['sometimes', 'string', 'max:64'],
+            'whatsapp_access_token' => ['sometimes', 'string', 'max:1024'],
+            'whatsapp_app_secret' => ['sometimes', 'string', 'max:255'],
+            'whatsapp_verify_token' => ['sometimes', 'string', 'max:255'],
+            'whatsapp_template_name' => ['sometimes', 'string', 'max:128'],
+            'whatsapp_template_language' => ['sometimes', 'string', 'max:16'],
             'max_posted_age_days' => ['sometimes', 'integer', 'min:1', 'max:90'],
         ];
     }

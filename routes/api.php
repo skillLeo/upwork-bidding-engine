@@ -54,8 +54,21 @@ Route::get('/branding', [SettingsController::class, 'branding']);
 Route::get('/health/ping', HealthPingController::class)
     ->middleware('throttle:30,1');
 
-// Outbound WhatsApp goes through OpenClaw (see OpenClawService), not Meta's
-// Cloud API, so there is no inbound Meta webhook to receive here.
+/*
+|----------------------------------------------------------------------
+| WhatsApp Business Cloud API (Meta) — inbound.
+|
+| Necessarily public: Meta holds no credential of ours. The GET handshake
+| is gated on hub.verify_token matching the workspace's own, and every POST
+| is authenticated by an X-Hub-Signature-256 HMAC over the raw body before
+| a single field is acted on. This is what makes BID/SKIP/PAUSE replies
+| possible at all — the OpenClaw path can only send, never receive.
+|----------------------------------------------------------------------
+*/
+Route::get('/webhooks/whatsapp', [\App\Http\Controllers\WhatsAppWebhookController::class, 'verify'])
+    ->middleware('throttle:webhooks');
+Route::post('/webhooks/whatsapp', [\App\Http\Controllers\WhatsAppWebhookController::class, 'handle'])
+    ->middleware('throttle:webhooks');
 
 /*
 |--------------------------------------------------------------------------

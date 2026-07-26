@@ -152,6 +152,26 @@ class SendLeadRemindersCommand extends Command
         // SECONDARY: a convenience copy on WhatsApp. Isolated in its own
         // try/catch AFTER the primary send, so an offline tunnel is logged
         // and forgotten rather than taking the reminder down with it.
+        $cloud = app(\App\Services\WhatsApp\WhatsAppCloudService::class);
+
+        if ($cloud->isConfigured()) {
+            try {
+                $cloud->sendAlert(
+                    $message.' '.$dashboardUrl.'/leads/'.$lead->id,
+                    [
+                        ((int) ($lead->score ?? 0)).'/10',
+                        (string) $lead->title,
+                        (string) ($lead->budget ?: 'budget not stated'),
+                        'reminder '.$dueReminderNumber.' of 2',
+                    ],
+                );
+            } catch (\Throwable $e) {
+                report($e);
+            }
+
+            return;
+        }
+
         if (! $whatsappAvailable) {
             return;
         }

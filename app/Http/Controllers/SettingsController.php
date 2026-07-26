@@ -240,7 +240,11 @@ class SettingsController extends Controller
 
         $result = match ($service) {
             'openclaw' => $openClaw->testConnection(),
-            'whatsapp' => $openClaw->testWhatsAppConnection(),
+            // Prefer Meta's Cloud API when it's configured — that's the path
+            // real alerts take, so it's the one worth proving.
+            'whatsapp' => app(\App\Services\WhatsApp\WhatsAppCloudService::class)->isConfigured()
+                ? app(\App\Services\WhatsApp\WhatsAppCloudService::class)->testConnection()
+                : $openClaw->testWhatsAppConnection(),
             'vollna' => $this->testVollna(),
             'mail' => $this->testMail($request),
             'heartbeat' => $this->testHeartbeat(),

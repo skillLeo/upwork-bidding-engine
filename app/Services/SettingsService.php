@@ -104,6 +104,32 @@ class SettingsService
         // only, fresh lead cards still arrive; 'muted' stops everything.
         'whatsapp_alert_mode' => ['group' => 'whatsapp', 'secret' => false, 'default' => 'normal'],
 
+        // Meta's official WhatsApp Business Cloud API. Sanctioned
+        // server-to-server HTTP, so it needs no Mac, no ngrok tunnel and no
+        // QR-linked companion session — which is exactly what the OpenClaw
+        // path depends on and why that path keeps dying. When
+        // whatsapp_cloud_enabled is on AND the credentials are present, the
+        // Cloud API is used for outbound alerts and OpenClaw is bypassed.
+        // Unlike OpenClaw it can also RECEIVE messages, which is what makes
+        // BID/SKIP/PAUSE replies possible at all.
+        'whatsapp_cloud_enabled' => ['group' => 'whatsapp', 'secret' => false, 'default' => false],
+        'whatsapp_phone_number_id' => ['group' => 'whatsapp', 'secret' => false, 'default' => ''],
+        'whatsapp_waba_id' => ['group' => 'whatsapp', 'secret' => false, 'default' => ''],
+        'whatsapp_access_token' => ['group' => 'whatsapp', 'secret' => true, 'default' => ''],
+        // Verifies X-Hub-Signature-256 on inbound webhooks. Without it anyone
+        // who learns the URL could POST forged "BID"/"PAUSE" commands.
+        'whatsapp_app_secret' => ['group' => 'whatsapp', 'secret' => true, 'default' => ''],
+        // Echoed back during Meta's GET subscription handshake.
+        'whatsapp_verify_token' => ['group' => 'whatsapp', 'secret' => true, 'default' => ''],
+        // The approved UTILITY template used to open a conversation outside
+        // the 24-hour service window. Utility, never Marketing — a lead alert
+        // is transactional, and Marketing is ~5x the price per message.
+        'whatsapp_template_name' => ['group' => 'whatsapp', 'secret' => false, 'default' => 'fresh_lead'],
+        'whatsapp_template_language' => ['group' => 'whatsapp', 'secret' => false, 'default' => 'en'],
+        // Last time the operator messaged us. Meta allows cheaper, free-form
+        // replies for 24h after this; outside it we must open with a template.
+        'whatsapp_last_inbound_at' => ['group' => 'whatsapp', 'secret' => false, 'default' => null],
+
         // Direct AI layer — scoring/proposals via the Anthropic (or OpenAI)
         // API from Laravel itself, no OpenClaw hop. The system prompts are
         // deliberately settings, not code: the operator pastes and tunes
