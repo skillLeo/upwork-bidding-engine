@@ -1,13 +1,12 @@
 <script setup>
-import { onMounted, reactive, ref, watch } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { toast } from "vue-sonner";
-import { UserPlus, Trash2, RefreshCw, SlidersHorizontal, Building2 } from "@lucide/vue";
+import { UserPlus, Trash2, RefreshCw, SlidersHorizontal } from "@lucide/vue";
 import MemberOverridesPanel from "@/components/settings/MemberOverridesPanel.vue";
 import Card from "@/components/ui/Card.vue";
 import CardHeader from "@/components/ui/CardHeader.vue";
 import CardTitle from "@/components/ui/CardTitle.vue";
 import CardContent from "@/components/ui/CardContent.vue";
-import CardDescription from "@/components/ui/CardDescription.vue";
 import Button from "@/components/ui/Button.vue";
 import Input from "@/components/ui/Input.vue";
 import Label from "@/components/ui/Label.vue";
@@ -19,13 +18,22 @@ import { relativeTime } from "@/lib/utils";
 
 const auth = useAuthStore();
 
-// EXACTLY TWO INVITABLE ROLES (P8). A workspace has one owner — you — and
-// everyone you bring in is a bidder or a viewer. Owner is reached by
-// transferring the workspace, never by invitation, so it is not an option
-// here and the server refuses it regardless of what is posted.
+// "Admin" is NOT a role inside this workspace — there is no such thing, and
+// bringing one back would immediately raise "can an admin invite an admin?",
+// the ambiguity the three-role hierarchy exists to remove. It is offered here
+// because it is the word people actually use for "someone who runs their own
+// shop", and picking it creates a SEPARATE WORKSPACE with that person as its
+// owner. The label says so; the fields that appear say so; the server enforces
+// it either way (an admin invitation into this workspace is a 403).
+const ADMIN_OPTION = {
+  value: "admin",
+  label: "Admin — their own workspace",
+  hint: "Creates a separate workspace they own. Their own stacks, leads, filters and bidding rules — you will not see theirs and they will not see yours.",
+};
+
 const ROLE_OPTIONS = [
-  { value: "bidder", label: "Bidder", hint: "Works the pipeline: leads, proposals, clients. No secret keys, no members." },
-  { value: "viewer", label: "Viewer", hint: "Read-only. For someone watching output without touching it." },
+  { value: "bidder", label: "Bidder", hint: "Joins THIS workspace. Works the pipeline: leads, proposals, clients. Shares your leads, stacks and rules." },
+  { value: "viewer", label: "Viewer", hint: "Joins THIS workspace, read-only. For someone watching output without touching it." },
 ];
 
 // Shown on the members list, where an existing owner still has to render.
@@ -64,7 +72,8 @@ async function createWorkspace() {
       name: wsForm.name.trim(),
       slug: wsForm.slug.trim(),
       specialization: wsForm.specialization.trim() || null,
-      owner_email: wsForm.owner_email.trim(),
+      // The one email field at the top of the form is the person either way.
+      owner_email: inviteEmail.value.trim(),
       owner_name: wsForm.owner_name.trim() || null,
       // Blank means "email them an invitation instead" — the server picks
       // the door based on whether a password came through.
@@ -72,6 +81,7 @@ async function createWorkspace() {
     });
     toast.success(res.data.data.message, { duration: 10000 });
     Object.assign(wsForm, { name: "", slug: "", specialization: "", owner_email: "", owner_name: "", owner_password: "" });
+    inviteEmail.value = "";
     wsSlugTouched.value = false;
   } catch (error) {
     toast.error(apiErrorMessage(error, "Could not create the workspace."));
@@ -80,10 +90,24 @@ async function createWorkspace() {
   }
 }
 
-// The same two, always. Kept as a function so the template reads the same as
-// before; there is no longer any branch on who is asking, because only the
-// owner can reach this endpoint at all.
-const roleChoices = () => ROLE_OPTIONS;
+// Only the platform owner can create a workspace, so only they are offered
+// Admin. Everyone else sees the two roles that join THIS workspace.
+const roleChoices = () => (auth.isPlatformOwner ? [ADMIN_OPTION, ...ROLE_OPTIONS] : ROLE_OPTIONS);
+
+const canSubmitAdd = computed(() => {
+  if (!inviteEmail.value.trim()) return false;
+
+  return inviteRole.value === "admin" ? Boolean(wsForm.name.trim() && wsForm.slug.trim()) : true;
+});
+
+/**
+ * One button, two outcomes. Admin creates a workspace; anything else invites
+ * into this one. The branch lives here rather than in two separate forms
+ * because "add a person" is one action in the operator's head.
+ */
+function submitAdd() {
+  return inviteRole.value === "admin" ? createWorkspace() : sendInvite();
+}
 
 async function load() {
   loading.value = true;
@@ -158,116 +182,27 @@ onMounted(load);
 
 <template>
   <div class="space-y-4">
-    <!-- THE CHOICE, STATED ONCE, BEFORE EITHER FORM.
-         Adding someone to your workspace and giving someone a workspace of
-         their own are completely different acts with the same everyday word
-         ("add a person") attached to both. Only one of them used to be on
-         this screen, so the wrong one was the only one anybody could find. -->
-    <Card>
-      <CardContent class="space-y-3 pt-5">
-        <p class="text-sm font-semibold text-text-primary">Two different things live here</p>
-        <div class="grid gap-3 sm:grid-cols-2">
-          <div class="rounded-md border border-border bg-neutral-bg/50 p-3">
-            <p class="text-sm font-medium text-text-primary">Someone who works on YOUR leads</p>
-            <p class="mt-1 text-xs text-text-secondary">
-              A bidder or viewer. They see this workspace's leads, stacks and rules, because it
-              is the workspace they are working in. Use the invite form below.
-            </p>
-          </div>
-          <div
-            class="rounded-md border p-3"
-            :class="auth.isPlatformOwner ? 'border-primary/30 bg-primary-tint/40' : 'border-border bg-neutral-bg/50'"
-          >
-            <p class="text-sm font-medium text-text-primary">Someone who runs their OWN workspace</p>
-            <p class="mt-1 text-xs text-text-secondary">
-              Their own stacks, their own leads, their own filters — invisible to you, and yours
-              invisible to them. That is a separate workspace, not an invitation.
-              <template v-if="!auth.isPlatformOwner">Only the platform owner can create one.</template>
-            </p>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-
-    <!-- Platform owner only: the workspace-creation path, put HERE rather
-         than left buried in the platform console, because this is the screen
-         people actually open when they want to add somebody. -->
-    <Card v-if="auth.isPlatformOwner">
-      <CardHeader>
-        <CardTitle class="flex items-center gap-2">
-          <Building2 class="h-4 w-4 text-primary" /> Give someone their own workspace
-        </CardTitle>
-      </CardHeader>
-      <CardContent class="space-y-3">
-        <CardDescription>
-          Creates a separate workspace on a trial and emails that person an owner invitation.
-          They fill in their own stacks and project facts and start from nothing — they will
-          never see this workspace's leads, and you will never see theirs.
-        </CardDescription>
-
-        <div class="grid gap-3 sm:grid-cols-2">
-          <div>
-            <Label>Workspace name</Label>
-            <Input v-model="wsForm.name" placeholder="Northwind Design" />
-          </div>
-          <div>
-            <Label>Slug</Label>
-            <Input v-model="wsForm.slug" @input="wsSlugTouched = true" placeholder="northwind-design" class="font-mono" />
-          </div>
-          <div>
-            <Label>Specialization <span class="text-text-tertiary">(optional)</span></Label>
-            <Input v-model="wsForm.specialization" placeholder="Graphic design" />
-          </div>
-          <div>
-            <Label>Their email</Label>
-            <Input v-model="wsForm.owner_email" type="email" placeholder="owner@northwind.com" />
-          </div>
-          <div>
-            <Label>Their name <span class="text-text-tertiary">(optional)</span></Label>
-            <Input v-model="wsForm.owner_name" placeholder="Nora Owner" />
-          </div>
-          <div>
-            <Label>Set their password <span class="text-text-tertiary">(optional)</span></Label>
-            <Input v-model="wsForm.owner_password" type="password" autocomplete="new-password" placeholder="Leave blank to email an invitation" />
-            <FieldHint>
-              Type a password and their account is created and usable immediately — no email
-              involved. Leave it blank and they get an invitation link instead. Use the password
-              route if email delivery is unreliable; hand them the password yourself and let them
-              change it in their profile.
-            </FieldHint>
-          </div>
-        </div>
-
-        <div class="flex justify-end">
-          <Button
-            :loading="creatingWorkspace"
-            :disabled="!wsForm.name || !wsForm.slug || !wsForm.owner_email"
-            @click="createWorkspace"
-          >
-            Create workspace &amp; invite owner
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-
+    <!-- ONE FORM, ONE ROLE DROPDOWN.
+         This screen used to carry two cards — "invite a teammate" and
+         "give someone their own workspace" — and the operator reached for
+         the invite form five separate times looking for an Admin option
+         that lived in the other card. Splitting something people think of
+         as a single act ("add a person, pick what they are") across two
+         cards means the wrong one gets used every time. So: one form, and
+         the ROLE decides what actually happens. -->
     <Card>
       <CardHeader>
         <CardTitle class="flex items-center gap-2">
-          <UserPlus class="h-4 w-4 text-primary" /> Invite someone into THIS workspace
+          <UserPlus class="h-4 w-4 text-primary" /> Add someone
         </CardTitle>
       </CardHeader>
       <CardContent class="space-y-3">
-        <CardDescription>
-          They'll get an email with a single-use link that expires in 72 hours, and they join
-          <strong class="font-semibold text-text-primary">this</strong> workspace — sharing its
-          leads, stacks and bidding rules with you.
-        </CardDescription>
         <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div class="flex-1">
             <Label>Email</Label>
-            <Input v-model="inviteEmail" type="email" placeholder="teammate@company.com" @keyup.enter="sendInvite" />
+            <Input v-model="inviteEmail" type="email" placeholder="person@company.com" @keyup.enter="submitAdd" />
           </div>
-          <div class="sm:w-48">
+          <div class="sm:w-60">
             <Label>Role</Label>
             <select
               v-model="inviteRole"
@@ -276,11 +211,47 @@ onMounted(load);
               <option v-for="r in roleChoices()" :key="r.value" :value="r.value">{{ r.label }}</option>
             </select>
           </div>
-          <Button :loading="inviting" @click="sendInvite">Send invite</Button>
         </div>
-        <p class="text-xs text-text-tertiary">
-          {{ roleChoices().find((r) => r.value === inviteRole)?.hint }}
-        </p>
+
+        <p class="text-xs text-text-secondary">{{ roleChoices().find((r) => r.value === inviteRole)?.hint }}</p>
+
+        <!-- Admin only: an admin does NOT join this workspace, they get one
+             of their own, so that workspace has to be named right here. -->
+        <div v-if="inviteRole === 'admin'" class="space-y-3 rounded-md border border-primary/30 bg-primary-tint/30 p-3">
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div>
+              <Label>Their workspace name</Label>
+              <Input v-model="wsForm.name" placeholder="Northwind Design" />
+            </div>
+            <div>
+              <Label>Slug</Label>
+              <Input v-model="wsForm.slug" @input="wsSlugTouched = true" placeholder="northwind-design" class="font-mono" />
+            </div>
+            <div>
+              <Label>Specialization <span class="text-text-tertiary">(optional)</span></Label>
+              <Input v-model="wsForm.specialization" placeholder="Graphic design" />
+            </div>
+            <div>
+              <Label>Their name <span class="text-text-tertiary">(optional)</span></Label>
+              <Input v-model="wsForm.owner_name" placeholder="Nora Owner" />
+            </div>
+          </div>
+          <div>
+            <Label>Set their password <span class="text-text-tertiary">(optional)</span></Label>
+            <Input v-model="wsForm.owner_password" type="password" autocomplete="new-password" placeholder="Leave blank to email them an invitation" />
+            <FieldHint>
+              Type a password and their account works immediately, with no email involved —
+              the safer route while mail delivery is unreliable. Leave it blank and they get
+              an invitation link instead.
+            </FieldHint>
+          </div>
+        </div>
+
+        <div class="flex justify-end">
+          <Button :loading="inviting || creatingWorkspace" :disabled="!canSubmitAdd" @click="submitAdd">
+            {{ inviteRole === "admin" ? "Create workspace & add admin" : "Send invite" }}
+          </Button>
+        </div>
       </CardContent>
     </Card>
 
