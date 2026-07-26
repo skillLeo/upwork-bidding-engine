@@ -9,6 +9,7 @@ use App\Models\ActivityLog;
 use App\Services\OpenClawService;
 use App\Services\SettingsService;
 use App\Services\WhatsApp\WhatsAppCloudService;
+use App\Tenancy\Tenancy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -28,6 +29,8 @@ class SettingsController extends Controller
 
     public function store(UpdateSettingsRequest $request): JsonResponse
     {
+        $this->refusePlatformOnlyKeys($request);
+
         $validated = $request->validated();
         $user = $request->user();
         $toSave = [];
@@ -69,6 +72,44 @@ class SettingsController extends Controller
             'data' => $this->maskedPayload($request),
             'meta' => ['message' => 'Settings saved.'],
         ]);
+    }
+
+    /**
+     * Refuse a platform-only key OUT LOUD instead of quietly ignoring it.
+     *
+     * These keys were removed from UpdateSettingsRequest's accepted
+     * vocabulary in P8, which made them safe — Laravel's validated() drops
+     * anything it doesn't know, so nothing was ever written. But the request
+     * still came back 200 "Settings saved.", which is the exact failure this
+     * codebase refuses everywhere else: a save that looks like it worked and
+     * didn't. Someone posting scoring_system_prompt deserves to be told the
+     * methodology belongs to the platform, not to be left believing their
+     * workspace now has its own rubric.
+     *
+     * The platform-OWNING workspace is exempt: its writes are redirected to
+     * the platform layer by SettingsService, which is how the platform owner
+     * edits the product's own defaults at all.
+     */
+    private function refusePlatformOnlyKeys(Request $request): void
+    {
+        if (Tenancy::current()?->plan === 'internal') {
+            return;
+        }
+
+        $platformOnly = (array) config('tenancy.platform_only_keys', []);
+        $attempted = array_values(array_intersect(array_keys($request->all()), $platformOnly));
+
+        if ($attempted === []) {
+            return;
+        }
+
+        ActivityLog::record('platform_only_setting_refused', meta: [
+            'keys' => $attempted,
+        ], userId: $request->user()?->id);
+
+        abort(403, count($attempted) === 1
+            ? "[{$attempted[0]}] belongs to the platform, not to a workspace — it is the same for every workspace and only the platform owner can change it."
+            : 'These belong to the platform, not to a workspace: '.implode(', ', $attempted).'.');
     }
 
     /**
