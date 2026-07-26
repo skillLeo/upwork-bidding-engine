@@ -11,9 +11,11 @@ use App\Services\Members\InvitationService;
 use App\Tenancy\Tenancy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Testing\TestResponse;
 use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
 /**
@@ -248,9 +250,78 @@ class InvitationMatrixTest extends TestCase
         $newOwner = User::where('email', 'owner@northwind.test')->firstOrFail();
 
         $this->assertSame($newOwner->id, $created->fresh()->owner_user_id);
+
+        // Pinned for the READ too. Binding the tenant is not enough: Spatie
+        // answers through the team resolver, which prefers a leftover
+        // override — so an unpinned read can look in a different workspace
+        // than the write did and report a confident, wrong answer.
         $this->assertSame(
             'owner',
-            Tenancy::runAs($created->fresh(), fn () => $newOwner->fresh()->getRoleNames()->first()),
+            \App\Tenancy\TenantTeamResolver::pinnedTo(
+                $created->id,
+                fn () => Tenancy::runAs($created->fresh(), fn () => $newOwner->fresh()->getRoleNames()->first()),
+            ),
+        );
+    }
+
+    /**
+     * The role assignment lands in the RIGHT TEAM — asserted against the raw
+     * pivot row, not through Spatie.
+     *
+     * This is not pedantry. The previous version of this file asked
+     * getRoleNames() for the answer, which resolves through the same
+     * TenantTeamResolver the write used. When an override was left pinned to
+     * another workspace, the write went to the wrong team AND the read
+     * followed it there — so the test passed green on data that was wrong,
+     * and the failure only surfaced when the flow was run for real outside a
+     * test (where it died with "There is no role named `owner`").
+     *
+     * A test whose read shares the bug with its write proves nothing.
+     */
+    public function test_the_owner_role_row_lands_on_the_new_workspace_not_the_founding_one(): void
+    {
+        $platformOwner = User::factory()->create(['platform_role' => 'platform_owner']);
+
+        $this->asToken($platformOwner)->postJson('/api/platform/tenants', [
+            'name' => 'Northwind', 'slug' => 'northwind', 'owner_email' => 'owner@northwind.test',
+        ])->assertStatus(201);
+
+        $created = Tenancy::asPlatform(fn () => Tenant::where('slug', 'northwind')->firstOrFail());
+        $invitation = Tenancy::runAs($created, fn () => Invitation::firstOrFail());
+
+        // Poison the team resolver with a stale override pointing at the
+        // FOUNDING workspace — exactly the state workspace creation used to
+        // leave behind. Acceptance must land on the new workspace anyway.
+        //
+        // THROUGH THE REGISTRAR, not app(TenantTeamResolver::class): the
+        // registrar constructs its resolver with `new`, so the container
+        // instance is a different object that Spatie never reads. Poisoning
+        // that one sets nothing, and this test passed against the unfixed
+        // code until it was pointed at the real one.
+        app(PermissionRegistrar::class)->setPermissionsTeamId($this->tenant->id);
+
+        $user = app(InvitationService::class)
+            ->accept($invitation, ['name' => 'New Owner', 'password' => 'password123']);
+
+        $teamKey = config('permission.column_names.team_foreign_key', 'tenant_id');
+
+        $rows = DB::table('model_has_roles')
+            ->join('roles', 'roles.id', '=', 'model_has_roles.role_id')
+            ->where('model_has_roles.model_id', $user->id)
+            ->get(['roles.name', 'model_has_roles.'.$teamKey.' as team_id']);
+
+        $this->assertCount(1, $rows, 'exactly one role assignment');
+        $this->assertSame('owner', $rows[0]->name);
+        $this->assertSame(
+            $created->id,
+            (int) $rows[0]->team_id,
+            'the owner role was written against the wrong workspace',
+        );
+
+        // And the founding workspace gained nobody.
+        $this->assertFalse(
+            $this->tenant->users()->whereKey($user->id)->exists(),
+            'the new owner must not have been added to the founding workspace',
         );
     }
 }

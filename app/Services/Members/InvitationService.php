@@ -10,6 +10,7 @@ use App\Models\Invitation;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Tenancy\Tenancy;
+use App\Tenancy\TenantTeamResolver;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -127,9 +128,16 @@ class InvitationService
             $tenant->update(['owner_user_id' => $user->id]);
         }
 
-        Tenancy::runAs($tenant, function () use ($user, $invitation) {
-            $user->syncRoles([$invitation->role]);
-        });
+        // withTeam(), not runAs() alone. Spatie resolves the team through
+        // TenantTeamResolver, which honours an OVERRIDE ahead of the bound
+        // tenant — and workspace creation leaves one set moments earlier.
+        // Binding the tenant without pinning the team looked correct and
+        // resolved the role in the wrong team, so accepting an owner
+        // invitation died with "There is no role named `owner`".
+        Tenancy::runAs($tenant, fn () => TenantTeamResolver::pinnedTo(
+            $tenant->id,
+            fn () => $user->syncRoles([$invitation->role]),
+        ));
 
         Tenancy::runAs($tenant, fn () => $invitation->update(['accepted_at' => now()]));
 

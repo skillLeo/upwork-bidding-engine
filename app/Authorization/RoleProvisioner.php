@@ -4,6 +4,7 @@ namespace App\Authorization;
 
 use App\Models\Tenant;
 use App\Tenancy\Tenancy;
+use App\Tenancy\TenantTeamResolver;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -64,12 +65,15 @@ class RoleProvisioner
     {
         $this->ensureGlobalPermissions();
 
-        $registrar = app(PermissionRegistrar::class);
         $teamKey = config('permission.column_names.team_foreign_key', 'tenant_id');
-        $previousTeam = $registrar->getPermissionsTeamId();
-        $registrar->setPermissionsTeamId($tenant->id);
 
-        try {
+        // withTeam(), not save-pin-restore by hand: the resolver answers
+        // getPermissionsTeamId() with the BOUND TENANT when nothing is
+        // overridden, so saving that answer and restoring it turns "follow
+        // the tenant" into "pinned to whichever tenant happened to be bound
+        // a moment ago" — which is how accepting an owner invitation ended
+        // up looking for its role in the wrong team and finding none.
+        TenantTeamResolver::pinnedTo($tenant->id, function () use ($tenant, $teamKey) {
             Tenancy::runAs($tenant, function () use ($tenant, $teamKey) {
                 foreach (TenantRole::cases() as $roleEnum) {
                     $existing = Role::where('name', $roleEnum->value)
@@ -94,10 +98,9 @@ class RoleProvisioner
                         ->syncPermissions($roleEnum->defaultPermissions());
                 }
             });
-        } finally {
-            $registrar->setPermissionsTeamId($previousTeam);
-            $registrar->forgetCachedPermissions();
-        }
+        });
+
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
 
     /**

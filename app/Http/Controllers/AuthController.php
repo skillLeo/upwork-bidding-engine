@@ -18,6 +18,7 @@ use App\Services\Auth\LoginThrottle;
 use App\Services\Auth\TokenIssuer;
 use App\Services\SettingsService;
 use App\Tenancy\Tenancy;
+use App\Tenancy\TenantTeamResolver;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -442,16 +443,9 @@ class AuthController extends Controller
     {
         app(RoleProvisioner::class)->provision($tenant);
 
-        $registrar = app(PermissionRegistrar::class);
-        $previousTeam = $registrar->getPermissionsTeamId();
-        $registrar->setPermissionsTeamId($tenant->id);
+        TenantTeamResolver::pinnedTo($tenant->id, fn () => $user->syncRoles([TenantRole::Owner->value]));
 
-        try {
-            $user->syncRoles([TenantRole::Owner->value]);
-        } finally {
-            $registrar->setPermissionsTeamId($previousTeam);
-            $registrar->forgetCachedPermissions();
-        }
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
 
     /**
