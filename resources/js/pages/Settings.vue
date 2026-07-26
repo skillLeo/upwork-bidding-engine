@@ -23,6 +23,7 @@ import DiagnosticsSection from "@/components/settings/DiagnosticsSection.vue";
 import VollnaSection from "@/components/settings/VollnaSection.vue";
 import OpenClawSection from "@/components/settings/OpenClawSection.vue";
 import AiApiSection from "@/components/settings/AiApiSection.vue";
+import TrackRecordSection from "@/components/settings/TrackRecordSection.vue";
 import AiUsageSection from "@/components/settings/AiUsageSection.vue";
 import NotificationsSection from "@/components/settings/NotificationsSection.vue";
 import RulesSection from "@/components/settings/RulesSection.vue";
@@ -66,6 +67,11 @@ const allSections = [
   { id: "vollna", label: "Vollna", icon: Webhook, platformOnly: true },
   { id: "openclaw", label: "AI Engine", icon: Bot, platformOnly: true, internalOnly: true },
   { id: "ai", label: "Proposals & Facts", icon: Brain, platformOnly: true },
+  // The workspace's OWN facts and signature. Separate from the tab above,
+  // which is the methodology: hiding the methodology from a customer must not
+  // also hide the data only that customer can supply, or their proposals stay
+  // paused forever behind a banner pointing at a screen they cannot open.
+  { id: "track-record", label: "Your track record", icon: Brain, need: "setting.project_facts" },
   { id: "ai-usage", label: "AI Usage & Cost", icon: Wallet, need: "ai_usage.view" },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "rules", label: "Bidding Rules", icon: SlidersHorizontal },
@@ -165,6 +171,11 @@ const activeLabel = computed(() => allSections.find((s) => s.id === activeSectio
             <VollnaSection v-else-if="activeSection === 'vollna'" :settings="settings.vollna" @saved="refetch" />
             <OpenClawSection v-else-if="activeSection === 'openclaw'" :settings="settings.openclaw" @saved="refetch" />
             <AiApiSection v-else-if="activeSection === 'ai'" :settings="settings.ai" @saved="refetch" />
+            <TrackRecordSection
+              v-else-if="activeSection === 'track-record'"
+              :settings="settings.ai"
+              @saved="refetch"
+            />
             <AiUsageSection v-else-if="activeSection === 'ai-usage'" />
             <NotificationsSection
               v-else-if="activeSection === 'notifications'"

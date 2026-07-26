@@ -7,6 +7,7 @@ use App\Authorization\TenantRole;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\SettingsService;
+use App\Services\Workspaces\WorkspaceReadiness;
 use App\Tenancy\Tenancy;
 use App\Tenancy\TenantContext;
 use App\Tenancy\TenantTeamResolver;
@@ -110,6 +111,11 @@ class WorkspaceOwnerCapabilitiesTest extends TestCase
             'notification rules' => ['notify_score_min' => 9, 'notification_freshness_hours' => 24],
             'quiet hours' => ['quiet_hours_start' => 22, 'quiet_hours_end' => 8],
             'alert mode' => ['whatsapp_alert_mode' => 'paused'],
+            // The four things only this workspace can supply. They live on
+            // their own Settings tab precisely because the methodology tab
+            // beside them is platform-owned — hiding the methodology must not
+            // also hide a workspace's own facts, or its proposals stay paused
+            // forever behind a banner pointing at a screen it cannot open.
             'their track record' => ['project_facts' => 'Northwind brand system.', 'proposal_signature' => 'Nora'],
             'proposal shape' => ['proposal_min_words' => 100, 'proposal_max_words' => 160],
             'workspace 2FA policy' => ['require_2fa' => true],
@@ -209,6 +215,36 @@ class WorkspaceOwnerCapabilitiesTest extends TestCase
             ->whereIn('key', array_keys($platformProperty))
             ->where('tenant_id', $this->workspace->id)
             ->count());
+    }
+
+    /**
+     * Filling in the track record must actually lift the pause — the banner
+     * is only honest if the thing it asks for is the thing that clears it.
+     */
+    public function test_filling_in_the_track_record_lets_proposals_run(): void
+    {
+        $readiness = fn () => Tenancy::runAs(
+            $this->workspace,
+            fn () => app(WorkspaceReadiness::class)->banner(),
+        );
+
+        $this->asAdmin()->postJson('/api/settings', ['core_stacks' => ['Figma']])->assertOk();
+
+        $banner = $readiness();
+        $this->assertNotNull($banner);
+        $this->assertTrue($banner['can_score'], 'scoring is ready; only proposals are waiting');
+
+        // Every remaining gap points at a tab an admin can actually open.
+        foreach ($banner['missing'] as $item) {
+            $this->assertSame('track-record', $item['section']);
+        }
+
+        $this->asAdmin()->postJson('/api/settings', [
+            'project_facts' => 'Northwind brand system. Figma, Illustrator.',
+            'proposal_signature' => 'Nora',
+        ])->assertOk();
+
+        $this->assertNull($readiness(), 'the banner must clear once the workspace has filled it in');
     }
 
     public function test_an_admin_cannot_reach_the_platform_console_at_all(): void

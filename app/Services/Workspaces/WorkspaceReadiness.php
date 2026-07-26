@@ -76,7 +76,7 @@ class WorkspaceReadiness
             $missing[] = [
                 'key' => 'project_facts',
                 'label' => 'Your project facts — a proposal may only claim what this sheet backs',
-                'section' => 'ai',
+                'section' => 'track-record',
             ];
         }
 
@@ -84,7 +84,7 @@ class WorkspaceReadiness
             $missing[] = [
                 'key' => 'proposal_signature',
                 'label' => 'The name your proposals sign off with',
-                'section' => 'ai',
+                'section' => 'track-record',
             ];
         }
 
