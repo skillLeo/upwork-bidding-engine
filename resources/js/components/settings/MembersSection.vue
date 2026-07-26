@@ -1,7 +1,7 @@
 <script setup>
-import { onMounted, ref } from "vue";
+import { onMounted, reactive, ref, watch } from "vue";
 import { toast } from "vue-sonner";
-import { UserPlus, Trash2, RefreshCw, SlidersHorizontal } from "@lucide/vue";
+import { UserPlus, Trash2, RefreshCw, SlidersHorizontal, Building2 } from "@lucide/vue";
 import MemberOverridesPanel from "@/components/settings/MemberOverridesPanel.vue";
 import Card from "@/components/ui/Card.vue";
 import CardHeader from "@/components/ui/CardHeader.vue";
@@ -38,6 +38,42 @@ const inviteRole = ref("bidder");
 const inviting = ref(false);
 const busyId = ref(null);
 const overridesFor = ref(null); // member whose personal-permissions panel is open
+
+// ------------------------------------------- give someone their own workspace
+// Same endpoint the platform console uses. Surfaced here because this is the
+// screen people open when they want to add a person, and the two paths need
+// to be visible side by side or the wrong one wins by default.
+const creatingWorkspace = ref(false);
+const wsSlugTouched = ref(false);
+const wsForm = reactive({ name: "", slug: "", specialization: "", owner_email: "" });
+
+watch(
+  () => wsForm.name,
+  (name) => {
+    if (!wsSlugTouched.value) {
+      wsForm.slug = name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    }
+  },
+);
+
+async function createWorkspace() {
+  creatingWorkspace.value = true;
+  try {
+    const res = await apiClient.post("/platform/tenants", {
+      name: wsForm.name.trim(),
+      slug: wsForm.slug.trim(),
+      specialization: wsForm.specialization.trim() || null,
+      owner_email: wsForm.owner_email.trim(),
+    });
+    toast.success(res.data.data.message);
+    Object.assign(wsForm, { name: "", slug: "", specialization: "", owner_email: "" });
+    wsSlugTouched.value = false;
+  } catch (error) {
+    toast.error(apiErrorMessage(error, "Could not create the workspace."));
+  } finally {
+    creatingWorkspace.value = false;
+  }
+}
 
 // The same two, always. Kept as a function so the template reads the same as
 // before; there is no longer any branch on who is asking, because only the
@@ -117,22 +153,95 @@ onMounted(load);
 
 <template>
   <div class="space-y-4">
+    <!-- THE CHOICE, STATED ONCE, BEFORE EITHER FORM.
+         Adding someone to your workspace and giving someone a workspace of
+         their own are completely different acts with the same everyday word
+         ("add a person") attached to both. Only one of them used to be on
+         this screen, so the wrong one was the only one anybody could find. -->
     <Card>
+      <CardContent class="space-y-3 pt-5">
+        <p class="text-sm font-semibold text-text-primary">Two different things live here</p>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <div class="rounded-md border border-border bg-neutral-bg/50 p-3">
+            <p class="text-sm font-medium text-text-primary">Someone who works on YOUR leads</p>
+            <p class="mt-1 text-xs text-text-secondary">
+              A bidder or viewer. They see this workspace's leads, stacks and rules, because it
+              is the workspace they are working in. Use the invite form below.
+            </p>
+          </div>
+          <div
+            class="rounded-md border p-3"
+            :class="auth.isPlatformOwner ? 'border-primary/30 bg-primary-tint/40' : 'border-border bg-neutral-bg/50'"
+          >
+            <p class="text-sm font-medium text-text-primary">Someone who runs their OWN workspace</p>
+            <p class="mt-1 text-xs text-text-secondary">
+              Their own stacks, their own leads, their own filters — invisible to you, and yours
+              invisible to them. That is a separate workspace, not an invitation.
+              <template v-if="!auth.isPlatformOwner">Only the platform owner can create one.</template>
+            </p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+
+    <!-- Platform owner only: the workspace-creation path, put HERE rather
+         than left buried in the platform console, because this is the screen
+         people actually open when they want to add somebody. -->
+    <Card v-if="auth.isPlatformOwner">
       <CardHeader>
         <CardTitle class="flex items-center gap-2">
-          <UserPlus class="h-4 w-4 text-primary" /> Invite a teammate
+          <Building2 class="h-4 w-4 text-primary" /> Give someone their own workspace
         </CardTitle>
       </CardHeader>
       <CardContent class="space-y-3">
         <CardDescription>
-          They'll get an email with a single-use link that expires in 72 hours.
-          <strong class="font-semibold text-text-primary">
-            Anyone you invite here joins THIS workspace
-          </strong>
-          — they share your leads, your stacks, and your bidding rules. That is what a bidder is
-          for. If you want someone who runs their own separate workspace, with their own stacks
-          and their own leads that you cannot see and they cannot see yours, that is a new
-          workspace, not an invitation.
+          Creates a separate workspace on a trial and emails that person an owner invitation.
+          They fill in their own stacks and project facts and start from nothing — they will
+          never see this workspace's leads, and you will never see theirs.
+        </CardDescription>
+
+        <div class="grid gap-3 sm:grid-cols-2">
+          <div>
+            <Label>Workspace name</Label>
+            <Input v-model="wsForm.name" placeholder="Northwind Design" />
+          </div>
+          <div>
+            <Label>Slug</Label>
+            <Input v-model="wsForm.slug" @input="wsSlugTouched = true" placeholder="northwind-design" class="font-mono" />
+          </div>
+          <div>
+            <Label>Specialization <span class="text-text-tertiary">(optional)</span></Label>
+            <Input v-model="wsForm.specialization" placeholder="Graphic design" />
+          </div>
+          <div>
+            <Label>Their email</Label>
+            <Input v-model="wsForm.owner_email" type="email" placeholder="owner@northwind.com" />
+          </div>
+        </div>
+
+        <div class="flex justify-end">
+          <Button
+            :loading="creatingWorkspace"
+            :disabled="!wsForm.name || !wsForm.slug || !wsForm.owner_email"
+            @click="createWorkspace"
+          >
+            Create workspace &amp; invite owner
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+
+    <Card>
+      <CardHeader>
+        <CardTitle class="flex items-center gap-2">
+          <UserPlus class="h-4 w-4 text-primary" /> Invite someone into THIS workspace
+        </CardTitle>
+      </CardHeader>
+      <CardContent class="space-y-3">
+        <CardDescription>
+          They'll get an email with a single-use link that expires in 72 hours, and they join
+          <strong class="font-semibold text-text-primary">this</strong> workspace — sharing its
+          leads, stacks and bidding rules with you.
         </CardDescription>
         <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div class="flex-1">
