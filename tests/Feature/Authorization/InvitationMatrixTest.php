@@ -9,9 +9,11 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Members\InvitationService;
 use App\Tenancy\Tenancy;
+use App\Tenancy\TenantTeamResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Testing\TestResponse;
 use Spatie\Permission\Models\Role;
@@ -257,7 +259,7 @@ class InvitationMatrixTest extends TestCase
         // than the write did and report a confident, wrong answer.
         $this->assertSame(
             'owner',
-            \App\Tenancy\TenantTeamResolver::pinnedTo(
+            TenantTeamResolver::pinnedTo(
                 $created->id,
                 fn () => Tenancy::runAs($created->fresh(), fn () => $newOwner->fresh()->getRoleNames()->first()),
             ),
@@ -323,5 +325,77 @@ class InvitationMatrixTest extends TestCase
             $this->tenant->users()->whereKey($user->id)->exists(),
             'the new owner must not have been added to the founding workspace',
         );
+    }
+
+    /**
+     * The one-step door: create the workspace AND its owner's account, no
+     * email involved.
+     *
+     * Both doors exist because email is the part of this flow that fails
+     * silently. A platform owner opening an account for a customer should
+     * not be blocked by an SMTP problem they may not even know about.
+     */
+    public function test_a_workspace_can_be_created_with_its_owner_ready_to_sign_in(): void
+    {
+        $platformOwner = User::factory()->create(['platform_role' => 'platform_owner']);
+
+        $this->asToken($platformOwner)->postJson('/api/platform/tenants', [
+            'name' => 'Northwind',
+            'slug' => 'northwind',
+            'owner_email' => 'nora@northwind.test',
+            'owner_name' => 'Nora Owner',
+            'owner_password' => 'password123',
+        ])->assertStatus(201);
+
+        $created = Tenancy::asPlatform(fn () => Tenant::where('slug', 'northwind')->firstOrFail());
+        $nora = User::where('email', 'nora@northwind.test')->firstOrFail();
+
+        // Owner immediately, with no invitation minted at all.
+        $this->assertSame($nora->id, $created->owner_user_id);
+        $this->assertSame('Nora Owner', $nora->name);
+        $this->assertSame(0, Tenancy::runAs($created, fn () => Invitation::count()));
+
+        // The role row is on the NEW workspace.
+        $teamKey = config('permission.column_names.team_foreign_key', 'tenant_id');
+        $row = DB::table('model_has_roles')
+            ->join('roles', 'roles.id', '=', 'model_has_roles.role_id')
+            ->where('model_has_roles.model_id', $nora->id)
+            ->first(['roles.name', 'model_has_roles.'.$teamKey.' as team_id']);
+
+        $this->assertSame('owner', $row->name);
+        $this->assertSame($created->id, (int) $row->team_id);
+
+        // And the password actually works.
+        Auth::forgetGuards();
+        $this->postJson('/api/auth/login', [
+            'email' => 'nora@northwind.test',
+            'password' => 'password123',
+        ])->assertOk();
+    }
+
+    /**
+     * An email that already has an account is ATTACHED, not duplicated — and
+     * its password is left alone. Opening a workspace for someone is not
+     * authority to reset a password they use elsewhere.
+     */
+    public function test_an_existing_account_is_attached_without_its_password_being_reset(): void
+    {
+        $platformOwner = User::factory()->create(['platform_role' => 'platform_owner']);
+        $existing = User::factory()->create([
+            'email' => 'already@example.test',
+            'password' => Hash::make('their-own-password'),
+        ]);
+
+        $this->asToken($platformOwner)->postJson('/api/platform/tenants', [
+            'name' => 'Second', 'slug' => 'second',
+            'owner_email' => 'already@example.test',
+            'owner_password' => 'a-different-password',
+        ])->assertStatus(201);
+
+        $this->assertSame(1, User::where('email', 'already@example.test')->count(), 'no duplicate account');
+
+        // Their original password still works; the one just typed does not.
+        $this->assertTrue(Hash::check('their-own-password', $existing->fresh()->password));
+        $this->assertFalse(Hash::check('a-different-password', $existing->fresh()->password));
     }
 }

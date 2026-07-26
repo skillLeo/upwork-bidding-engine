@@ -5,20 +5,25 @@ namespace App\Http\Controllers\Platform;
 use App\Authorization\PlatformRole;
 use App\Authorization\RoleProvisioner;
 use App\Authorization\TenantRole;
+use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\AiCall;
 use App\Models\AuthEvent;
 use App\Models\Lead;
 use App\Models\Tenant;
+use App\Models\User;
 use App\Services\Ai\AiQuotaService;
 use App\Services\Members\InvitationService;
 use App\Services\SettingsService;
 use App\Tenancy\Tenancy;
+use App\Tenancy\TenantTeamResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 /**
  * The Tenants list and Tenant detail (P5 platform console).
@@ -112,6 +117,13 @@ class TenantController extends Controller
             'slug' => ['required', 'string', 'max:63', 'alpha_dash', 'unique:tenants,slug'],
             'specialization' => ['sometimes', 'nullable', 'string', 'max:80'],
             'owner_email' => ['required', 'email', 'max:255'],
+            // Set a password and the account is created and ready NOW, with
+            // no email round-trip. Leave it blank and an invitation is sent
+            // instead. Both doors exist because email is the part of this
+            // that can fail silently — a platform owner opening an account
+            // for a customer should not be blocked by an SMTP problem.
+            'owner_name' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'owner_password' => ['sometimes', 'nullable', 'string', 'min:8', 'max:255'],
         ]);
 
         // TENANCY: creating a tenant is inherently a platform act — there is
@@ -130,21 +142,25 @@ class TenantController extends Controller
 
         app(RoleProvisioner::class)->provision($tenant);
 
-        app(InvitationService::class)->invite(
-            $tenant,
-            $validated['owner_email'],
-            TenantRole::Owner,
-            $actor,
-        );
+        $email = strtolower(trim($validated['owner_email']));
+        $password = trim((string) ($validated['owner_password'] ?? ''));
+
+        if ($password !== '') {
+            $message = $this->createOwnerDirectly($tenant, $email, $validated['owner_name'] ?? null, $password);
+        } else {
+            app(InvitationService::class)->invite($tenant, $email, TenantRole::Owner, $actor);
+            $message = "Workspace created. An owner invitation is on its way to {$email}.";
+        }
 
         ActivityLog::record('workspace_created', meta: [
             'tenant_id' => $tenant->id,
             'slug' => $tenant->slug,
-            'owner_email' => strtolower(trim($validated['owner_email'])),
+            'owner_email' => $email,
+            'owner_created_directly' => $password !== '',
         ], userId: $actor->id);
 
         return response()->json(['data' => [
-            'message' => "Workspace created. An owner invitation is on its way to {$validated['owner_email']}.",
+            'message' => $message,
             'tenant' => [
                 'id' => $tenant->id,
                 'name' => $tenant->name,
@@ -154,6 +170,42 @@ class TenantController extends Controller
                 'status' => $tenant->status,
             ],
         ]], 201);
+    }
+
+    /**
+     * Create the workspace's owner account outright — no invitation, no
+     * email, usable immediately.
+     *
+     * An EXISTING account with this email is attached rather than
+     * duplicated, and its password is left alone: the platform owner is
+     * opening a workspace for someone, which is not authority to reset a
+     * password on an account that person already uses elsewhere.
+     */
+    private function createOwnerDirectly(Tenant $tenant, string $email, ?string $name, string $password): string
+    {
+        $existing = User::where('email', $email)->first();
+
+        $user = $existing ?? User::create([
+            'name' => $name ?: Str::before($email, '@'),
+            'email' => $email,
+            'password' => Hash::make($password),
+            // Legacy display column only; authorization reads the Spatie role.
+            'role' => UserRole::Admin->value,
+        ]);
+
+        $tenant->users()->syncWithoutDetaching([$user->id => ['joined_at' => now()]]);
+        $tenant->update(['owner_user_id' => $user->id]);
+
+        // Pinned: Spatie resolves the team through TenantTeamResolver, which
+        // prefers a leftover override — and provision() ran moments ago.
+        TenantTeamResolver::pinnedTo(
+            $tenant->id,
+            fn () => $user->syncRoles([TenantRole::Owner->value]),
+        );
+
+        return $existing !== null
+            ? "Workspace created. {$email} already had an account, so it was made the owner — their existing password still applies."
+            : "Workspace created. {$email} can sign in now with the password you set.";
     }
 
     public function show(int $tenant): JsonResponse

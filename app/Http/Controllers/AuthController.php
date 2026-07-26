@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Authorization\PlatformRole;
 use App\Authorization\RoleProvisioner;
 use App\Authorization\TenantRole;
 use App\Enums\ActivityType;
@@ -261,17 +262,28 @@ class AuthController extends Controller
     {
         abort_unless(config('skillleo.dev_quick_login'), 404);
 
+        // 'platform_owner' is not a UserRole — it lives on its own column, in
+        // a separate namespace from the tenant roles (see PlatformRole). It is
+        // accepted here as a target because "sign in as the super admin" is
+        // the single most useful shortcut while the product is being built,
+        // and picking the oldest 'admin' only happens to hit that account
+        // today by coincidence of ids.
         $validated = $request->validate([
-            'role' => ['required', 'string', Rule::enum(UserRole::class)],
+            'role' => ['required', 'string', Rule::in([...UserRole::cases(), 'platform_owner'])],
         ]);
 
-        $role = UserRole::from($validated['role']);
-
-        $user = User::where('role', $role)->oldest('id')->first();
+        if ($validated['role'] === 'platform_owner') {
+            $user = User::where('platform_role', PlatformRole::Owner->value)->oldest('id')->first();
+            $label = 'platform owner';
+        } else {
+            $role = UserRole::from($validated['role']);
+            $user = User::where('role', $role)->oldest('id')->first();
+            $label = $role->value;
+        }
 
         if (! $user) {
             throw ValidationException::withMessages([
-                'role' => ["No {$role->value} user exists to sign in as."],
+                'role' => ["No {$label} user exists to sign in as."],
             ]);
         }
 

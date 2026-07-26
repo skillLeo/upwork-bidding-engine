@@ -240,8 +240,13 @@ function backToCredentials() {
         <router-link to="/register" class="auth-link">Get started</router-link>
       </p>
 
-      <!-- Dev-only, gated by a server flag; never renders in production. -->
-      <div v-if="devQuickLogin" class="mt-6 flex gap-2">
+      <!-- Gated by a server flag (config/skillleo.php). Super admin targets
+           the platform_owner column directly rather than hoping the oldest
+           'admin' happens to be that account. -->
+      <div v-if="devQuickLogin" class="mt-6 flex flex-wrap gap-2">
+        <AuthButton variant="secondary" :disabled="submitting" @click="quickLogin('platform_owner')">
+          Super admin
+        </AuthButton>
         <AuthButton variant="secondary" :disabled="submitting" @click="quickLogin('admin')">Admin</AuthButton>
         <AuthButton variant="secondary" :disabled="submitting" @click="quickLogin('bidder')">Bidder</AuthButton>
       </div>

@@ -11,6 +11,7 @@ import CardDescription from "@/components/ui/CardDescription.vue";
 import Button from "@/components/ui/Button.vue";
 import Input from "@/components/ui/Input.vue";
 import Label from "@/components/ui/Label.vue";
+import FieldHint from "@/components/ui/FieldHint.vue";
 import Skeleton from "@/components/ui/Skeleton.vue";
 import { apiClient, apiErrorMessage } from "@/lib/api-client";
 import { useAuthStore } from "@/stores/auth";
@@ -45,7 +46,7 @@ const overridesFor = ref(null); // member whose personal-permissions panel is op
 // to be visible side by side or the wrong one wins by default.
 const creatingWorkspace = ref(false);
 const wsSlugTouched = ref(false);
-const wsForm = reactive({ name: "", slug: "", specialization: "", owner_email: "" });
+const wsForm = reactive({ name: "", slug: "", specialization: "", owner_email: "", owner_name: "", owner_password: "" });
 
 watch(
   () => wsForm.name,
@@ -64,9 +65,13 @@ async function createWorkspace() {
       slug: wsForm.slug.trim(),
       specialization: wsForm.specialization.trim() || null,
       owner_email: wsForm.owner_email.trim(),
+      owner_name: wsForm.owner_name.trim() || null,
+      // Blank means "email them an invitation instead" — the server picks
+      // the door based on whether a password came through.
+      owner_password: wsForm.owner_password.trim() || null,
     });
-    toast.success(res.data.data.message);
-    Object.assign(wsForm, { name: "", slug: "", specialization: "", owner_email: "" });
+    toast.success(res.data.data.message, { duration: 10000 });
+    Object.assign(wsForm, { name: "", slug: "", specialization: "", owner_email: "", owner_name: "", owner_password: "" });
     wsSlugTouched.value = false;
   } catch (error) {
     toast.error(apiErrorMessage(error, "Could not create the workspace."));
@@ -216,6 +221,20 @@ onMounted(load);
           <div>
             <Label>Their email</Label>
             <Input v-model="wsForm.owner_email" type="email" placeholder="owner@northwind.com" />
+          </div>
+          <div>
+            <Label>Their name <span class="text-text-tertiary">(optional)</span></Label>
+            <Input v-model="wsForm.owner_name" placeholder="Nora Owner" />
+          </div>
+          <div>
+            <Label>Set their password <span class="text-text-tertiary">(optional)</span></Label>
+            <Input v-model="wsForm.owner_password" type="password" autocomplete="new-password" placeholder="Leave blank to email an invitation" />
+            <FieldHint>
+              Type a password and their account is created and usable immediately — no email
+              involved. Leave it blank and they get an invitation link instead. Use the password
+              route if email delivery is unreliable; hand them the password yourself and let them
+              change it in their profile.
+            </FieldHint>
           </div>
         </div>
 
