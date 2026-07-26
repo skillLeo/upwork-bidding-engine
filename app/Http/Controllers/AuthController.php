@@ -490,13 +490,53 @@ class AuthController extends Controller
     {
         // One funnel for every sign-in path, so device metadata, the audit
         // row and the new-device alert cannot be present on one route and
-        // forgotten on another.
-        $issued = $this->tokens->issue($user, $request);
+        // forgotten on another — AND so the token is always stamped with a
+        // workspace this person actually belongs to.
+        $issued = Tenancy::runAs(
+            $this->workspaceFor($user),
+            fn () => $this->tokens->issue($user, $request),
+        );
 
         return [
             'token' => $issued['token'],
-            'user' => new UserResource($user),
+            'user' => new UserResource($user->fresh()),
         ];
+    }
+
+    /**
+     * The workspace this sign-in belongs in.
+     *
+     * WHY THIS IS NOT SIMPLY "the bound tenant". Sign-in happens on the
+     * public host, which names no workspace, so the request falls back to
+     * the configured default — workspace 1. TokenIssuer then stamped THAT on
+     * the token, and every later request resolved from it. The result: a
+     * second workspace's owner was permanently bound to the founder's
+     * workspace, where they hold no role, so their navigation was empty and
+     * every settings page refused them. The token carried the wrong
+     * workspace from the very first request.
+     *
+     * Preference order: the bound tenant IF they are a member of it (so a
+     * real tenant subdomain still wins), then a workspace they own, then any
+     * workspace they belong to. Someone who belongs to none keeps the
+     * fallback — they have nothing else, and the role checks refuse them
+     * everywhere regardless.
+     */
+    protected function workspaceFor(User $user): Tenant
+    {
+        $current = Tenancy::current();
+
+        // TENANCY: the tenants table is never tenant-scoped, and this reads
+        // only the workspaces THIS user is already a member of.
+        $theirs = Tenancy::asPlatform(fn () => $user->tenants()->orderBy('id')->get());
+
+        if ($current !== null && $theirs->contains('id', $current->id)) {
+            return $current;
+        }
+
+        return $theirs->firstWhere('owner_user_id', $user->id)
+            ?? $theirs->first()
+            ?? $current
+            ?? abort(403, 'This account does not belong to any workspace.');
     }
 
     protected function clearOtpChallenge(User $user): void

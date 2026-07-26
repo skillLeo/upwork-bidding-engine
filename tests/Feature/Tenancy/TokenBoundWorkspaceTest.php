@@ -12,6 +12,8 @@ use App\Tenancy\Tenancy;
 use App\Tenancy\TenantTeamResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
@@ -173,5 +175,37 @@ class TokenBoundWorkspaceTest extends TestCase
     public function test_an_anonymous_request_still_falls_back_to_the_default_workspace(): void
     {
         $this->getJson('/api/branding')->assertOk();
+    }
+
+    /**
+     * The root cause, tested at the source: signing in on the public host
+     * must stamp the token with a workspace this person actually belongs to,
+     * NOT the fallback that host resolves to.
+     */
+    public function test_signing_in_stamps_the_users_own_workspace_not_the_fallback(): void
+    {
+        $this->otherOwner->forceFill(['password' => Hash::make('password123')])->save();
+
+        Auth::forgetGuards();
+
+        $token = $this->postJson('/api/auth/login', [
+            'email' => 'nora@northwind.test',
+            'password' => 'password123',
+        ])->assertOk()->json('data.token');
+
+        $id = explode('|', $token)[0];
+
+        $this->assertSame(
+            $this->other->id,
+            (int) DB::table('personal_access_tokens')->where('id', $id)->value('tenant_id'),
+            'the token was stamped with the fallback workspace instead of their own',
+        );
+
+        // And the very next request lands in the right place.
+        Auth::forgetGuards();
+        $this->withToken($token)->getJson('/api/me')
+            ->assertOk()
+            ->assertJsonPath('data.tenant.slug', 'northwind')
+            ->assertJsonPath('data.tenant_role', 'owner');
     }
 }
