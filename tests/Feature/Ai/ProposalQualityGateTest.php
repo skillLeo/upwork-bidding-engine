@@ -237,7 +237,7 @@ class ProposalQualityGateTest extends TestCase
     {
         $this->configureLint();
 
-        $service = app(\App\Services\Ai\ProposalService::class);
+        $service = app(ProposalService::class);
         $method = new \ReflectionMethod($service, 'normalizeSignatureLine');
         $method->setAccessible(true);
 
@@ -547,6 +547,10 @@ class ProposalQualityGateTest extends TestCase
     {
         $this->settings->set('proposal_skill', 'SKILL RULES v2 MARKER');
         $this->settings->set('proposal_reference', 'TEACHING DOC MARKER — must never be sent');
+        // Set explicitly: project_facts ships EMPTY now (it used to default to
+        // the founding user's own track record, which every new workspace
+        // then inherited — see NewWorkspaceInheritsNothingTest).
+        $this->settings->set('project_facts', 'PatrolTick: Laravel + Vue. Anything not on this sheet is NOT in the track record.');
 
         $system = app(ProposalService::class)->systemPrompt();
 

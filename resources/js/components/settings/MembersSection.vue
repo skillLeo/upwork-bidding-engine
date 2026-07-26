@@ -126,6 +126,13 @@ onMounted(load);
       <CardContent class="space-y-3">
         <CardDescription>
           They'll get an email with a single-use link that expires in 72 hours.
+          <strong class="font-semibold text-text-primary">
+            Anyone you invite here joins THIS workspace
+          </strong>
+          — they share your leads, your stacks, and your bidding rules. That is what a bidder is
+          for. If you want someone who runs their own separate workspace, with their own stacks
+          and their own leads that you cannot see and they cannot see yours, that is a new
+          workspace, not an invitation.
         </CardDescription>
         <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div class="flex-1">

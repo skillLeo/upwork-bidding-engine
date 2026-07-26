@@ -2,20 +2,35 @@
 
 namespace App\Http\Controllers;
 
+use App\Authorization\Permissions;
 use App\Enums\ActivityType;
 use App\Enums\ClientStage;
+use App\Enums\ClientView;
+use App\Enums\LeadOutcome;
 use App\Enums\LeadStatus;
 use App\Http\Requests\Leads\UpdateLeadStatusRequest;
 use App\Http\Resources\LeadResource;
+use App\Http\Resources\ProposalVersionResource;
 use App\Jobs\ScoreLeadJob;
 use App\Models\ActivityLog;
 use App\Models\Client;
 use App\Models\Lead;
+use App\Services\Ai\ProposalEditFailedException;
+use App\Services\Ai\ProposalEditor;
+use App\Services\Ai\ProposalWritingPausedException;
 use App\Services\LeadFilterEvaluator;
+use App\Services\LeadRefreshService;
+use App\Services\LeadRunInProgressException;
 use App\Services\NlSearchParser;
 use App\Services\OpenClawService;
+use App\Services\ProposalVersionRecorder;
+use App\Services\SettingsService;
+use App\Services\Workspaces\WorkspaceReadiness;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\Rule;
 
@@ -77,7 +92,7 @@ class LeadController extends Controller
             // "attention" sort, where score always dominates). The decay rate
             // is operator-tunable. Age is computed DB-side (differs by driver)
             // so ordering stays correct across pages, not just the loaded rows.
-            $decay = (float) app(\App\Services\SettingsService::class)->get('priority_decay_rate', 0.05);
+            $decay = (float) app(SettingsService::class)->get('priority_decay_rate', 0.05);
             $ageHours = $query->getConnection()->getDriverName() === 'sqlite'
                 ? "((julianday('now') - julianday(posted_at)) * 24.0)"
                 : 'TIMESTAMPDIFF(SECOND, posted_at, NOW()) / 3600.0';
@@ -131,6 +146,11 @@ class LeadController extends Controller
                 'per_page' => $leads->perPage(),
                 'total' => $leads->total(),
                 'search_chips' => $searchChips,
+                // Null once the workspace is set up, so the banner clears
+                // itself rather than needing to be dismissed. Sent with the
+                // lead list because that is the screen where "why is nothing
+                // scoring?" is actually asked.
+                'setup' => app(WorkspaceReadiness::class)->banner(),
             ],
         ]);
     }
@@ -142,7 +162,7 @@ class LeadController extends Controller
      * unreachable/unconfigured/erroring — the search box must never hang or
      * come back empty just because the parser or OpenClaw had a bad day.
      *
-     * @param  \Illuminate\Database\Eloquent\Builder<Lead>  $query
+     * @param  Builder<Lead>  $query
      * @return array<int, array{label: string, phrase: ?string}>
      */
     protected function applySearch($query, string $search): array
@@ -158,7 +178,7 @@ class LeadController extends Controller
         // The AI fallback is its own permission (it spends an agent call).
         // Lacking it degrades gracefully to the plain keyword LIKE below —
         // search never errors, it just doesn't get the expensive parse.
-        $aiCriteria = request()->user()?->can(\App\Authorization\Permissions::LEADS_AI_SEARCH)
+        $aiCriteria = request()->user()?->can(Permissions::LEADS_AI_SEARCH)
             ? $this->tryAiSearchFallback($search)
             : null;
 
@@ -247,7 +267,7 @@ class LeadController extends Controller
      * my filter" annotation. Search criteria restrict the result set
      * directly; they're never just advisory.
      *
-     * @param  \Illuminate\Database\Eloquent\Builder<Lead>  $query
+     * @param  Builder<Lead>  $query
      * @param  array<string, mixed>  $criteria
      */
     protected function applyNlCriteria($query, array $criteria): void
@@ -312,7 +332,7 @@ class LeadController extends Controller
     }
 
     /**
-     * @param  \Illuminate\Database\Eloquent\Builder<Lead>  $query
+     * @param  Builder<Lead>  $query
      * @param  array<string, mixed>  $criteria
      */
     protected function applyCriteria($query, array $criteria): void
@@ -410,7 +430,7 @@ class LeadController extends Controller
         return [];
     }
 
-    public function updateStatus(UpdateLeadStatusRequest $request, Lead $lead, \App\Services\ProposalVersionRecorder $versions): JsonResponse
+    public function updateStatus(UpdateLeadStatusRequest $request, Lead $lead, ProposalVersionRecorder $versions): JsonResponse
     {
         $this->authorize('updateStatus', $lead);
         $oldStatus = $lead->status;
@@ -432,7 +452,7 @@ class LeadController extends Controller
         // rather than leave "no response" sitting on a won lead. This is the
         // same contradiction the outcome rework exists to prevent, just
         // reached from the status side.
-        if ($lead->outcome !== null && ! in_array($lead->outcome->value, \App\Enums\LeadOutcome::valuesForStatus($newStatus), true)) {
+        if ($lead->outcome !== null && ! in_array($lead->outcome->value, LeadOutcome::valuesForStatus($newStatus), true)) {
             $updates['outcome'] = null;
             $updates['outcome_at'] = null;
         }
@@ -499,7 +519,7 @@ class LeadController extends Controller
     public function updateClientView(Request $request, Lead $lead): JsonResponse
     {
         $validated = $request->validate([
-            'client_view' => ['present', 'nullable', Rule::in(\App\Enums\ClientView::values())],
+            'client_view' => ['present', 'nullable', Rule::in(ClientView::values())],
         ]);
 
         $lead->update(['client_view' => $validated['client_view']]);
@@ -521,7 +541,7 @@ class LeadController extends Controller
      */
     public function updateOutcome(Request $request, Lead $lead): JsonResponse
     {
-        $allowed = \App\Enums\LeadOutcome::valuesForStatus($lead->status);
+        $allowed = LeadOutcome::valuesForStatus($lead->status);
 
         $validated = $request->validate([
             'outcome' => ['present', 'nullable', Rule::in($allowed)],
@@ -601,18 +621,18 @@ class LeadController extends Controller
             'count' => $count,
         ], userId: $request->user()?->id);
 
-        return response()->json(['data' => ['message' => "{$count} lead".($count === 1 ? '' : 's')." updated.", 'count' => $count]]);
+        return response()->json(['data' => ['message' => "{$count} lead".($count === 1 ? '' : 's').' updated.', 'count' => $count]]);
     }
 
     /**
      * Synchronous re-score — one shared pipeline (LeadRefreshService)
      * with the Agent API; this is just the dashboard's mouth on it.
      */
-    public function regenerateScore(Lead $lead, \App\Services\LeadRefreshService $refresh): JsonResponse
+    public function regenerateScore(Lead $lead, LeadRefreshService $refresh): JsonResponse
     {
         try {
             $refresh->rescore($lead, 'dashboard');
-        } catch (\App\Services\LeadRunInProgressException $e) {
+        } catch (LeadRunInProgressException $e) {
             return response()->json(['message' => $e->getMessage()], 409);
         } catch (\Throwable $e) {
             return $this->aiFailureResponse($e);
@@ -626,14 +646,14 @@ class LeadController extends Controller
      * API's rewrite. The SPA shows a non-blocking progress toast while
      * it runs (~15-60s with the quality gate).
      */
-    public function regenerateProposal(Lead $lead, \App\Services\LeadRefreshService $refresh): JsonResponse
+    public function regenerateProposal(Lead $lead, LeadRefreshService $refresh): JsonResponse
     {
         $this->authorize('rewriteProposal', $lead);
         try {
             $refresh->rewrite($lead, 'dashboard');
-        } catch (\App\Services\LeadRunInProgressException $e) {
+        } catch (LeadRunInProgressException $e) {
             return response()->json(['message' => $e->getMessage()], 409);
-        } catch (\App\Services\Ai\ProposalWritingPausedException $e) {
+        } catch (ProposalWritingPausedException $e) {
             return response()->json(['message' => $e->getMessage()], 409);
         } catch (\Throwable $e) {
             return $this->aiFailureResponse($e);
@@ -649,7 +669,7 @@ class LeadController extends Controller
      * banned claim - the same rule check the AI writer is held to. Available to
      * admin + bidder, same as status updates.
      */
-    public function updateProposal(Request $request, Lead $lead, \App\Services\ProposalVersionRecorder $versions): JsonResponse
+    public function updateProposal(Request $request, Lead $lead, ProposalVersionRecorder $versions): JsonResponse
     {
         $this->authorize('editProposal', $lead);
         $validated = $request->validate([
@@ -677,7 +697,7 @@ class LeadController extends Controller
     public function proposalVersions(Lead $lead): JsonResponse
     {
         return response()->json([
-            'data' => \App\Http\Resources\ProposalVersionResource::collection(
+            'data' => ProposalVersionResource::collection(
                 $lead->proposalVersions()->reorder('version_number', 'desc')->get()
             ),
         ]);
@@ -689,7 +709,7 @@ class LeadController extends Controller
      * linted and returned but NOT persisted - the operator sees the diff and
      * linter delta, then explicitly accepts (acceptAiEditProposal) or discards.
      */
-    public function aiEditProposal(Request $request, Lead $lead, \App\Services\Ai\ProposalEditor $editor): JsonResponse
+    public function aiEditProposal(Request $request, Lead $lead, ProposalEditor $editor): JsonResponse
     {
         $this->authorize('aiEditProposal', $lead);
         $validated = $request->validate([
@@ -709,7 +729,7 @@ class LeadController extends Controller
                 $validated['selection_start'] ?? null,
                 $validated['selection_end'] ?? null,
             );
-        } catch (\App\Services\Ai\ProposalEditFailedException $e) {
+        } catch (ProposalEditFailedException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         } catch (\Throwable $e) {
             return $this->aiFailureResponse($e);
@@ -723,7 +743,7 @@ class LeadController extends Controller
      * text is re-linted by the recorder, so the stored warnings are always
      * computed here and can't be spoofed by the client.
      */
-    public function acceptAiEditProposal(Request $request, Lead $lead, \App\Services\ProposalVersionRecorder $versions): JsonResponse
+    public function acceptAiEditProposal(Request $request, Lead $lead, ProposalVersionRecorder $versions): JsonResponse
     {
         $validated = $request->validate([
             'proposal_text' => ['required', 'string', 'max:20000'],
@@ -784,7 +804,7 @@ class LeadController extends Controller
     {
         report($e);
 
-        if ($e instanceof \Illuminate\Http\Client\RequestException && $e->response->status() === 429) {
+        if ($e instanceof RequestException && $e->response->status() === 429) {
             return response()->json([
                 'message' => 'The AI provider is rate-limited right now. Wait a minute and try again.',
             ], 503);
@@ -826,8 +846,8 @@ class LeadController extends Controller
     {
         @set_time_limit(60);
 
-        $exit = \Illuminate\Support\Facades\Artisan::call('vollna:poll-api');
-        $output = trim(\Illuminate\Support\Facades\Artisan::output());
+        $exit = Artisan::call('vollna:poll-api');
+        $output = trim(Artisan::output());
 
         if ($exit !== 0) {
             // Surface the actual reason (rate limit, auth, network) - never a
@@ -850,7 +870,7 @@ class LeadController extends Controller
         return response()->json(['data' => [
             'imported' => $new,
             'message' => $new > 0
-                ? "{$new} new lead".($new === 1 ? '' : 's')." imported."
+                ? "{$new} new lead".($new === 1 ? '' : 's').' imported.'
                 : "No new leads — you're already up to date.",
         ]]);
     }

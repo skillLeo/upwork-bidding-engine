@@ -151,6 +151,11 @@ class ScoringStageTest extends TestCase
         $this->settings->setMany([
             'min_budget' => 0,
             'max_posted_age_days' => 30,
+            // A workspace with no core stacks does not score at all now —
+            // it has not said what it does, so there is nothing to score
+            // against (see WorkspaceReadiness). This test is about sub-score
+            // persistence, so give it a configured workspace.
+            'core_stacks' => ['PHP', 'Laravel'],
         ]);
 
         Http::fake([

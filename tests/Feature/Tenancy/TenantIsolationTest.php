@@ -201,6 +201,14 @@ class TenantIsolationTest extends TestCase
     {
         Http::fake();
 
+        // Both workspaces are configured. A workspace with no core stacks
+        // does not reach the hard filters at all since P8 — it has not said
+        // what it does, so its leads are held rather than judged (see
+        // WorkspaceReadiness). This test is about WHICH tenant the job wrote
+        // to, so both need to get as far as the filter.
+        $this->as($this->a, fn () => app(SettingsService::class)->set('core_stacks', ['PHP']));
+        $this->as($this->b, fn () => app(SettingsService::class)->set('core_stacks', ['PHP']));
+
         $leadA = $this->as($this->a, fn () => Lead::factory()->create(['title' => 'alpha job lead', 'proposal_count' => 999]));
         $leadB = $this->as($this->b, fn () => Lead::factory()->create(['title' => 'beta job lead', 'proposal_count' => 999]));
 

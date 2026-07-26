@@ -2,28 +2,31 @@
 
 namespace App\Jobs;
 
-use App\Jobs\Concerns\RunsForTenant;
 use App\Enums\ActivityType;
 use App\Enums\LeadOutcome;
 use App\Enums\LeadStatus;
+use App\Jobs\Concerns\RunsForTenant;
 use App\Models\ActivityLog;
 use App\Models\Lead;
 use App\Services\Ai\ProposalService;
+use App\Services\Ai\ProposalWritingPausedException;
 use App\Services\Ai\ScoringService as AiScoringService;
+use App\Services\Notifications\NotificationDispatcher;
 use App\Services\OpsAlertService;
 use App\Services\ScoringService;
 use App\Services\SettingsService;
+use App\Services\Workspaces\WorkspaceReadiness;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
 
 class ScoreLeadJob implements ShouldQueue
 {
-    use RunsForTenant;
-
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use RunsForTenant;
 
     public int $tries = 3;
 
@@ -65,6 +68,24 @@ class ScoreLeadJob implements ShouldQueue
         $lead = Lead::find($this->leadId);
 
         if (! $lead || ! in_array($lead->status, [LeadStatus::New, LeadStatus::Scoring, LeadStatus::NeedsReview], true)) {
+            return;
+        }
+
+        // BEFORE the hard filters, not after. Those filters archive on the
+        // workspace's own budget floors and stack lists — rules an
+        // unconfigured workspace has never set. Running them first would
+        // auto-archive every incoming lead against defaults its owner never
+        // chose, and archived leads read as "the engine rejected this",
+        // which would be a lie. Held as `new` instead, until setup is done.
+        $readiness = app(WorkspaceReadiness::class);
+
+        if (! $readiness->canScore()) {
+            $lead->update(['score_reason' => $readiness->reason()]);
+
+            ActivityLog::record('scoring_skipped_setup_incomplete', subject: $lead, meta: [
+                'missing' => array_column($readiness->missingForScoring(), 'key'),
+            ]);
+
             return;
         }
 
@@ -113,7 +134,7 @@ class ScoreLeadJob implements ShouldQueue
 
             try {
                 $proposal = $result['bid'] ? $proposals->write($lead, $result) : null;
-            } catch (\App\Services\Ai\ProposalWritingPausedException) {
+            } catch (ProposalWritingPausedException) {
                 // Operator-controlled pause, not a failure: the lead still
                 // gets its real score and Ready/Archived status, it just
                 // ships without a proposal until writing is turned back on.
@@ -164,7 +185,7 @@ class ScoreLeadJob implements ShouldQueue
             // seconds. An alerting failure must never read as a scoring
             // failure though (the lead IS scored), so it is contained here.
             try {
-                app(\App\Services\Notifications\NotificationDispatcher::class)->leadReady($lead);
+                app(NotificationDispatcher::class)->leadReady($lead);
             } catch (\Throwable $e) {
                 report($e);
             }
@@ -208,7 +229,7 @@ class ScoreLeadJob implements ShouldQueue
         // sync burst turned this into 29+ identical WhatsApp messages.
         // One alert opens the incident; the rest stay in the dashboard's
         // Needs review list; the flag self-clears after 30 minutes.
-        if (\Illuminate\Support\Facades\Cache::add('ai:scoring_failure_alerted', now()->toIso8601String(), now()->addMinutes(30))) {
+        if (Cache::add('ai:scoring_failure_alerted', now()->toIso8601String(), now()->addMinutes(30))) {
             app(OpsAlertService::class)->send(sprintf(
                 "⚠️ SkillLeo: AI scoring is failing — e.g. lead \"%s\" was NOT scored after 3 attempts.\n\nError: %s\n\nFailed leads are marked Needs review in the dashboard; rescore them once the AI provider is healthy. Further scoring-failure alerts are muted for 30 minutes.",
                 $lead->title,

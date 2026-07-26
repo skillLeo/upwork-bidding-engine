@@ -60,7 +60,7 @@ class SettingsService
         // mailbox becomes the live intake door. Same downstream pipeline:
         // the poller hands parsed jobs to VollnaProjectImporter, exactly
         // like the webhook and the API backfill do.
-        'gmail_address' => ['group' => 'vollna', 'secret' => false, 'default' => 'skillleopvt@gmail.com'],
+        'gmail_address' => ['group' => 'vollna', 'secret' => false, 'default' => ''],
         // Gmail rejects the account password over IMAP — this must be a
         // 16-character App Password (Google Account → Security → 2-Step
         // Verification → App passwords).
@@ -182,30 +182,13 @@ class SettingsService
         // Canonical fact sheet — the only source of truth about Hassam's
         // track record. Anything not derivable from this must never be
         // claimed in a proposal.
-        'project_facts' => ['group' => 'ai', 'secret' => false, 'default' => 'PatrolTick: guard-management SaaS. Laravel + Vue web, Flutter mobile, PostgreSQL. Built the REST API the mobile app runs on, auth + role-based access, reporting, offline guard check-in sync.'
-            ."\nSkillLeo Financial: multi-tenant finance SaaS. Laravel backend + Flutter app. Tenant model, billing, dashboards."
-            ."\nRouteHealth: healthcare platform. Next.js + Laravel."
-            ."\niiBSOOR: e-commerce app for the Somali market. Flutter + Laravel. RTL layout."
-            ."\nMy EXtreme Trainer: fitness platform. Laravel + Next.js."
-            ."\nOdoo migrations: large Odoo-to-Odoo data migrations over XML-RPC. Batched record transfer, custom field mapping, attachment migration, resume after interruption. This was DATA MIGRATION, not an inventory sync system. Never describe it as anything else."
-            ."\nSkillLeo Bidding Engine: this system. Laravel + Vue."
-            ."\nEbonix AI: representation-first AI creative platform. PHP + Python FastAPI + MySQL + Stripe. Multi-provider AI image/video generation (FLUX, Seedream, Imagen-4, Veo-3, Kling, Luma), an AI Twin portrait system with an identity-preservation engine, Stripe coin-economy billing with subscriptions and a full ledger."
-            ."\nWorkDo: HRM SaaS platform. Laravel + Inertia.js + React + TypeScript + MySQL + Spatie. Payroll compliance with automated tax calculations, full employee lifecycle, recruitment and contract modules, biometric attendance, granular role-based permissions."
-            ."\nTapAcademy: multi-tenant LMS SaaS. Laravel + React + MySQL + Stripe + AI integrations. AI-powered course and quiz generation, assignment management, progress tracking, certification workflows, instructor dashboards."
-            ."\nSchool Management SaaS: multi-tenant school platform, one subdomain per school. Laravel 12 + MySQL. Subdomain-based tenant isolation, granular per-role per-module permissions, full student/teacher/staff lifecycle, academic records and result publishing, 60+ relational tables."
-            ."\nHospital Management System: hospital CRM. Laravel + MySQL. Patient scheduling, medical record workflows, staff attendance and roles, operational reporting dashboards."
-            ."\nSmart Hospitals: custom single-tenant hospital backend (non-SaaS). Laravel + MySQL. OPD/IPD patient journey (register, admit, discharge), biometric-ready attendance and fingerprint enrollment, ward/bed occupancy management, pharmacy issue-medicine workflow, statistical reporting."
-            ."\nGerman CRM: international recruitment CRM. Laravel + MySQL. Role-based spaces for agent/employer/employee, interview scheduling, candidate tracking, skills-profile matching."
-            ."\nPayroll Management System: HR payroll platform. Laravel + MySQL. Employee positions and schedules, overtime and attendance tracking, deductions and salary advances, payroll generation."
-            ."\nRadio Station Platform: personal radio station platform. Laravel + MySQL. Station creation, custom stream integration, user playlist management."
-            ."\nMailbox & Ship: business correspondence platform. Laravel + MySQL. Secure handling of sensitive messages and transactions, organized workflows."
-            ."\nQuran-UL-Majeed: online academy. Laravel 12 + MySQL + Blade. Live 1-to-1/group class scheduling across multiple tracks, subscriptions and donations, teacher/student portals with video-call links, progress tracking."
-            ."\nSamuel Hasrat Foundation: NGO site. Laravel + PHP + MySQL + Blade. Donation-ready content site for a non-profit\'s children/youth/family programs."
-            ."\nPOS Application: point-of-sale system. Laravel + React + MySQL. Inventory management, multi-role support, real-time stock tracking, sales reporting."
-            ."\nGym_Saas: fitness SaaS platform. Laravel + Stripe. AI coaching, nutrition tracking, workout logging, social community features, recipe management, subscription billing."
-            ."\nImage Text Editor: client-side image editing tool, no backend. Vanilla JS + Google Cloud Vision API + HTML5 Canvas. Upload, style, reposition, resize text on images with professional rendering."
-            ."\nThynkTech: frontend theme/template, no backend. HTML + Bootstrap + CSS + JavaScript. Landing and inner pages (pricing, shop, product, blog, portfolio), static site."
-            ."\nAnything not on this sheet is NOT in the track record and must never be claimed. Never state or link a project URL - none are guaranteed to be live. The list of in-scope stacks (core, secondary, excluded) is supplied separately in the STACKS block; never attribute a technology to a named project above that that project's own line does not list, even if the technology is in scope generally."],
+        // Empty by default, and that is the point. This used to ship the
+        // founding user's entire track record as the hardcoded default, so
+        // EVERY workspace was born able to claim his projects as its own —
+        // the worst possible leak, since it ends up inside a proposal sent to
+        // a stranger. A workspace states its own record or states nothing;
+        // WorkspaceReadiness stops proposals until it does.
+        'project_facts' => ['group' => 'ai', 'secret' => false, 'default' => ''],
 
         // Proposal quality gate — every generated proposal is mechanically
         // linted (banned phrases, word count, signature, required phrases)
@@ -222,7 +205,7 @@ class SettingsService
         // running value to match.
         'proposal_min_words' => ['group' => 'ai', 'secret' => false, 'default' => 90],
         'proposal_max_words' => ['group' => 'ai', 'secret' => false, 'default' => 150],
-        'proposal_signature' => ['group' => 'ai', 'secret' => false, 'default' => 'Hassam'],
+        'proposal_signature' => ['group' => 'ai', 'secret' => false, 'default' => ''],
         'proposal_required_phrases' => ['group' => 'ai', 'secret' => false, 'default' => ['Done =']],
         'proposal_banned_phrases' => ['group' => 'ai', 'secret' => false, 'default' => [
             // Em/en dashes and the double hyphen — the #1 AI tell the
@@ -274,7 +257,10 @@ class SettingsService
         // DEPRECATED flat list - superseded by core/secondary/excluded_stacks
         // below, which the scorer, writer, and linter all read. Kept only so
         // old persisted rows don't error; nothing reads it anymore.
-        'stack_keywords' => ['group' => 'rules', 'secret' => false, 'default' => ['Laravel', 'PHP', 'Next.js', 'React', 'Node', 'MERN', 'Flutter', 'Python']],
+        // DEPRECATED flat list - superseded by core/secondary/excluded_stacks
+        // below, which the scorer, writer, and linter all read. Kept only so
+        // old persisted rows don't error; nothing reads it anymore.
+        'stack_keywords' => ['group' => 'rules', 'secret' => false, 'default' => []],
         // The single source of truth for what stacks are in scope, split by
         // strength. The scoring rubric, the proposal writer, and the tech
         // linter are all rendered from these three lists at prompt-build time -
@@ -283,19 +269,17 @@ class SettingsService
         // score medium, may mention but never claim as a named project's core
         // unless project_facts backs it. Excluded = out of scope, score low,
         // never claim (the linter's deny-list).
-        'core_stacks' => ['group' => 'rules', 'secret' => false, 'default' => [
-            'PHP', 'Laravel', 'Vue', 'Flutter', 'Odoo', 'Python', 'Django', 'FastAPI', 'Flask',
-            'Next.js', 'TypeScript', 'React Native', 'Dart', 'Kotlin', 'HTML', 'CSS',
-            'MySQL', 'PostgreSQL', 'Firebase',
-        ]],
-        'secondary_stacks' => ['group' => 'rules', 'secret' => false, 'default' => [
-            'Node.js', 'React', 'JavaScript', 'Express', 'jQuery', 'MongoDB', 'MERN', 'REST API',
-        ]],
-        'excluded_stacks' => ['group' => 'rules', 'secret' => false, 'default' => [
-            'Go', 'Golang', 'Ruby', 'Ruby on Rails', 'Rust', 'Angular', '.NET', 'Java', 'Spring Boot',
-            'Symfony', 'Kubernetes', 'Redis', 'Docker', 'AWS Lambda', 'GraphQL', 'WordPress',
-            'Magento', 'Shopify', 'Wix', 'Redux', 'Vuex', 'Nuxt', 'Svelte',
-        ]],
+        //
+        // ALL THREE DEFAULT TO EMPTY, deliberately. They used to default to
+        // the founding user's own stacks, which meant a brand-new workspace
+        // silently scored every lead against HIS definition of in-scope work
+        // and rejected jobs in its own speciality. A workspace's stacks are
+        // the one thing nobody else can guess for it. A workspace with no
+        // core stacks does not score at all (see WorkspaceReadiness) rather
+        // than scoring against somebody else's.
+        'core_stacks' => ['group' => 'rules', 'secret' => false, 'default' => []],
+        'secondary_stacks' => ['group' => 'rules', 'secret' => false, 'default' => []],
+        'excluded_stacks' => ['group' => 'rules', 'secret' => false, 'default' => []],
         // Priority-sort decay: the leads list's default "Priority" order is
         // score minus (hours-since-posted * this rate), so a high score fades
         // in position as the lead ages and a fresh mid-score can outrank a

@@ -400,6 +400,35 @@ async function handleSync() {
 
 <template>
   <PageContainer class="max-w-[1600px]">
+    <!-- Setup banner. Not dismissible, because dismissing it would not make
+         scoring start — it disappears on its own the moment the workspace
+         has what it needs. -->
+    <div
+      v-if="meta?.setup"
+      class="mb-4 rounded-card border border-warning-border bg-warning-bg p-4"
+    >
+      <h2 class="text-sm font-semibold text-warning">
+        {{ meta.setup.can_score ? "Proposals are paused until you finish setting up" : "Leads are arriving, but nothing is being scored yet" }}
+      </h2>
+      <p class="mt-1 text-sm text-text-secondary">
+        {{ meta.setup.can_score
+          ? "Scoring is running. Proposals need a little more before they can claim anything on your behalf:"
+          : "Your workspace hasn't said what it does yet, so there is nothing to score leads against. Nothing is lost — every lead is being collected and will score as soon as you fill this in." }}
+      </p>
+      <ul class="mt-3 space-y-1.5">
+        <li v-for="item in meta.setup.missing" :key="item.key" class="flex items-center gap-2 text-sm">
+          <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-warning" />
+          <span class="text-text-primary">{{ item.label }}</span>
+          <RouterLink
+            :to="`/settings?section=${item.section}`"
+            class="font-medium text-primary hover:underline"
+          >
+            Set it up
+          </RouterLink>
+        </li>
+      </ul>
+    </div>
+
     <div class="flex items-start gap-4">
       <LeftRail>
         <LeadFiltersRail
