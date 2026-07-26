@@ -39,6 +39,11 @@ class SendLeadRemindersCommand extends Command
 
     public const SECOND_REMINDER_MINUTES = 90;
 
+    /**
+     * Fallback only. The live bar is the notify_score_min setting, shared
+     * with NotificationDispatcher so a lead can never be alert-worthy but
+     * not reminder-worthy (or the reverse).
+     */
     public const MIN_SCORE = 8;
 
     public const MAX_LEAD_AGE_HOURS = 6;
@@ -78,7 +83,7 @@ class SendLeadRemindersCommand extends Command
 
         $leads = Lead::query()
             ->where('status', LeadStatus::Ready)
-            ->where('score', '>=', self::MIN_SCORE)
+            ->where('score', '>=', (int) $settings->get('notify_score_min', self::MIN_SCORE))
             ->where('posted_at', '>=', now()->subHours(self::MAX_LEAD_AGE_HOURS))
             ->get();
 

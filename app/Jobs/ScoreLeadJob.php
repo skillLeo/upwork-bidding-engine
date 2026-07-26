@@ -156,25 +156,17 @@ class ScoreLeadJob implements ShouldQueue
         ]);
 
         if ($isReady) {
-            // In-app bell notification — created here (not inside NotifyBidderJob)
-            // so it lands even if the WhatsApp/browser path fails. Best-effort.
+            // One dispatcher owns every alerting decision and every channel
+            // (see NotificationDispatcher): the score bar, the freshness
+            // gate, mute, per-channel dedupe, and the shared message format.
+            // Called inline, not queued — the whole point of scoring on the
+            // webhook is that the operator hears about a fresh lead within
+            // seconds. An alerting failure must never read as a scoring
+            // failure though (the lead IS scored), so it is contained here.
             try {
-                app(\App\Services\NotificationService::class)->leadReady($lead);
+                app(\App\Services\Notifications\NotificationDispatcher::class)->leadReady($lead);
             } catch (\Throwable $e) {
                 report($e);
-            }
-
-            // Sync, not queued: the whole point of scoring inline on the
-            // webhook is that a bidder gets the WhatsApp alert within
-            // seconds — queuing this step back up would reintroduce the
-            // exact lag we just removed. A notify failure must not read as
-            // a scoring failure though (the lead IS scored), so it falls
-            // back to its own queued retry instead of bubbling up.
-            try {
-                NotifyBidderJob::dispatchSync($lead->id);
-            } catch (\Throwable $e) {
-                report($e);
-                NotifyBidderJob::dispatch($lead->id)->delay(30);
             }
         }
     }

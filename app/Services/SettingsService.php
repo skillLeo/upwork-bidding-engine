@@ -296,6 +296,13 @@ class SettingsService
         // lead older than this at scoring time doesn't ring the phone —
         // fresh leads are the whole bidding strategy. 0 disables the gate.
         'notification_freshness_hours' => ['group' => 'rules', 'secret' => false, 'default' => 48],
+        // The bar for actually ringing the phone. Deliberately separate from
+        // score_cutoff (which decides whether a lead is worth WRITING a
+        // proposal for, default 7): a 7/10 is worth having on the dashboard,
+        // an 8+ is worth interrupting the operator for. Read by
+        // NotificationDispatcher and by the reminder sweep, so the alert bar
+        // and the reminder bar can never drift apart.
+        'notify_score_min' => ['group' => 'rules', 'secret' => false, 'default' => 8],
         // A stale posting is a spend-saving pre-check, not a visibility
         // rule — a lead that fails this still saves, still shows up in the
         // dashboard as Archived, and is never deleted. It only skips the

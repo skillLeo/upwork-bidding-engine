@@ -28,7 +28,13 @@ class NotificationService
     ];
 
     /**
-     * @param array{level?: string, body?: ?string, url?: ?string, lead_id?: ?int} $opts
+     * `push` (default true) controls only the OUTBOUND channels — Web Push
+     * and email. The in-app bell row is written either way, so a suppressed
+     * alert (a stale lead, or muted alerts) is quiet without ever becoming
+     * invisible on the dashboard. See NotificationDispatcher, which owns the
+     * decision.
+     *
+     * @param array{level?: string, body?: ?string, url?: ?string, lead_id?: ?int, push?: bool} $opts
      */
     public function push(string $type, string $title, array $opts = []): AppNotification
     {
@@ -40,6 +46,10 @@ class NotificationService
             'url' => $opts['url'] ?? null,
             'lead_id' => $opts['lead_id'] ?? null,
         ]);
+
+        if (($opts['push'] ?? true) === false) {
+            return $notification;
+        }
 
         // Fire a real Web Push too, so it lands on a locked / closed-browser
         // phone - not just the in-app bell. Best-effort; a push failure never
@@ -91,6 +101,12 @@ class NotificationService
     /**
      * A fresh, bid-worthy lead just landed. Deduped to one per lead so a
      * rescore can't double-notify.
+     *
+     * @deprecated Alerting decisions now belong to NotificationDispatcher,
+     * which owns the score bar, freshness gate, mute switch, per-channel
+     * dedupe and the shared message format. This raw fan-out is kept only
+     * for the bell-only path and existing callers; new code should call
+     * NotificationDispatcher::leadReady().
      */
     public function leadReady(Lead $lead): ?AppNotification
     {
