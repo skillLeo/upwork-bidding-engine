@@ -211,7 +211,7 @@ onMounted(() => {
       </CardHeader>
       <CardContent class="space-y-3">
         <CardDescription>
-          Makes someone else the owner. You become an admin. Only the owner can transfer ownership,
+          Makes someone else the owner. You become a bidder. Only the owner can transfer ownership,
           and only to an existing member.
         </CardDescription>
         <div class="flex flex-col gap-3 sm:flex-row">
