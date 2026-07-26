@@ -6,25 +6,38 @@ use App\Models\Tenant;
 use App\Tenancy\TenantContext;
 use Closure;
 use Illuminate\Http\Request;
+use Laravel\Sanctum\PersonalAccessToken;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Binds the tenant for the duration of a web request, from the HOST ONLY.
- *
- * Never from a query string, header or route parameter. A user-supplied
- * tenant id is horizontal privilege escalation, and the global scope reads
- * from TenantContext precisely so there is one place to audit.
+ * Binds the tenant for the duration of a web request.
  *
  * Resolution order:
- *   1. First label of the host matches a tenant slug  -> that tenant.
- *   2. Otherwise the configured fallback tenant       -> that tenant.
- *   3. Otherwise 404.
+ *   1. First label of the host matches a tenant slug -> that tenant.
+ *   2. The tenant the caller's ACCESS TOKEN was issued for -> that tenant.
+ *   3. Otherwise the configured fallback tenant.
+ *   4. Otherwise 404.
  *
- * Step 2 is why this ships without taking production down. The live host is
- * upwork.skillleo.com, whose first label is "upwork" — not a tenant slug.
- * Strict subdomain resolution alone would 404 every request the moment this
- * deploys. Set tenancy.strict_subdomain to true (and give each tenant its own
- * subdomain) to remove the fallback when real customers exist.
+ * STEP 2 EXISTS BECAUSE STEP 1 CANNOT WORK ON THIS DEPLOYMENT, and leaving it
+ * out silently broke every workspace but the first. The live host is
+ * upwork.skillleo.com, whose first label is "upwork" — not a tenant slug — so
+ * host resolution always misses and every request fell through to the
+ * fallback, workspace 1. A brand-new workspace owner signing in therefore
+ * landed in the FOUNDER'S workspace, where they hold no role at all: no
+ * permissions, no navigation, no Settings, and the founder's saved filters
+ * on screen. Subdomain switching assumes wildcard DNS that does not exist
+ * here, so "give each tenant its own subdomain" was never going to arrive on
+ * its own.
+ *
+ * A TOKEN'S tenant_id IS NOT USER-SUPPLIED. It is written by TokenIssuer at
+ * sign-in from the tenant that was bound then, it is stored server-side, and
+ * it is reached only by presenting the token's own secret. That is a
+ * different thing entirely from reading a tenant id out of a query string,
+ * header or route parameter — those remain forbidden, and for the original
+ * reason: they would be horizontal privilege escalation.
+ *
+ * Host still wins when it names a real tenant, so per-subdomain access keeps
+ * working wherever the DNS does exist.
  */
 class ResolveTenant
 {
@@ -37,7 +50,9 @@ class ResolveTenant
     {
         $context = app(TenantContext::class);
 
-        $tenant = $this->fromHost($request->getHost()) ?? $this->fallback();
+        $tenant = $this->fromHost($request->getHost())
+            ?? $this->fromAccessToken($request)
+            ?? $this->fallback();
 
         if ($tenant === null) {
             abort(404, 'Workspace not found.');
@@ -77,6 +92,34 @@ class ResolveTenant
         // TENANCY: reads the tenants table, which is not tenant-scoped — it
         // is the table the scope is derived from.
         return Tenant::where('slug', strtolower($labels[0]))->first();
+    }
+
+    /**
+     * The workspace this token was issued for.
+     *
+     * Sanctum's findToken() verifies the token's hash before returning
+     * anything, so a forged or guessed value resolves to nothing. Expiry and
+     * revocation are deliberately NOT re-checked here: auth:sanctum rejects
+     * such a request moments later regardless, and a tenant bound for a
+     * request that then 401s changes nothing.
+     */
+    protected function fromAccessToken(Request $request): ?Tenant
+    {
+        $bearer = $request->bearerToken();
+
+        if ($bearer === null || $bearer === '') {
+            return null;
+        }
+
+        $token = PersonalAccessToken::findToken($bearer);
+
+        if ($token === null || $token->tenant_id === null) {
+            return null;
+        }
+
+        // TENANCY: the tenants table is never tenant-scoped — it is the table
+        // the scope is derived from.
+        return Tenant::find($token->tenant_id);
     }
 
     protected function fallback(): ?Tenant
