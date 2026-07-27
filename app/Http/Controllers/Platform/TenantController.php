@@ -47,6 +47,7 @@ class TenantController extends Controller
         // TENANCY: the platform console reads across every tenant by design —
         // this controller is the audited cross-tenant exception.
         $tenants = Tenancy::asPlatform(fn () => Tenant::query()
+            ->with('owner:id,email,name')
             ->when($search !== '', fn ($q) => $q->where(
                 fn ($q2) => $q2->where('name', 'like', "%{$search}%")->orWhere('slug', 'like', "%{$search}%")
             ))
@@ -57,6 +58,24 @@ class TenantController extends Controller
 
         $ids = $tenants->pluck('id');
         $monthStart = now()->startOfMonth();
+
+        // Who is in each workspace, by role. The members column was a single
+        // total, which answers "is anyone in there" but not the question
+        // actually being asked: how many bidders has this admin taken on, and
+        // is anyone sitting read-only. Read from the role pivot in one query
+        // rather than per tenant.
+        // TENANCY: role assignments across every workspace — the platform
+        // console is the audited cross-tenant exception.
+        $teamKey = config('permission.column_names.team_foreign_key', 'tenant_id');
+
+        $roleCounts = Tenancy::asPlatform(fn () => DB::table('model_has_roles')
+            ->join('roles', 'roles.id', '=', 'model_has_roles.role_id')
+            ->whereIn('model_has_roles.'.$teamKey, $ids)
+            ->selectRaw('model_has_roles.'.$teamKey.' as tid, roles.name as role, count(*) as c')
+            ->groupBy('tid', 'role')
+            ->get()
+            ->groupBy('tid')
+            ->map(fn ($rows) => $rows->pluck('c', 'role')->all()));
 
         // TENANCY: aggregate counts across tenants, for the list's columns.
         [$members, $leads, $spend, $lastActivity] = Tenancy::asPlatform(function () use ($ids, $monthStart) {
@@ -80,6 +99,12 @@ class TenantController extends Controller
             'plan' => $t->plan,
             'status' => $t->status,
             'members' => (int) ($members[$t->id] ?? 0),
+            'roles' => [
+                'owner' => (int) ($roleCounts[$t->id]['owner'] ?? 0),
+                'bidder' => (int) ($roleCounts[$t->id]['bidder'] ?? 0),
+                'viewer' => (int) ($roleCounts[$t->id]['viewer'] ?? 0),
+            ],
+            'owner_email' => $t->owner?->email,
             'leads_this_month' => (int) ($leads[$t->id] ?? 0),
             'ai_spend_this_month' => round((float) ($spend[$t->id] ?? 0), 2),
             'last_activity_at' => $lastActivity[$t->id] ?? null,

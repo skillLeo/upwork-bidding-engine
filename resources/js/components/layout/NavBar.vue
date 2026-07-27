@@ -2,7 +2,7 @@
 import { ref, computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { toast } from "vue-sonner";
-import { Activity, BarChart3, ChevronDown, LayoutGrid, LogOut, Settings as SettingsIcon, UserCircle } from "@lucide/vue";
+import { Activity, BarChart3, Building2, ChevronDown, LayoutGrid, LogOut, Settings as SettingsIcon, UserCircle } from "@lucide/vue";
 import { useAuthStore } from "@/stores/auth";
 import { useBrandingStore } from "@/stores/branding";
 import { apiClient } from "@/lib/api-client";
@@ -129,6 +129,20 @@ async function handleLogout() {
             >
               <UserCircle class="h-4 w-4" />
               Profile
+            </router-link>
+            <!-- The platform console had no entry point anywhere in the app:
+                 it was reachable only by typing /platform into the address
+                 bar, which meant the one person who owns every workspace had
+                 no way to see them. Shown to platform staff only, and still
+                 gated server-side by platform_role. -->
+            <router-link
+              v-if="auth.user?.platform_role"
+              to="/platform"
+              @click="menuOpen = false"
+              class="flex w-full items-center gap-2 px-3 py-2 text-sm text-text-secondary transition-colors hover:bg-black/5 hover:text-text-primary"
+            >
+              <Building2 class="h-4 w-4" />
+              All workspaces
             </router-link>
             <button
               @click="handleLogout"

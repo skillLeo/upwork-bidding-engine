@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Platform;
 
+use App\Authorization\RoleProvisioner;
 use App\Exceptions\AiQuotaExceededException;
 use App\Models\AiCall;
 use App\Models\Lead;
@@ -9,10 +10,13 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Ai\AiManager;
 use App\Services\SettingsService;
+use App\Tenancy\Tenancy;
+use App\Tenancy\TenantTeamResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Testing\TestResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Testing\TestResponse;
+use Laravel\Sanctum\PersonalAccessToken;
 use Tests\TestCase;
 
 /**
@@ -163,7 +167,7 @@ class PlatformConsoleTest extends TestCase
             ->assertOk();
         $expiredToken = $start2->json('data.token');
 
-        \Laravel\Sanctum\PersonalAccessToken::findToken($expiredToken)
+        PersonalAccessToken::findToken($expiredToken)
             ->forceFill(['impersonation_expires_at' => now()->subMinute()])->save();
 
         $this->asToken($expiredToken)->getJson('/api/leads')->assertStatus(401);
@@ -264,5 +268,56 @@ class PlatformConsoleTest extends TestCase
         $this->asToken($token)->getJson('/api/platform/tenants')->assertStatus(403);
         $this->asToken($token)->getJson('/api/platform/health')->assertStatus(403);
         $this->asToken($token)->getJson('/api/platform/settings')->assertStatus(403);
+    }
+
+    /**
+     * The platform owner can see every workspace and who is in it.
+     *
+     * The console answered "how many members" with a single total, which is
+     * not the question that gets asked — how many bidders has this admin
+     * taken on, is anyone sitting read-only, and who owns the place. And it
+     * had no entry point in the app at all: reachable only by typing
+     * /platform, so the one person who owns every workspace had no way in.
+     */
+    public function test_the_tenants_list_shows_each_workspaces_owner_and_role_breakdown(): void
+    {
+        $platformOwner = $this->platformUser();
+
+        $workspace = Tenancy::asPlatform(fn () => Tenant::create([
+            'name' => 'Northwind', 'slug' => 'northwind',
+            'plan' => 'free', 'status' => Tenant::STATUS_ACTIVE,
+        ]));
+
+        app(RoleProvisioner::class)->provision($workspace);
+
+        $owner = User::factory()->create(['email' => 'nora@northwind.test']);
+        $workspace->update(['owner_user_id' => $owner->id]);
+
+        $members = [$owner->id => 'owner'];
+        foreach (range(1, 3) as $i) {
+            $members[User::factory()->create(['email' => "bidder{$i}@northwind.test"])->id] = 'bidder';
+        }
+        $members[User::factory()->create(['email' => 'viewer@northwind.test'])->id] = 'viewer';
+
+        foreach ($members as $userId => $role) {
+            $workspace->users()->syncWithoutDetaching([$userId => ['joined_at' => now()]]);
+            TenantTeamResolver::pinnedTo(
+                $workspace->id,
+                fn () => User::find($userId)->syncRoles([$role]),
+            );
+        }
+
+        $row = collect($this->asToken($this->tokenFor($platformOwner))
+            ->getJson('/api/platform/tenants')
+            ->assertOk()
+            ->json('data.tenants'))
+            ->firstWhere('slug', 'northwind');
+
+        $this->assertNotNull($row);
+        $this->assertSame('nora@northwind.test', $row['owner_email']);
+        $this->assertSame(5, $row['members']);
+        $this->assertSame(1, $row['roles']['owner']);
+        $this->assertSame(3, $row['roles']['bidder']);
+        $this->assertSame(1, $row['roles']['viewer']);
     }
 }

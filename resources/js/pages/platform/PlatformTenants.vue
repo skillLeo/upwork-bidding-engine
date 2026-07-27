@@ -197,7 +197,8 @@ onMounted(load);
             <th class="px-3 py-2 font-medium">Specialization</th>
             <th class="px-3 py-2 font-medium">Plan</th>
             <th class="px-3 py-2 font-medium">Status</th>
-            <th class="px-3 py-2 font-medium">Members</th>
+            <th class="px-3 py-2 font-medium">Owner</th>
+            <th class="px-3 py-2 font-medium">Team</th>
             <th class="px-3 py-2 font-medium">Leads / mo</th>
             <th class="px-3 py-2 font-medium">AI spend / mo</th>
             <th class="px-3 py-2 font-medium">Last activity</th>
@@ -205,8 +206,8 @@ onMounted(load);
           </tr>
         </thead>
         <tbody class="divide-y divide-white/5">
-          <tr v-if="loading"><td colspan="9" class="px-3 py-6 text-center text-white/40">Loading…</td></tr>
-          <tr v-else-if="!tenants.length"><td colspan="9" class="px-3 py-6 text-center text-white/40">No tenants match.</td></tr>
+          <tr v-if="loading"><td colspan="10" class="px-3 py-6 text-center text-white/40">Loading…</td></tr>
+          <tr v-else-if="!tenants.length"><td colspan="10" class="px-3 py-6 text-center text-white/40">No tenants match.</td></tr>
           <tr
             v-for="t in tenants"
             :key="t.id"
@@ -217,7 +218,14 @@ onMounted(load);
             <td class="px-3 py-2.5 text-white/60">{{ t.specialization || "—" }}</td>
             <td class="px-3 py-2.5 capitalize">{{ t.plan }}</td>
             <td class="px-3 py-2.5 capitalize">{{ t.status }}</td>
-            <td class="px-3 py-2.5">{{ t.members }}</td>
+            <td class="px-3 py-2.5 text-white/60">{{ t.owner_email || "—" }}</td>
+            <td class="px-3 py-2.5 whitespace-nowrap">
+              <span class="text-white">{{ t.members }}</span>
+              <span class="ml-1.5 text-xs text-white/40">
+                {{ t.roles.bidder }} bidder{{ t.roles.bidder === 1 ? "" : "s" }},
+                {{ t.roles.viewer }} viewer{{ t.roles.viewer === 1 ? "" : "s" }}
+              </span>
+            </td>
             <td class="px-3 py-2.5">{{ t.leads_this_month }}</td>
             <td class="px-3 py-2.5">${{ t.ai_spend_this_month.toFixed(2) }}</td>
             <td class="px-3 py-2.5 text-white/50">{{ t.last_activity_at ? relativeTime(t.last_activity_at) : "—" }}</td>
