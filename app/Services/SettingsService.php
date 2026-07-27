@@ -302,6 +302,17 @@ class SettingsService
         'hourly_floor' => ['group' => 'rules', 'secret' => false, 'default' => 8],
         'zero_history_budget_floor' => ['group' => 'rules', 'secret' => false, 'default' => 100],
         'red_flag_words' => ['group' => 'rules', 'secret' => false, 'default' => ['free test', 'unpaid sample', 'urgent no budget', 'revenue share only']],
+        // Every workspace is served the SAME lead feed — one Vollna
+        // subscription, fanned out — so a designer's board receives the
+        // backend jobs too. Scoring is the only part of that which costs
+        // money, and it costs it once PER WORKSPACE. This spends it only on
+        // jobs that mention something the workspace actually works in.
+        //
+        // Nothing is hidden or archived by this: an unmatched lead sits on
+        // the board as normal, unscored, with a reason on the row, and can
+        // be scored by hand at any time. Turn it off to have every lead
+        // scored regardless of stack.
+        'stack_gate_enabled' => ['group' => 'rules', 'secret' => false, 'default' => true],
         'followup_days' => ['group' => 'rules', 'secret' => false, 'default' => 3],
         // Separate from the rubric's 7-day auto-reject: a 3-day-old 8/10
         // still gets scored and written (visible on the dashboard), but a

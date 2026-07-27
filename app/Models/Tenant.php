@@ -68,6 +68,39 @@ class Tenant extends Model
     }
 
     /**
+     * The company's own workspace — the one the platform operates from.
+     *
+     * Platform-wide work still needs A workspace bound: settings resolution,
+     * activity logging and ops alerts are all tenant-owned, and the shared
+     * lead intake is run by the company rather than by any customer. This is
+     * the honest owner for that work, and pinning it to the internal plan
+     * means it cannot drift onto a customer's workspace the way "tenant 1"
+     * silently did.
+     *
+     * TENANCY: the tenants table is never tenant-scoped — it is the table
+     * the scope is derived from.
+     */
+    public static function platformWorkspace(): ?self
+    {
+        // TENANCY: the tenants table is never tenant-scoped — it is the table
+        // the scope is derived from.
+        return \App\Tenancy\Tenancy::asPlatform(function () {
+            $internal = static::query()->where('plan', self::PLAN_INTERNAL)->orderBy('id')->first();
+
+            // A single-workspace install — a fresh deployment, or the test
+            // suite — has no internal plan yet. The oldest workspace is the
+            // company's own by definition there, and refusing intake outright
+            // would be a worse answer than operating from it.
+            //
+            // Safe in a way the old implicit "tenant 1" fallback was not:
+            // this only decides whose SETTINGS and activity log intake runs
+            // under. Ownership of the leads themselves is no longer at stake
+            // — they go to the shared pool and out to every workspace.
+            return $internal ?? static::query()->orderBy('id')->first();
+        });
+    }
+
+    /**
      * DISPLAY ONLY. `specialization` is a label the workspace picks for
      * itself ("Laravel + Vue", "Graphic design") and nothing reads it to make
      * a decision. Real scoring behaviour comes from the workspace's

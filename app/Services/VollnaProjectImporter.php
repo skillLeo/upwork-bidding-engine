@@ -3,24 +3,37 @@
 namespace App\Services;
 
 use App\Enums\ActivityType;
-use App\Enums\LeadStatus;
 use App\Models\ActivityLog;
+use App\Models\DeletedLeadExternalId;
 use App\Models\Lead;
-use App\Jobs\ScoreLeadJob;
+use App\Models\LeadSourceItem;
+use App\Services\Leads\LeadFanOut;
+use App\Tenancy\Tenancy;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 /**
- * Shared by the live webhook (VollnaWebhookController) and the one-time
- * REST API backfill command (vollna:backfill) so both paths dedupe, map
- * fields, and dispatch scoring identically - only the shape of the raw
- * payload they hand in differs (the backfill command normalizes the API's
- * camelCase shape into this same snake_case shape before calling in).
+ * Turns a raw Vollna project into a pool item, and the pool item into a lead
+ * on every workspace's board.
+ *
+ * Two doors, deliberately not one:
+ *
+ *   ingest()        platform-wide. The scheduled poller and the webhook.
+ *                   One job in, every eligible workspace served.
+ *   importProject() this workspace only. The manual "Sync now" button and
+ *                   the one-off backfill command.
+ *
+ * Both share the field mapping, the age gate and the pool, so the two paths
+ * can never disagree about what a job is or whether it is too old — only
+ * about who gets it.
  */
 class VollnaProjectImporter
 {
-    public function __construct(protected SettingsService $settings) {}
+    public function __construct(
+        protected SettingsService $settings,
+        protected LeadFanOut $fanOut,
+    ) {}
 
 
     /**
@@ -60,40 +73,88 @@ class VollnaProjectImporter
     }
 
     /**
+     * THE PLATFORM INTAKE DOOR: one job into the shared pool, then out to
+     * every workspace entitled to it.
+     *
+     * This is what the scheduled poller and the Vollna webhook call. It runs
+     * ONCE per delivery, not once per workspace — the old arrangement had
+     * every workspace poll Vollna separately and import into itself, which
+     * multiplied the API bill by the number of customers (measured live:
+     * 1,441 calls/day at one workspace, 3,944 at four) and could never work
+     * anyway, because leads.external_id was globally unique.
+     *
      * @param  array<string, mixed>  $project
      * @return array<string, mixed>
      */
-    /**
-     * $scoreInline: true (webhook-style) scores in the same request so an
-     * alert lands within seconds; false (the scheduled poller) just queues
-     * the scoring — the poller runs INSIDE the scheduler process, and a
-     * burst of inline 60-90s scoring runs there would starve every other
-     * scheduled task and risk the whole cron being killed mid-run.
-     */
-    public function importProject(array $project, bool $scoreInline = true): array
+    public function ingest(array $project): array
     {
         $mapped = $this->mapPayload($project);
 
-        if ($mapped['external_id'] === '' || $mapped['title'] === '') {
-            return ['status' => 'skipped', 'reason' => 'missing job identifier or title'];
+        if (($gate = $this->gate($mapped)) !== null) {
+            return $gate;
         }
 
-        // Age gate at the door: a posting older than the scoring window
-        // is never even inserted. Learned live on 2026-07-19: a mirror
-        // sync resurrected 515 deleted two-week-old leads and dispatched
-        // scoring for all of them. Old jobs are dead inventory — they
-        // don't get a row, a score, or an alert. (0 disables the gate.)
-        $maxAgeDays = (int) $this->settings->get('max_posted_age_days', 7);
+        [$item, $isNew] = $this->resolveSourceItem($mapped);
 
-        if ($maxAgeDays > 0 && $mapped['posted_at'] !== null && $mapped['posted_at']->lt(now()->subDays($maxAgeDays))) {
-            return ['status' => 'skipped', 'reason' => "posted more than {$maxAgeDays} days ago — not imported"];
+        if (! $isNew) {
+            // Idempotent: Vollna re-delivers, and the poller sees the same
+            // newest page every minute. A job already in the pool must not
+            // be re-distributed or re-scored anywhere.
+            return ['status' => 'duplicate', 'source_item_id' => $item->id];
         }
 
-        // Checked before the live-row lookup: a permanently deleted lead
-        // has no live row to match against, but must still never come
-        // back. See deleted_lead_external_ids migration for the incident
-        // this closes (a mirror sync resurrected 515 deleted leads).
-        if (\App\Models\DeletedLeadExternalId::where('external_id', $mapped['external_id'])->exists()) {
+        $fan = $this->fanOut->distribute($item);
+
+        ActivityLog::record(ActivityType::LeadReceived, meta: [
+            'source' => 'vollna',
+            'source_item_id' => $item->id,
+            'external_id' => $item->external_id,
+            'delivered_to' => $fan['tenants'],
+        ]);
+
+        return [
+            'status' => 'accepted',
+            'source_item_id' => $item->id,
+            'delivered' => $fan['delivered'],
+            'skipped' => $fan['skipped'],
+        ];
+    }
+
+    /**
+     * ONE WORKSPACE ONLY — the manual "Sync now" button and the one-off
+     * backfill command, both of which are a person asking for THEIR
+     * workspace to be brought up to date.
+     *
+     * Still routes through the pool, so a job pulled in this way is
+     * available to every other workspace afterwards rather than being
+     * privately owned by whoever pressed the button.
+     *
+     * @param  array<string, mixed>  $project
+     * @return array<string, mixed>
+     */
+    public function importProject(array $project): array
+    {
+        $tenant = Tenancy::current();
+
+        if ($tenant === null) {
+            throw new \RuntimeException(
+                'importProject() delivers to the CURRENT workspace and none is bound. '
+                .'Platform-wide intake goes through ingest().'
+            );
+        }
+
+        $mapped = $this->mapPayload($project);
+
+        if (($gate = $this->gate($mapped)) !== null) {
+            return $gate;
+        }
+
+        // Checked before anything else: a permanently deleted lead has no
+        // live row to match against, but must still never come back. See the
+        // deleted_lead_external_ids migration for the incident this closes
+        // (a mirror sync resurrected 515 deleted leads). Tenant-scoped — one
+        // workspace deleting a job says nothing about anyone else's.
+        if (DeletedLeadExternalId::where('external_id', $mapped['external_id'])->exists()) {
             ActivityLog::record(ActivityType::LeadResurrectionBlocked, meta: [
                 'external_id' => $mapped['external_id'],
             ]);
@@ -108,35 +169,86 @@ class VollnaProjectImporter
                 'external_id' => $mapped['external_id'],
             ]);
 
-            // Idempotent: Vollna may retry deliveries, this must not create dupes or re-score.
             return ['status' => 'duplicate', 'lead_id' => $existing->id];
         }
 
-        $lead = Lead::create([...$mapped, 'status' => LeadStatus::New]);
+        [$item] = $this->resolveSourceItem($mapped);
 
-        ActivityLog::record(ActivityType::LeadReceived, subject: $lead, meta: ['source' => 'vollna']);
-
-        // Score inline, in the same request, so the bidder gets the
-        // real-time alert within seconds. Scoring now runs against the
-        // AI provider's API directly (seconds, always-on) — no OpenClaw
-        // health gate needed. inline=true suppresses the final-failure
-        // treatment on this first attempt; the queued retry below owns
-        // the real retry cycle (3 tries, 10s gaps) and the needs_review
-        // + operator alert if those fail too. No lead is ever lost.
-        if (! $scoreInline) {
-            ScoreLeadJob::dispatch($lead->id);
-
-            return ['status' => 'accepted', 'lead_id' => $lead->id];
+        if (! $this->fanOut->deliver($item, $tenant)) {
+            return ['status' => 'duplicate', 'source_item_id' => $item->id];
         }
 
-        try {
-            ScoreLeadJob::dispatchSync($lead->id, true);
-        } catch (\Throwable $e) {
-            report($e);
-            ScoreLeadJob::dispatch($lead->id);
+        return ['status' => 'accepted', 'source_item_id' => $item->id];
+    }
+
+    /**
+     * The two refusals that apply before a job is worth storing at all.
+     *
+     * @param  array<string, mixed>  $mapped
+     * @return array<string, mixed>|null  null when the job may proceed
+     */
+    protected function gate(array $mapped): ?array
+    {
+        if ($mapped['external_id'] === '' || $mapped['title'] === '') {
+            return ['status' => 'skipped', 'reason' => 'missing job identifier or title'];
         }
 
-        return ['status' => 'accepted', 'lead_id' => $lead->id];
+        // Age gate at the door: a posting older than the scoring window is
+        // never even stored. Learned live on 2026-07-19, when a mirror sync
+        // resurrected 515 deleted two-week-old leads and dispatched scoring
+        // for all of them. Old jobs are dead inventory — no row, no score,
+        // no alert. (0 disables the gate.)
+        //
+        // Read from whichever workspace is bound, which for the poller is
+        // the platform's own. Each workspace ALSO enforces its own
+        // max_posted_age_days in applyHardFilters, so a workspace wanting a
+        // tighter window still gets one; this is only the outer bound on
+        // what enters the pool.
+        $maxAgeDays = (int) $this->settings->get('max_posted_age_days', 7);
+
+        if ($maxAgeDays > 0 && $mapped['posted_at'] !== null && $mapped['posted_at']->lt(now()->subDays($maxAgeDays))) {
+            return ['status' => 'skipped', 'reason' => "posted more than {$maxAgeDays} days ago — not imported"];
+        }
+
+        return null;
+    }
+
+    /**
+     * Find or create the pool row for this job.
+     *
+     * proposal_count is refreshed on an item already in the pool: it is the
+     * one fact that genuinely moves after publication, and a stale count
+     * feeds every workspace's max_proposals rule the wrong number. Nothing
+     * else is overwritten — re-editing a job's title or budget after the
+     * fact is not something the source reports reliably, and rewriting the
+     * text under a proposal a workspace has already drafted against it would
+     * be worse than being slightly out of date.
+     *
+     * @param  array<string, mixed>  $mapped
+     * @return array{0: LeadSourceItem, 1: bool}  the item, and whether it is new
+     */
+    protected function resolveSourceItem(array $mapped): array
+    {
+        // TENANCY: the pool is owned by nobody by design — see
+        // LeadSourceItem. This is the write that fills it.
+        return Tenancy::asPlatform(function () use ($mapped) {
+            $facts = array_intersect_key(
+                $mapped,
+                array_flip(LeadSourceItem::PROJECTED_COLUMNS),
+            );
+
+            $existing = LeadSourceItem::where('external_id', $mapped['external_id'])->first();
+
+            if ($existing !== null) {
+                if ((int) $existing->proposal_count !== (int) ($facts['proposal_count'] ?? 0)) {
+                    $existing->update(['proposal_count' => $facts['proposal_count'] ?? 0]);
+                }
+
+                return [$existing, false];
+            }
+
+            return [LeadSourceItem::create([...$facts, 'source' => 'vollna']), true];
+        });
     }
 
     /**

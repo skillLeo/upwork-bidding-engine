@@ -54,7 +54,11 @@ const overridesFor = ref(null); // member whose personal-permissions panel is op
 // to be visible side by side or the wrong one wins by default.
 const creatingWorkspace = ref(false);
 const wsSlugTouched = ref(false);
-const wsForm = reactive({ name: "", slug: "", specialization: "", owner_email: "", owner_name: "", owner_password: "" });
+const wsForm = reactive({ name: "", slug: "", specialization_preset: "", owner_email: "", owner_name: "", owner_password: "" });
+
+// Fetched rather than hardcoded so the dropdown can never offer a trade the
+// server would reject.
+const presets = ref([]);
 
 watch(
   () => wsForm.name,
@@ -71,7 +75,9 @@ async function createWorkspace() {
     const res = await apiClient.post("/platform/tenants", {
       name: wsForm.name.trim(),
       slug: wsForm.slug.trim(),
-      specialization: wsForm.specialization.trim() || null,
+      // The preset carries its own label, so the free-text field is only
+      // needed when nobody picked one.
+      specialization_preset: wsForm.specialization_preset || null,
       // The one email field at the top of the form is the person either way.
       owner_email: inviteEmail.value.trim(),
       owner_name: wsForm.owner_name.trim() || null,
@@ -80,7 +86,7 @@ async function createWorkspace() {
       owner_password: wsForm.owner_password.trim() || null,
     });
     toast.success(res.data.data.message, { duration: 10000 });
-    Object.assign(wsForm, { name: "", slug: "", specialization: "", owner_email: "", owner_name: "", owner_password: "" });
+    Object.assign(wsForm, { name: "", slug: "", specialization_preset: "", owner_email: "", owner_name: "", owner_password: "" });
     inviteEmail.value = "";
     wsSlugTouched.value = false;
   } catch (error) {
@@ -119,6 +125,16 @@ async function load() {
     toast.error(apiErrorMessage(error, "Could not load members."));
   } finally {
     loading.value = false;
+  }
+
+  // Platform-owner only, and quietly optional: a workspace owner opening
+  // this screen to invite a bidder has no business seeing this endpoint, and
+  // a 403 here must not read as "members failed to load".
+  try {
+    const res = await apiClient.get("/platform/specializations");
+    presets.value = res.data.data.presets;
+  } catch {
+    presets.value = [];
   }
 }
 
@@ -228,8 +244,18 @@ onMounted(load);
               <Input v-model="wsForm.slug" @input="wsSlugTouched = true" placeholder="northwind-design" class="font-mono" />
             </div>
             <div>
-              <Label>Specialization <span class="text-text-tertiary">(optional)</span></Label>
-              <Input v-model="wsForm.specialization" placeholder="Graphic design" />
+              <Label>What they do</Label>
+              <select
+                v-model="wsForm.specialization_preset"
+                class="h-9 w-full rounded-md border border-border-strong bg-white px-3 text-sm text-text-primary focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none"
+              >
+                <option value="">Let them set it up themselves</option>
+                <option v-for="p in presets" :key="p.key" :value="p.key">{{ p.label }}</option>
+              </select>
+              <FieldHint>
+                Fills in their starting stacks so their leads score from day one. They can change
+                all of it later in their own Bidding rules.
+              </FieldHint>
             </div>
             <div>
               <Label>Their name <span class="text-text-tertiary">(optional)</span></Label>

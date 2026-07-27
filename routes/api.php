@@ -363,6 +363,10 @@ Route::middleware(['auth:sanctum', 'impersonation.guard', 'enforce.2fa'])->group
     */
     Route::prefix('platform')->middleware('platform.staff')->group(function () {
         Route::get('/tenants', [TenantController::class, 'index']);
+        // The starter stack lists a new workspace can be opened with, so the
+        // creation form and the server agree on one list instead of the
+        // frontend carrying its own copy.
+        Route::get('/specializations', [TenantController::class, 'specializations']);
         // The closed-signup door: create a workspace and invite its owner.
         // Platform-owner only (checked in the controller, not just here).
         Route::post('/tenants', [TenantController::class, 'store']);

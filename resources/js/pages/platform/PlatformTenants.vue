@@ -49,7 +49,11 @@ const healthDot = (status) => ({
 // place an owner invitation is ever minted.
 const creating = ref(false);
 const saving = ref(false);
-const form = reactive({ name: "", slug: "", specialization: "", owner_email: "" });
+const form = reactive({ name: "", slug: "", specialization_preset: "", owner_email: "" });
+
+// Offered by the server so the dropdown and the validator can never
+// disagree about which trades exist.
+const presets = ref([]);
 
 // Slug suggested from the name, but only until it is typed into by hand —
 // silently rewriting somebody's deliberate slug is worse than a blank field.
@@ -63,10 +67,21 @@ watch(
   },
 );
 
-function openCreate() {
-  Object.assign(form, { name: "", slug: "", specialization: "", owner_email: "" });
+async function openCreate() {
+  Object.assign(form, { name: "", slug: "", specialization_preset: "", owner_email: "" });
   slugTouched.value = false;
   creating.value = true;
+
+  if (presets.value.length === 0) {
+    try {
+      const res = await apiClient.get("/platform/specializations");
+      presets.value = res.data.data.presets;
+    } catch {
+      // The dropdown falls back to "let them set it up themselves", which
+      // is a working workspace — not a reason to block creation.
+      presets.value = [];
+    }
+  }
 }
 
 async function createWorkspace() {
@@ -75,7 +90,7 @@ async function createWorkspace() {
     const res = await apiClient.post("/platform/tenants", {
       name: form.name.trim(),
       slug: form.slug.trim(),
-      specialization: form.specialization.trim() || null,
+      specialization_preset: form.specialization_preset || null,
       owner_email: form.owner_email.trim(),
     });
     toast.success(res.data.data.message);
@@ -151,13 +166,18 @@ onMounted(load);
           />
         </div>
         <div>
-          <label class="mb-1 block text-xs font-medium text-white/70">Specialization <span class="text-white/30">(optional)</span></label>
-          <input
-            v-model="form.specialization"
-            placeholder="Graphic design"
-            class="h-9 w-full rounded-md border border-white/10 bg-white/5 px-3 text-sm text-white placeholder:text-white/25 focus:border-amber-500 focus:outline-none"
-          />
-          <p class="mt-1 text-xs text-white/40">A label for this list. Scoring reads their stack lists, never this.</p>
+          <label class="mb-1 block text-xs font-medium text-white/70">What they do</label>
+          <select
+            v-model="form.specialization_preset"
+            class="h-9 w-full rounded-md border border-white/10 bg-white/5 px-3 text-sm text-white focus:border-amber-500 focus:outline-none"
+          >
+            <option value="" class="bg-neutral-900">Let them set it up themselves</option>
+            <option v-for="p in presets" :key="p.key" :value="p.key" class="bg-neutral-900">{{ p.label }}</option>
+          </select>
+          <p class="mt-1 text-xs text-white/40">
+            Seeds their starting stacks, so their board scores from day one. They own these lists
+            afterwards and can change every entry.
+          </p>
         </div>
         <div>
           <label class="mb-1 block text-xs font-medium text-white/70">Owner email</label>

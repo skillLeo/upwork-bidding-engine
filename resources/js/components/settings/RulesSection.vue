@@ -124,6 +124,23 @@ async function handleSave() {
         <FieldHint>Any brief containing one of these is archived before any AI call runs.</FieldHint>
       </div>
 
+      <div class="rounded-lg border border-border-strong p-4">
+        <label class="flex items-center gap-2 text-sm font-medium text-text-primary">
+          <input
+            type="checkbox"
+            v-model="form.stack_gate_enabled"
+            class="h-4 w-4 rounded border-border-strong text-primary focus:ring-2 focus:ring-primary/30"
+          />
+          Only score leads that mention one of my stacks
+        </label>
+        <FieldHint class="mt-2">
+          You receive every lead the platform pulls in, including work in other people's trades.
+          With this on, AI scoring is spent only on jobs that mention one of your core or secondary
+          stacks. The rest still appear on your board — unscored, never archived, with a note saying
+          why — and you can score any of them by hand. Turn this off to have every lead scored.
+        </FieldHint>
+      </div>
+
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <Label>Priority sort decay rate</Label>

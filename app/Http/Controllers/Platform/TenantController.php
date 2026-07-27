@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Services\Ai\AiQuotaService;
 use App\Services\Members\InvitationService;
 use App\Services\SettingsService;
+use App\Services\Workspaces\WorkspaceBootstrapper;
 use App\Tenancy\Tenancy;
 use App\Tenancy\TenantTeamResolver;
 use Illuminate\Http\JsonResponse;
@@ -23,6 +24,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
 
 /**
@@ -115,6 +117,19 @@ class TenantController extends Controller
     }
 
     /**
+     * The trades a new workspace can be opened as.
+     *
+     * Config-backed, so the creation form offers exactly what the server
+     * will accept — a hardcoded list in the frontend would drift the first
+     * time a trade is added, and the failure would be a validation error
+     * naming a preset the user just picked from a dropdown.
+     */
+    public function specializations(): JsonResponse
+    {
+        return response()->json(['data' => ['presets' => WorkspaceBootstrapper::presets()]]);
+    }
+
+    /**
      * Create a workspace and invite its owner (P8).
      *
      * This is the CLOSED-SIGNUP path: the platform owner opens a workspace
@@ -141,6 +156,14 @@ class TenantController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'slug' => ['required', 'string', 'max:63', 'alpha_dash', 'unique:tenants,slug'],
             'specialization' => ['sometimes', 'nullable', 'string', 'max:80'],
+            // Picks the workspace's starter stack lists. Without one, the
+            // workspace opens on the setup banner and scores nothing until
+            // its owner fills in core_stacks by hand — correct, but a poor
+            // first day for somebody who just paid.
+            'specialization_preset' => [
+                'sometimes', 'nullable', 'string',
+                Rule::in(array_keys((array) config('specializations.presets', []))),
+            ],
             'owner_email' => ['required', 'email', 'max:255'],
             // Set a password and the account is created and ready NOW, with
             // no email round-trip. Leave it blank and an invitation is sent
@@ -166,6 +189,12 @@ class TenantController extends Controller
         }
 
         app(RoleProvisioner::class)->provision($tenant);
+
+        // Starter stacks from the chosen trade, and the last week of the
+        // shared lead pool queued into the new board — so the owner's first
+        // sign-in shows a working engine rather than an empty screen and a
+        // list of things to configure.
+        app(WorkspaceBootstrapper::class)->bootstrap($tenant, $validated['specialization_preset'] ?? null);
 
         $email = strtolower(trim($validated['owner_email']));
         $password = trim((string) ($validated['owner_password'] ?? ''));

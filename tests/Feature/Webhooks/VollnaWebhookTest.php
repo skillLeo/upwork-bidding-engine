@@ -165,8 +165,8 @@ class VollnaWebhookTest extends TestCase
         ]);
 
         $response = $this->postJson('/api/vollna-hook', $this->batch(
-            ['title' => 'Job One', 'url' => 'https://www.vollna.com/go?pid=101'],
-            ['title' => 'Job Two', 'url' => 'https://www.vollna.com/go?pid=102'],
+            ['title' => 'Laravel Job One', 'url' => 'https://www.vollna.com/go?pid=101'],
+            ['title' => 'Laravel Job Two', 'url' => 'https://www.vollna.com/go?pid=102'],
         ), ['X-Vollna-Secret' => 'test-secret']);
 
         $response->assertStatus(201)
@@ -185,7 +185,9 @@ class VollnaWebhookTest extends TestCase
             'api.anthropic.com/*' => Http::response($this->anthropic('{"score": 3, "bid": false, "reason": "weak"}')),
         ]);
 
-        $payload = $this->batch(['title' => 'Job One', 'url' => 'https://www.vollna.com/go?pid=dup-1']);
+        // Names a core stack so the cheap stack gate lets it reach the model
+        // — this test is about idempotency, not about what gets scored.
+        $payload = $this->batch(['title' => 'Laravel Job One', 'url' => 'https://www.vollna.com/go?pid=dup-1']);
         $headers = ['X-Vollna-Secret' => 'test-secret'];
 
         $this->postJson('/api/vollna-hook', $payload, $headers)->assertStatus(201);

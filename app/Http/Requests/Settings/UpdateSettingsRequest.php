@@ -108,6 +108,7 @@ class UpdateSettingsRequest extends FormRequest
             'secondary_stacks.*' => ['string', 'max:50'],
             'excluded_stacks' => ['sometimes', 'array'],
             'excluded_stacks.*' => ['string', 'max:50'],
+            'stack_gate_enabled' => ['sometimes', 'boolean'],
             'priority_decay_rate' => ['sometimes', 'numeric', 'min:0', 'max:1'],
             // Empty disables the ping. Anything else must be a real http(s)
             // URL: the scheduler and the "Send test ping" button both dial

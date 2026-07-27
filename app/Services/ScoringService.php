@@ -80,6 +80,104 @@ class ScoringService
         return ['passed' => true, 'reason' => null];
     }
 
+    /**
+     * Is this job in this workspace's line of work at all?
+     *
+     * WHY THIS EXISTS. Every workspace is served the same lead feed from one
+     * Vollna subscription, so a graphic-design workspace receives the Laravel
+     * jobs and a backend workspace receives the logo jobs. Scoring is what
+     * costs money, and it costs it once per workspace per lead — without a
+     * cheap check first, onboarding a tenth admin multiplies the AI bill
+     * tenfold on leads nobody involved would ever bid.
+     *
+     * The hard filters above cannot do this job: they gate on budget,
+     * proposal count, age and red-flag phrases, and deliberately say nothing
+     * about stacks. The stack lists reach the model only inside the rubric
+     * prompt — which means paying full price to be told "not your field".
+     *
+     * A REFUSAL HERE IS NOT A REJECTION. The lead stays on the board,
+     * unarchived, in `new`, with this reason on the row; the owner can score
+     * it by hand. That distinction is the whole point — filtering is the
+     * workspace's business, and this only decides where the money goes.
+     *
+     * Falls open in every ambiguous case: no stack lists configured, or a
+     * brief that names no technology at all, both count as relevant. A false
+     * negative costs a real lead; a false positive costs one AI call.
+     *
+     * @return array{relevant: bool, reason: ?string}
+     */
+    public function stackRelevance(Lead $lead): array
+    {
+        if (! $this->settings->get('stack_gate_enabled', true)) {
+            return ['relevant' => true, 'reason' => null];
+        }
+
+        $lists = $this->settings->stackLists();
+        $wanted = array_merge($lists['core'], $lists['secondary']);
+
+        // No stacks set is not "nothing matches", it is "we have not been
+        // told yet". WorkspaceReadiness already holds scoring back in that
+        // case, and silently skipping here would hide why.
+        if ($wanted === []) {
+            return ['relevant' => true, 'reason' => null];
+        }
+
+        // ONE POSITIVE TEST, and deliberately nothing else.
+        //
+        // excluded_stacks is NOT consulted here, though it is tempting. That
+        // list means "a job that CORE-REQUIRES this is out of scope" — a
+        // judgement about what the work centres on, which no keyword match
+        // can make. Caught in testing: a Next.js job whose brief mentioned
+        // GraphQL once in passing was refused by a workspace that builds
+        // Next.js, because GraphQL sat on its excluded list. Real briefs
+        // name adjacent technologies constantly; refusing on a mention would
+        // quietly drop good leads and nobody would ever learn why.
+        //
+        // So the excluded list keeps doing its real work inside the scoring
+        // rubric, where the model can weigh what the job is actually about.
+        // This only asks the cheap question: is there any sign at all that
+        // this is our kind of work? A false positive costs one AI call. A
+        // false negative costs a lead — so the asymmetry decides the design.
+        $haystack = strtolower(implode(' ', [
+            $lead->title,
+            implode(' ', (array) $lead->skills),
+            $lead->full_brief,
+        ]));
+
+        foreach ($wanted as $term) {
+            if ($this->mentions($haystack, $term)) {
+                return ['relevant' => true, 'reason' => null];
+            }
+        }
+
+        return [
+            'relevant' => false,
+            'reason' => 'Not auto-scored: nothing in this job matches your core or secondary stacks. '
+                .'It is still here — score it by hand, or widen your stacks in Settings → Bidding rules.',
+        ];
+    }
+
+    /**
+     * Word-boundary match, so "go" does not match "google" and "r" does not
+     * match every word in the brief. Falls back to a plain substring test for
+     * terms containing punctuation ("node.js", "c++", "ci/cd"), where
+     * \b behaves in ways nobody writing a stack list would predict.
+     */
+    protected function mentions(string $haystack, string $term): bool
+    {
+        $needle = strtolower(trim($term));
+
+        if ($needle === '') {
+            return false;
+        }
+
+        if (preg_match('/^[a-z0-9 ]+$/', $needle) !== 1) {
+            return str_contains($haystack, $needle);
+        }
+
+        return preg_match('/\b'.preg_quote($needle, '/').'\b/', $haystack) === 1;
+    }
+
     protected function parseBudgetAmount(?string $budget): ?float
     {
         if (! $budget) {

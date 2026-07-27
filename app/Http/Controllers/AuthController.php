@@ -18,6 +18,7 @@ use App\Models\User;
 use App\Services\Auth\LoginThrottle;
 use App\Services\Auth\TokenIssuer;
 use App\Services\SettingsService;
+use App\Services\Workspaces\WorkspaceBootstrapper;
 use App\Tenancy\Tenancy;
 use App\Tenancy\TenantTeamResolver;
 use Illuminate\Auth\Events\PasswordReset;
@@ -429,6 +430,13 @@ class AuthController extends Controller
         // idempotent (findOrCreate) and the owner grant can always be re-run,
         // whereas a half-rolled-back tenant could not.
         $this->provisionNewWorkspace($tenant, $user);
+
+        // Starter stacks and a board with leads on it. Self-serve sign-up
+        // names no specialization, so only the pool backfill applies here —
+        // the workspace still opens on the setup banner until its owner says
+        // what they build, which is the honest state for a workspace that
+        // has told us nothing.
+        app(WorkspaceBootstrapper::class)->bootstrap($tenant);
 
         // Bind the new workspace before issuing the token so the token, its
         // device metadata and the audit row all record the right tenant.

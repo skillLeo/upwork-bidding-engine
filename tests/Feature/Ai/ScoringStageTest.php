@@ -164,7 +164,16 @@ class ScoringStageTest extends TestCase
             )),
         ]);
 
-        $lead = Lead::factory()->create(['status' => LeadStatus::New, 'budget' => '$500 fixed', 'posted_at' => now(), 'proposal_count' => 2]);
+        // Title names a core stack on purpose: the stack gate spends AI
+        // credit only on jobs in the workspace's own trade, and this test is
+        // about what scoring persists, not about the gate.
+        $lead = Lead::factory()->create([
+            'title' => 'Laravel API integration',
+            'status' => LeadStatus::New,
+            'budget' => '$500 fixed',
+            'posted_at' => now(),
+            'proposal_count' => 2,
+        ]);
         ScoreLeadJob::dispatchSync($lead->id);
 
         $lead->refresh();

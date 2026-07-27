@@ -6,9 +6,11 @@ use App\Authorization\RoleProvisioner;
 use App\Exceptions\AiQuotaExceededException;
 use App\Models\AiCall;
 use App\Models\Lead;
+use App\Models\LeadSourceItem;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Ai\AiManager;
+use App\Services\Leads\LeadFanOut;
 use App\Services\SettingsService;
 use App\Tenancy\Tenancy;
 use App\Tenancy\TenantTeamResolver;
@@ -233,15 +235,39 @@ class PlatformConsoleTest extends TestCase
         app(AiManager::class)->complete('scoring', 'system prompt', 'user content', 'claude-haiku-4-5', 100);
     }
 
-    public function test_vollna_poller_skips_a_past_due_tenant_entirely(): void
+    public function test_a_past_due_workspace_receives_no_leads_from_the_pool(): void
     {
-        $this->tenant->update(['status' => Tenant::STATUS_PAST_DUE]);
-        app(SettingsService::class)->setMany(['vollna_api_token' => 'tok', 'vollna_filter_id' => '123']);
-        Http::fake();
+        // The poller no longer loops workspaces — it polls Vollna ONCE for
+        // the whole platform and hands each job to LeadFanOut. So the
+        // billing gate moved with the AI spend it protects: it is no longer
+        // "don't poll for this tenant", it is "don't deliver to it", which
+        // is the step that actually dispatches scoring.
+        $paying = Tenant::create([
+            'name' => 'Paying', 'slug' => 'paying-ws',
+            'plan' => 'free', 'status' => Tenant::STATUS_ACTIVE,
+        ]);
 
-        $this->artisan('vollna:poll-api', ['--tenant' => $this->tenant->slug])->assertExitCode(0);
+        $behind = Tenant::create([
+            'name' => 'Behind', 'slug' => 'behind-ws',
+            'plan' => 'free', 'status' => Tenant::STATUS_PAST_DUE,
+        ]);
 
-        Http::assertNothingSent();
+        $eligible = app(LeadFanOut::class)->eligibleWorkspaces()->pluck('slug')->all();
+
+        $this->assertContains($paying->slug, $eligible);
+        $this->assertNotContains($behind->slug, $eligible, 'a past-due workspace must not be fed leads');
+
+        $item = LeadSourceItem::create([
+            'external_id' => 'gate-check-1',
+            'title' => 'Laravel API work',
+            'full_brief' => 'Laravel and MySQL.',
+            'posted_at' => now(),
+        ]);
+
+        app(LeadFanOut::class)->distribute($item);
+
+        $this->assertSame(1, Tenancy::runAs($paying, fn () => Lead::where('external_id', 'gate-check-1')->count()));
+        $this->assertSame(0, Tenancy::runAs($behind, fn () => Lead::where('external_id', 'gate-check-1')->count()));
     }
 
     // -------------------------------------------------------------- extras

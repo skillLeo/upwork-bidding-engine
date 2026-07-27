@@ -2,11 +2,12 @@
 
 namespace App\Console\Commands;
 
-use App\Console\Concerns\RunsForTenants;
 use App\Enums\ActivityType;
 use App\Models\ActivityLog;
+use App\Models\Tenant;
 use App\Services\OpsAlertService;
 use App\Services\SettingsService;
+use App\Tenancy\Tenancy;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -33,21 +34,36 @@ use Illuminate\Support\Facades\Cache;
  */
 class VollnaCheckSilenceCommand extends Command
 {
-    use RunsForTenants;
-
     public const ALERTED_CACHE_KEY = 'vollna:silence_alerted';
 
-    protected $signature = 'vollna:check-silence
-        {--tenant= : run for this tenant only (default: every operable tenant)}';
+    protected $signature = 'vollna:check-silence';
 
-    protected $description = 'Alert (once per incident) when no Vollna webhook delivery has arrived within the configured window';
+    protected $description = 'Alert (once per incident) when Vollna intake has gone quiet past the configured window';
 
+    /**
+     * Watches the ONE intake door, not one per workspace.
+     *
+     * This used to loop every workspace, from when each workspace polled
+     * Vollna for itself. Intake is now a single platform-level poll feeding
+     * a shared pool, so only the platform's own workspace ever stamps
+     * vollna_last_intake_at — and looping would have every customer
+     * workspace report an outage that does not exist, one false alarm per
+     * customer, growing with every one onboarded.
+     */
     public function handle(SettingsService $settings, OpsAlertService $alerts): int
     {
-        return $this->forEachTenant(fn () => $this->runForTenant($settings, $alerts));
+        $platform = Tenant::platformWorkspace();
+
+        if ($platform === null) {
+            $this->error('No workspace to check intake for.');
+
+            return self::FAILURE;
+        }
+
+        return Tenancy::runAs($platform, fn () => $this->check($settings, $alerts));
     }
 
-    protected function runForTenant(SettingsService $settings, OpsAlertService $alerts): int
+    protected function check(SettingsService $settings, OpsAlertService $alerts): int
     {
         $threshold = max(1, (int) $settings->get('vollna_silence_alert_hours', 6));
 

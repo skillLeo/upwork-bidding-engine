@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\SavedFilter;
+use App\Tenancy\Tenancy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -65,7 +66,20 @@ class SavedFilterController extends Controller
         return $request->validate([
             'name' => [
                 'required', 'string', 'max:100',
-                Rule::unique('saved_filters', 'name')->ignore($ignoreId),
+                // Scoped to the workspace. Rule::unique builds its own query
+                // and so never sees the model's global tenant scope, which
+                // made saved-filter names unique across the WHOLE platform:
+                // one workspace naming a filter "Laravel" made that name
+                // permanently unavailable to every other workspace, with a
+                // 422 reading "The name has already been taken" about a
+                // filter its owner could not see and had never created.
+                //
+                // Filters are one of the four things each workspace owns
+                // outright, so two workspaces are perfectly entitled to the
+                // same name.
+                Rule::unique('saved_filters', 'name')
+                    ->where('tenant_id', Tenancy::id())
+                    ->ignore($ignoreId),
             ],
             'is_default' => ['sometimes', 'boolean'],
             'is_pinned' => ['sometimes', 'boolean'],

@@ -2,11 +2,12 @@
 
 namespace App\Console\Commands;
 
-use App\Console\Concerns\RunsForTenants;
 use App\Models\ActivityLog;
+use App\Models\Tenant;
 use App\Services\OpsAlertService;
 use App\Services\SettingsService;
 use App\Services\VollnaProjectImporter;
+use App\Tenancy\Tenancy;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -31,24 +32,49 @@ use Illuminate\Support\Facades\Http;
  */
 class VollnaPollApiCommand extends Command
 {
-    use RunsForTenants;
-
     public const FAIL_ALERT_KEY = 'vollna:poll_failure_alerted';
 
-    protected $signature = 'vollna:poll-api {--quiet-ok : only print when something was imported}
-        {--tenant= : run for this tenant only (default: every operable tenant)}';
+    protected $signature = 'vollna:poll-api {--quiet-ok : only print when something was imported}';
 
-    protected $description = 'Poll the Vollna filter API for new projects and run them through the intake pipeline';
+    protected $description = 'Poll the Vollna filter API for new projects and distribute them to every workspace';
 
+    /**
+     * ONE poll for the whole platform.
+     *
+     * This used to loop every workspace and poll Vollna once per workspace,
+     * because the Vollna credentials were tenant settings back when there
+     * was one tenant. After the credentials moved to the platform layer,
+     * every workspace was polling the SAME filter with the SAME token — one
+     * subscription being hit N times a minute for identical results.
+     * Measured live: 1,441 requests/day with one workspace, 3,944/day the
+     * day three customer workspaces were created, and rising with every
+     * customer onboarded.
+     *
+     * It could not have worked in any case: each workspace then tried to
+     * insert the same job into `leads`, which carried a GLOBAL unique on
+     * external_id, so every workspace after the first failed at the index.
+     * The failure was invisible — the per-project catch below counted it as
+     * "skipped" and the command still returned SUCCESS.
+     *
+     * Now: poll once, put the job in the shared pool, and let LeadFanOut
+     * hand it to every eligible workspace. The billing gate that used to
+     * live in the tenant loop moved to LeadFanOut::eligibleWorkspaces(),
+     * which is where the AI spend is actually triggered.
+     */
     public function handle(SettingsService $settings, VollnaProjectImporter $importer, OpsAlertService $alerts): int
     {
-        // P5: a suspended OR past_due tenant is skipped entirely by the
-        // poller — no polling, no AI spend from the scoring this import
-        // schedules. See RunsForTenants::tenantsToRun()'s $requireBillable.
-        return $this->forEachTenant(fn () => $this->runForTenant($settings, $importer, $alerts), requireBillable: true);
+        $platform = Tenant::platformWorkspace();
+
+        if ($platform === null) {
+            $this->error('No internal-plan workspace — intake has no operator to run as.');
+
+            return self::FAILURE;
+        }
+
+        return Tenancy::runAs($platform, fn () => $this->poll($settings, $importer, $alerts));
     }
 
-    protected function runForTenant(SettingsService $settings, VollnaProjectImporter $importer, OpsAlertService $alerts): int
+    protected function poll(SettingsService $settings, VollnaProjectImporter $importer, OpsAlertService $alerts): int
     {
         $token = $settings->vollnaApiToken();
         $filterId = $settings->vollnaFilterId();
@@ -96,20 +122,25 @@ class VollnaPollApiCommand extends Command
         $accepted = 0;
         $duplicate = 0;
         $skipped = 0;
+        $delivered = 0;
 
         foreach ($projects as $project) {
             try {
-                // scoreInline false: this command runs INSIDE the scheduler
-                // process (proc_open is disabled on this host), so it must
-                // return in seconds — scoring is queued and drained by the
-                // scheduler's queue closure within the next minute.
-                $result = $importer->importProject($importer->normalizeApiProject($project), scoreInline: false);
+                // Scoring is always QUEUED from here. This command runs
+                // INSIDE the scheduler process (proc_open is disabled on
+                // this host), so it must return in seconds — and one job now
+                // means one scoring run PER WORKSPACE, which no scheduler
+                // tick could absorb inline. The scheduler's queue closure
+                // drains them within the next minute.
+                $result = $importer->ingest($importer->normalizeApiProject($project));
             } catch (\Throwable $e) {
                 report($e);
                 $skipped++;
 
                 continue;
             }
+
+            $delivered += (int) ($result['delivered'] ?? 0);
 
             match ($result['status'] ?? 'skipped') {
                 'accepted' => $accepted++,
@@ -123,16 +154,18 @@ class VollnaPollApiCommand extends Command
                 'accepted' => $accepted,
                 'duplicate' => $duplicate,
                 'skipped' => $skipped,
+                'delivered_to_workspaces' => $delivered,
             ]);
         }
 
         if ($accepted > 0 || ! $this->option('quiet-ok')) {
             $this->info(sprintf(
-                'Polled %d projects: %d new, %d duplicate, %d skipped.',
+                'Polled %d projects: %d new, %d duplicate, %d skipped — %d workspace deliveries.',
                 count($projects),
                 $accepted,
                 $duplicate,
                 $skipped,
+                $delivered,
             ));
         }
 

@@ -108,6 +108,27 @@ class ScoreLeadJob implements ShouldQueue
             return;
         }
 
+        // Last cheap check before the money. Every workspace is served the
+        // same feed, so a workspace receives plenty of jobs from other
+        // people's trades; scoring those would multiply the AI bill by the
+        // number of customers for no possible bid.
+        //
+        // NOT a rejection, and deliberately not an archive: the lead stays
+        // visible in `new` with its reason on the row, and the owner can
+        // score it by hand. Deciding what to ignore is the workspace's
+        // business — this only decides what to spend on.
+        $relevance = $scoring->stackRelevance($lead);
+
+        if (! $relevance['relevant']) {
+            $lead->update(['score_reason' => $relevance['reason']]);
+
+            ActivityLog::record('scoring_skipped_out_of_stack', subject: $lead, meta: [
+                'reason' => $relevance['reason'],
+            ]);
+
+            return;
+        }
+
         // Kill switch: leave the lead as `new` (untouched, still visible, not
         // consumed) rather than call OpenClaw. Vollna intake keeps working
         // either way — only AI processing pauses. Re-enabling requires a
